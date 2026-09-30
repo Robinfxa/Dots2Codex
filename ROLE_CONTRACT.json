@@ -1,0 +1,75 @@
+{
+  "contract": "file-ipc-portable/1",
+  "protocol_scope": "text_only",
+  "roles": {
+    "parent_driver": {
+      "executes": "uses only actually available supported task tools or an explicit operator; schedules bounded workers",
+      "detects": [
+        "actual tool availability and schema",
+        "task outcome via supported read/status when available"
+      ],
+      "must_not_assume": [
+        "outbox writes wake an agent",
+        "environment disconnection ends a task",
+        "Python has native task tools",
+        "exactly-once task dispatch",
+        "unattended delivery SLA"
+      ]
+    },
+    "desktop": {
+      "runs": [
+        "official Codex",
+        "loopback facade",
+        "isolated launcher"
+      ],
+      "owns": [
+        "fresh queue path",
+        "fresh isolated CLI path",
+        "its own child process lifecycle"
+      ],
+      "network": "CLI and facade must share a reachable loopback environment"
+    },
+    "broker": {
+      "runs": [
+        "active native inference agent",
+        "bounded data wrappers"
+      ],
+      "owns": [
+        "current assignment epoch",
+        "private metadata ticket",
+        "exact model text result"
+      ],
+      "must_not_run": [
+        "payload tools or shell",
+        "default external provider",
+        "fabricated inference output"
+      ]
+    }
+  },
+  "state_dimensions": [
+    "deployment identity",
+    "role assignment epoch",
+    "queue lease epoch",
+    "inference dispatch state",
+    "HTTP delivery state",
+    "receipt observation state"
+  ],
+  "notification_states": [
+    "written_outbox",
+    "read_observer",
+    "acknowledged_parent"
+  ],
+  "retry_policy": {
+    "desktop": "new deployment only; never replay old queue",
+    "broker": "bounded starts; expired role and task lease; no started ambiguous inference until explicitly resolved",
+    "blocked": [
+      "user_stop",
+      "auth_required",
+      "permission_denied",
+      "configuration_error"
+    ]
+  },
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "native_task_api": "none implemented",
+  "network_listener": "127.0.0.1 only"
+}

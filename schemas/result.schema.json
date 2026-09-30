@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "result",
+  "$comment": "Portable contract v1. Runtime cross-file scope, hashing, fencing and time rules are additionally enforced by code.",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "const": "message"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 131072,
+      "description": "Runtime also caps the full encoded UTF-8 JSON envelope at 131072 bytes."
+    }
+  },
+  "required": [
+    "kind",
+    "text"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ticket",
+  "$comment": "Portable contract v1. Runtime cross-file scope, hashing, fencing and time rules are additionally enforced by code.",
+  "type": "object",
+  "properties": {
+    "contract": {
+      "const": "file-ipc-portable/1"
+    },
+    "deployment_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "assignment_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "worker_epoch": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "job": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "owner": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$"
+        },
+        "session": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$"
+        },
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "created": {
+          "type": "number",
+          "minimum": 0
+        },
+        "deadline": {
+          "type": "number",
+          "minimum": 0
+        },
+        "state": {
+          "const": "running"
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "lease_epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "delivery": {
+          "const": "waiting"
+        },
+        "lease": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "lease_until": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "owner",
+        "session",
+        "request_sha256",
+        "created",
+        "deadline",
+        "state",
+        "attempts",
+        "lease_epoch",
+        "delivery",
+        "lease",
+        "lease_until"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "contract",
+    "deployment_id",
+    "run_id",
+    "assignment_id",
+    "worker_epoch",
+    "job"
+  ],
+  "additionalProperties": false
+}

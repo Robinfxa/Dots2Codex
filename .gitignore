@@ -1,0 +1,47 @@
+# Python and optional local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.coverage
+htmlcov/
+
+# Private deployments, requests, capability tickets, receipts and CLI homes
+runtime/
+runtimes/
+runs/
+evidence/
+outbox/
+acks/
+observations/
+control/
+.codex/
+*.sqlite*
+*.db
+*.log
+*.raw
+*.jsonl
+*.sock
+.env
+.env.*
+!.env.example
+*token*
+*secret*
+auth.json
+*assignment.json
+*ticket.json
+*ticket-*.json
+*native-result*.json
+*synthetic-input*.json
+
+# Local packaging and editor artifacts
+release/
+dist/
+*.zip
+.DS_Store
+.vscode/
+.idea/
+
+# Versioned protocol schemas are public source, not capability files
+!schemas/*.schema.json

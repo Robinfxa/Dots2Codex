@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "recovery",
+  "$comment": "Portable contract v1. Runtime cross-file scope, hashing, fencing and time rules are additionally enforced by code.",
+  "type": "object",
+  "properties": {
+    "contract": {
+      "const": "file-ipc-portable/1"
+    },
+    "deployment_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "owner_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+    },
+    "action": {
+      "enum": [
+        "await_operator",
+        "assign_replacement_broker"
+      ]
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "executed": {
+      "const": false
+    },
+    "notification_delivered": {
+      "const": false
+    },
+    "desktop_restart": {
+      "const": "new deployment directory only; no replay of prior jobs"
+    }
+  },
+  "required": [
+    "contract",
+    "deployment_id",
+    "owner_id",
+    "action",
+    "reason",
+    "executed",
+    "notification_delivered",
+    "desktop_restart"
+  ],
+  "additionalProperties": false
+}

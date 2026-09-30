@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "receipt",
+  "$comment": "Portable contract v1. Runtime cross-file scope, hashing, fencing and time rules are additionally enforced by code.",
+  "type": "object",
+  "properties": {
+    "contract": {
+      "const": "file-ipc-portable/1"
+    },
+    "deployment_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "owner_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+    },
+    "role": {
+      "enum": [
+        "desktop",
+        "broker"
+      ]
+    },
+    "worker_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+    },
+    "assignment_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "epoch": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "receipt_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "event": {
+      "enum": [
+        "ready",
+        "claimed",
+        "inference_started",
+        "completed",
+        "failed",
+        "stopped",
+        "blocked",
+        "worker_expired",
+        "broker_crash",
+        "recovery_resolved"
+      ]
+    },
+    "code": {
+      "enum": [
+        "none",
+        "user_stop",
+        "auth_required",
+        "permission_denied",
+        "configuration_error",
+        "ambiguous_dispatch",
+        "worker_expired",
+        "broker_crash",
+        "deadline",
+        "service_closed",
+        "request_limit",
+        "normal_exit"
+      ]
+    },
+    "job": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{32}$"
+            },
+            "request_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "lease_epoch": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3
+            },
+            "state": {
+              "enum": [
+                "completed",
+                "failed"
+              ]
+            },
+            "completion_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "id",
+            "request_sha256",
+            "lease_epoch",
+            "state",
+            "completion_sha256"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "created": {
+      "type": "number",
+      "minimum": 0
+    },
+    "content_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "notification": {
+      "const": "written_outbox"
+    }
+  },
+  "required": [
+    "contract",
+    "deployment_id",
+    "run_id",
+    "owner_id",
+    "role",
+    "worker_id",
+    "assignment_id",
+    "epoch",
+    "receipt_id",
+    "event",
+    "code",
+    "job",
+    "created",
+    "content_sha256",
+    "notification"
+  ],
+  "additionalProperties": false
+}

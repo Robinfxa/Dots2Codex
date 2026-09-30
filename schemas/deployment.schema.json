@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "deployment",
+  "$comment": "Portable contract v1. Runtime cross-file scope, hashing, fencing and time rules are additionally enforced by code.",
+  "type": "object",
+  "properties": {
+    "contract": {
+      "const": "file-ipc-portable/1"
+    },
+    "deployment_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "owner_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+    },
+    "created": {
+      "type": "number",
+      "minimum": 0
+    },
+    "expires": {
+      "type": "number",
+      "minimum": 0
+    },
+    "scope": {
+      "const": "text_only"
+    },
+    "notification": {
+      "enum": [
+        "outbox_only",
+        "parent_tool_attested"
+      ]
+    },
+    "policy": {
+      "type": "object",
+      "properties": {
+        "max_requests": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "max_broker_starts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "max_desktop_starts": {
+          "const": 1
+        },
+        "request_seconds": {
+          "const": 180
+        },
+        "lease_seconds": {
+          "const": 60
+        },
+        "claim_wait_seconds": {
+          "const": 20
+        }
+      },
+      "required": [
+        "max_requests",
+        "max_broker_starts",
+        "max_desktop_starts",
+        "request_seconds",
+        "lease_seconds",
+        "claim_wait_seconds"
+      ],
+      "additionalProperties": false
+    },
+    "paths": {
+      "type": "object",
+      "properties": {
+        "queue": {
+          "type": "string",
+          "pattern": "^runs/[0-9a-f]{32}/queue$"
+        },
+        "cli": {
+          "type": "string",
+          "pattern": "^runs/[0-9a-f]{32}/isolated-cli$"
+        },
+        "evidence": {
+          "const": "evidence"
+        }
+      },
+      "required": [
+        "queue",
+        "cli",
+        "evidence"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "contract",
+    "deployment_id",
+    "run_id",
+    "owner_id",
+    "created",
+    "expires",
+    "scope",
+    "notification",
+    "policy",
+    "paths"
+  ],
+  "additionalProperties": false
+}

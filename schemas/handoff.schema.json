@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "handoff",
+  "$comment": "Portable contract v1. Runtime cross-file scope, hashing, fencing and time rules are additionally enforced by code.",
+  "type": "object",
+  "properties": {
+    "contract": {
+      "const": "file-ipc-portable/1"
+    },
+    "deployment_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "owner_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+    },
+    "role": {
+      "enum": [
+        "desktop",
+        "broker"
+      ]
+    },
+    "local_package_path": {
+      "type": "string"
+    },
+    "local_deployment_root": {
+      "type": "string"
+    },
+    "assignment_relative_path": {
+      "type": "string",
+      "pattern": "^evidence/[A-Za-z0-9_.-]+\\.json$"
+    },
+    "instructions": {
+      "enum": [
+        "START_HERE.zh-CN.md",
+        "BROKER_HANDOFF.zh-CN.md",
+        "HANDOFF_TEST.zh-CN.md"
+      ]
+    },
+    "expires": {
+      "type": "number",
+      "minimum": 0
+    },
+    "max_requests": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "scope": {
+      "const": "text_only"
+    },
+    "native_inference": {
+      "enum": [
+        "operator_attested",
+        "not_required"
+      ]
+    },
+    "parent_notification": {
+      "enum": [
+        "outbox_only",
+        "parent_tool_attested"
+      ]
+    },
+    "automatic_task_spawn": {
+      "const": false
+    }
+  },
+  "required": [
+    "contract",
+    "deployment_id",
+    "run_id",
+    "owner_id",
+    "role",
+    "local_package_path",
+    "local_deployment_root",
+    "assignment_relative_path",
+    "instructions",
+    "expires",
+    "max_requests",
+    "scope",
+    "native_inference",
+    "parent_notification",
+    "automatic_task_spawn"
+  ],
+  "additionalProperties": false
+}

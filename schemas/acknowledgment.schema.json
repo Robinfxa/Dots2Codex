@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "acknowledgment",
+  "$comment": "Portable contract v1. Runtime cross-file scope, hashing, fencing and time rules are additionally enforced by code.",
+  "type": "object",
+  "properties": {
+    "contract": {
+      "const": "file-ipc-portable/1"
+    },
+    "deployment_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "owner_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+    },
+    "receipt_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "content_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "via": {
+      "enum": [
+        "manual_parent",
+        "parent_tool"
+      ]
+    },
+    "evidence": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_:/.-]{1,256}$"
+    },
+    "meaning": {
+      "const": "parent acknowledgment recorded; this helper sent no notification"
+    }
+  },
+  "required": [
+    "contract",
+    "deployment_id",
+    "run_id",
+    "owner_id",
+    "receipt_id",
+    "content_sha256",
+    "via",
+    "evidence",
+    "meaning"
+  ],
+  "additionalProperties": false
+}
