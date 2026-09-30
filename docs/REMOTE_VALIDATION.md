@@ -3,7 +3,29 @@
 This public summary omits private resource IDs, account names, native task IDs,
 request/answer contents, runtime paths and raw provider responses.
 
-## Release relationship
+## Live long-session baseline (2026-09-30)
+
+The pre-optimization long-session source tree
+`91aad78505d4d770f6a6e770ad6c8a62136941c9bb97af658dd62cdd9c82b4a2`
+completed a bounded, approximately 28-minute session through an actual Mac
+controller, Google Drive/Docs, and an active native worker. All four requests
+reached `DELIVERED`. Request 3 emitted a native function-tool intent; request 4
+contained the matching Mac `function_call_output` with exit 0, followed by native
+continuation, committed result, and validated controller receipt.
+
+At 23:09 UTC, the controller CAS closed the session at epoch 21 with
+`closed=true`, phase `DELIVERED`, and `execution_may_be_running=false`. The worker
+then confirmed `stopped=true`, 89 reads, and no pending operation. No active
+worker or session remains from that test.
+
+This proves the observed bounded four-request/tool-continuation path, not
+multi-hour uptime, complete 128-request capacity, general cross-OAuth-app
+interoperability, or exactly-once external effects. The new parallel connector
+executor was not used in that live session and has **offline validation only**.
+Its 1.95× virtual-delay benchmark is not a production speedup measurement. See
+[latency validation](LATENCY_VALIDATION.md) and [long-session setup](REMOTE_LONG_SESSIONS.zh-CN.md).
+
+## Earlier remote release relationship (historical)
 
 The new remote package is merged alongside the existing local bridge at public
 baseline `d8ba399551a560b0050ff88941d06c58448cae56`. Existing runtime code, tool
@@ -15,7 +37,7 @@ source used for the corrected live test. New setup examples and their tests are
 separate additions, with offline-only verification. Documentation was adapted for
 publication; private experiment trees and raw evidence were not published.
 
-## Observed real connector/native roundtrip (2026-09-30)
+## Earlier one-request connector/native roundtrip (2026-09-30)
 
 One bounded text request passed through actual Drive/Docs connector operations and
 one freshly admitted native worker, then returned to the controller:
@@ -50,7 +72,7 @@ The repaired document still matched the original REQUESTED admission candidate,
 so admission was reconciled rather than replayed. Fresh claim/begin/result/receipt
 then passed. This is not evidence of general automatic crash recovery or repair.
 
-## Offline release checks
+## Earlier remote release checks (historical)
 
 Run the commands in the root README. Coverage groups are reported separately
 because their purposes overlap:
@@ -72,7 +94,7 @@ httplib2 may resend the identical request after a socket failure. The unchanged
 requiredRevisionId fences that resend. A lost first success followed by stale
 failure is conservatively unknown; it cannot create another native permit.
 
-## Not established by this release
+## Not established by that earlier one-request release
 
 - Independently deployed Codex CLI + remote facade + native worker across machines
 - User endpoint OAuth setup or cross-principal/cross-OAuth-app file interoperability

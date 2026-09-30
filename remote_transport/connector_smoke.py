@@ -10,7 +10,7 @@ from pathlib import Path
 from .backend import filename, read_private_file, validate_reference
 from .cli import write_new
 from .control import GoogleDocsCASControlStore, SessionCoordinator, initial_state, block_for, _ref
-from .model import Object, canonical, deployment, hash_bytes, require
+from .model import Object, canonical, deployment, hash_bytes, require, MAX_BYTES
 
 
 def structured(value):
@@ -41,7 +41,7 @@ class ConnectorEvidenceMessages:
                 isinstance(meta.get('title'),str) and meta.get('mime_type')=='application/json' and
                 type(meta.get('parent_ids')) is list and all(isinstance(x,str) for x in meta['parent_ids']) and
                 self.folder_id in meta['parent_ids'],'normalized_metadata_scope_mismatch')
-        obj=Object.parse(read_private_file(Path(entry['file']),131072))
+        obj=Object.parse(read_private_file(Path(entry['file']),MAX_BYTES))
         require(obj.oid==reference['object_id'] and meta['title']==filename(obj),'message_reference_mismatch')
         return obj
 
@@ -90,6 +90,7 @@ def consume_begin(plan,response,readback,journal_root):
     require(plan['kind']=='begin' and state['phase']=='DISPATCH_INTENT' and
             state['dispatch']==plan['candidate']['dispatch'],'fresh_begin_required')
     require(time.time()<state['binding']['expires'],'control_deployment_expired')
+    require(not state.get('closed',False),'control_session_closed')
     root=Path(journal_root)
     pin=Object.parse(read_private_file(root/'pin.json',131072))
     require(pin.oid==state['binding']['deployment_hash'],'worker_runtime_pin_mismatch')

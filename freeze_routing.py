@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 files = {}
-for path in sorted(ROOT.rglob('*.py')):
+for path in sorted(p for p in ROOT.rglob('*') if p.is_file() and p.suffix in {'.py','.js'}):
     if any(part in ('runtime', 'runtimes', 'runs', 'evidence', '__pycache__', 'audit',
                     '.venv', 'venv', '.git', '.codex', 'release', 'dist')
            for part in path.relative_to(ROOT).parts):

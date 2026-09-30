@@ -10,13 +10,14 @@ import re
 import time
 from dataclasses import dataclass
 from typing import Protocol
-from .model import Object, ProtocolError, canonical, hash_bytes, require, valid_hash
+from .model import Object, ProtocolError, canonical, hash_bytes, require, valid_hash, MAX_REQUESTS, MAX_SESSION_SECONDS
 from .backend import validate_reference
 
 BEGIN = 'DOTS2CODEX_CONTROL_BEGIN_V1\n'
 END = '\nDOTS2CODEX_CONTROL_END_V1\n'
 VERSION = 'dots-session-control/0'
-MAX_CONTROL_BYTES = 32768
+MAX_CONTROL_BYTES = 1024 * 1024
+MAX_OPERATIONS = MAX_REQUESTS * 7 + 16
 
 
 class CASConflict(ProtocolError):
@@ -56,7 +57,7 @@ class ControlSnapshot:
 
 def block_for(state):
     validate_state(state)
-    block = BEGIN + canonical(state).decode('utf-8') + END
+    block = BEGIN + canonical(state, max_bytes=MAX_CONTROL_BYTES).decode('utf-8') + END
     require(len(block.encode()) <= MAX_CONTROL_BYTES, 'control_block_too_large')
     return block
 
@@ -92,12 +93,13 @@ def initial_state(pin, control_id):
 def validate_state(s):
     require(isinstance(s,dict) and set(s)=={'contract','control_id','session_id','control_epoch',
             'binding','phase','admissions','max_requests','request','claim','dispatch','result',
-            'receipt','history','operations'},'invalid_control_state')
+            'receipt','history','operations'} | ({'closed'} if 'closed' in s else set()),'invalid_control_state')
+    require(type(s.get('closed', False)) is bool, 'invalid_control_closed')
     require(s['contract']==VERSION and isinstance(s['control_id'],str) and
             re.fullmatch('[A-Za-z0-9_-]{1,64}',s['control_id']) and isinstance(s['session_id'],str),
             'invalid_control_identity')
-    require(type(s['control_epoch']) is int and 0<=s['control_epoch']<=32 and
-            type(s['max_requests']) is int and 1<=s['max_requests']<=3 and
+    require(type(s['control_epoch']) is int and 0<=s['control_epoch']<=MAX_OPERATIONS and
+            type(s['max_requests']) is int and 1<=s['max_requests']<=MAX_REQUESTS and
             type(s['admissions']) is int and 0<=s['admissions']<=s['max_requests'],'invalid_control_budget')
     b=s['binding']
     require(isinstance(b,dict) and set(b)=={'deployment_hash','identity','created','expires','worker_id','generation','native_task_id','journal_id'} and
@@ -107,7 +109,7 @@ def validate_state(s):
             b['identity'].get('worker_id')==b['worker_id'] and b['identity'].get('generation')==b['generation'] and
             b['identity'].get('native_task_id')==b['native_task_id'] and b['identity'].get('worker_journal_id')==b['journal_id'] and
             b['identity'].get('session_id')==s['session_id'],'invalid_control_binding')
-    require(type(b['created']) is int and type(b['expires']) is int and 1<=b['expires']-b['created']<=900,'invalid_control_lifetime')
+    require(type(b['created']) is int and type(b['expires']) is int and 1<=b['expires']-b['created']<=MAX_SESSION_SECONDS,'invalid_control_lifetime')
     # Validate the complete identity using the common envelope schema.
     Object.make(b['identity'],'deployment',0,None,{'created':0,'expires':1,'max_requests':s['max_requests'],
                 'scope':'text_only','ownership':'externally_pinned_single_writer'})
@@ -118,7 +120,7 @@ def validate_state(s):
     else:
         require(isinstance(s['request'],dict) and set(s['request'])=={'object_id','locator','message_seq'} and
                 valid_hash(s['request']['object_id']) and type(s['request']['message_seq']) is int and
-                1<=s['request']['message_seq']<=3,'invalid_control_request')
+                1<=s['request']['message_seq']<=s['max_requests'],'invalid_control_request')
         validate_reference(_ref(s['request']))
         if phase=='REQUESTED':
             require(all(s[k] is None for k in ('claim','dispatch','result','receipt')),'invalid_requested_state')
@@ -138,16 +140,16 @@ def validate_state(s):
                 else:require(s['result'] is None,'invalid_control_result')
                 if phase=='DELIVERED':validate_reference(s['receipt'])
                 else:require(s['receipt'] is None,'invalid_control_receipt')
-    require(type(s['operations']) is list and len(s['operations'])==s['control_epoch'] and len(s['operations'])<=32,
+    require(type(s['operations']) is list and len(s['operations'])==s['control_epoch'] and len(s['operations'])<=MAX_OPERATIONS,
             'invalid_control_operations')
     ids=set()
     for op in s['operations']:
         require(isinstance(op,dict) and set(op)=={'id','kind','arguments_hash'} and
                 isinstance(op['id'],str) and re.fullmatch('[A-Za-z0-9_-]{1,64}',op['id']) and
-                op['id'] not in ids and op['kind'] in {'admit','claim','begin','result','receipt','ambiguous','rebind'} and
+                op['id'] not in ids and op['kind'] in {'admit','claim','begin','result','receipt','ambiguous','rebind','close'} and
                 valid_hash(op['arguments_hash']),'invalid_control_operation')
         ids.add(op['id'])
-    require(type(s['history']) is list and len(s['history'])<=3 and
+    require(type(s['history']) is list and len(s['history'])<=s['max_requests'] and
             s['admissions']==len(s['history'])+(s['request'] is not None),'invalid_control_history')
     for h in s['history']:
         require(isinstance(h,dict) and set(h)=={'phase','request','binding','result','receipt'} and
@@ -155,10 +157,10 @@ def validate_state(s):
                 isinstance(h['request'],dict) and valid_hash(h['request'].get('object_id')),
                 'invalid_control_history')
         require(set(h['request'])=={'object_id','locator','message_seq'} and
-                type(h['request']['message_seq']) is int and 1<=h['request']['message_seq']<=3,'invalid_control_history')
+                type(h['request']['message_seq']) is int and 1<=h['request']['message_seq']<=s['max_requests'],'invalid_control_history')
         validate_reference(_ref(h['request']))
         # Reuse full binding validation without recursively retaining history.
-        archived=copy.deepcopy(s);archived.update(binding=h['binding'],phase='IDLE',admissions=0,request=None,claim=None,
+        archived=dict(s);archived.update(binding=h['binding'],phase='IDLE',admissions=0,request=None,claim=None,
             dispatch=None,result=None,receipt=None,history=[],operations=[],control_epoch=0)
         validate_state(archived)
         if h['phase']=='DELIVERED':
@@ -309,16 +311,17 @@ class SessionCoordinator:
         shapes={'admit':{'request'},'rebind':{'deployment'},'claim':{'binding','claim_id'},
                 'begin':{'binding','claim_id','dispatch_id'},'ambiguous':{'binding','dispatch_id'},
                 'result':{'binding','dispatch_id','request','claim','started','result'},
-                'receipt':{'binding','receipt'}}
+                'receipt':{'binding','receipt'},'close':{'binding'}}
         require(kind in shapes and isinstance(args,dict) and set(args)==shapes[kind],'invalid_control_arguments')
         old=snapshot.state;s=copy.deepcopy(old);ah=hash_bytes(canonical(args))
         for op in old['operations']:
             if op['id']==operation_id:
                 require(op['kind']==kind and op['arguments_hash']==ah,'control_operation_conflict')
                 return {'status':'already_applied','permit':None,'state':old}
-        require(len(s['operations'])<32,'control_operation_budget_exceeded')
+        require(len(s['operations'])<MAX_OPERATIONS,'control_operation_budget_exceeded')
         phase=s['phase'];binding=s['binding']
         if kind in {'admit','claim','begin','rebind'}:
+            require(not s.get('closed',False), 'control_session_closed')
             require(time.time()<binding['expires'],'control_deployment_expired')
         if kind=='admit':
             require(phase in {'IDLE','DELIVERED'},'control_request_inflight')
@@ -345,7 +348,10 @@ class SessionCoordinator:
             s.update(binding=new,phase='IDLE',request=None,claim=None,dispatch=None,result=None,receipt=None)
         else:
             require(args.get('binding')==binding,'control_stale_worker_binding')
-            if kind=='claim':
+            if kind=='close':
+                require(not s.get('closed',False), 'control_session_closed')
+                s['closed']=True
+            elif kind=='claim':
                 require(phase=='REQUESTED','control_not_requestable')
                 s.update(phase='CLAIMED',claim={'id':args['claim_id'],'worker_id':binding['worker_id'],'generation':binding['generation']})
             elif kind=='begin':
@@ -366,6 +372,10 @@ class SessionCoordinator:
                         started.body['links']=={'request':req.oid,'claim':claim.oid} and
                         started.body['payload']['dispatch_id']==s['dispatch']['id'] and
                         result.body['links']=={'request':req.oid,'started':started.oid},'control_result_graph_mismatch')
+                if 'response_result' in result.body['payload']:
+                    from .wire import result_item
+                    require('responses_request' in req.body['payload'],'tool_result_requires_responses_request')
+                    result_item(result.body['payload'],req.body['payload']['responses_request'],req.oid,req.body['payload']['scope'])
                 s.update(phase='RESULT_COMMITTED',result={'reference':copy.deepcopy(args['result']),
                     'dependencies':{k:copy.deepcopy(args[k]) for k in ('request','claim','started')}})
             elif kind=='receipt':

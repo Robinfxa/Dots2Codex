@@ -9,7 +9,29 @@
 - **本地共享目录桥接**：CLI 与 loopback facade 在同一环境，通过私有 POSIX 目录与 broker 通信。[完整安装和操作说明](LOCAL_BRIDGE_README.zh-CN.md)
 - **实验性远程 Drive + Docs CAS**：Drive API 保存不可变 JSON 消息，固定 Google Doc 的 `requiredRevisionId` 控制 claim、begin、结果和交付回执。不是把共享目录放进 Drive 同步盘
 
+## 新增：手动活跃 worker 长会话（实验性）
+
+新增显式 `--long-session` 路径：最长 8 小时 / 128 次模型请求、1 MiB 完整请求，
+带 SSE JSON 心跳、同一任务的迟到结果恢复、CAS 关闭，以及显式 `responses_tools`
+作用域。工具由 Mac 官方 Codex 按原审批与沙箱执行；未知交付的工具不会自动重放。
+原生 worker 仍须先由父助手手动启动并保持活跃，Python 不会自动唤醒它。
+
+[安装、运行、限额与恢复](docs/REMOTE_LONG_SESSIONS.zh-CN.md) ·
+[原生连接器 worker 操作契约](docs/ACTIVE_CONNECTOR_WORKER.md)
+
+长会话基础版已完成约 28 分钟、4 次请求的真实 Mac 工具循环验证；这不代表多小时稳定性或
+128 次请求已获现场验收。本次新增并行连接器执行器仍只有离线验证，尚无真实加速数据。
+
 ## 当前验证到哪里
+
+2026-09-30，长会话基础版通过真实 Mac controller、Google Drive/Docs 和活跃原生 worker
+处理了 4 次请求，全部为 `DELIVERED`。其中第 3 次返回工具意图，第 4 次收到匹配的 Mac
+`function_call_output`（exit 0），完成原生继续推理、结果提交和控制端回执校验。
+该约 28 分钟会话已由控制端 CAS 关闭，worker 已停止；没有遗留活跃会话。
+这次测试没有使用本次新增的并行执行器，也未证明多小时在线率、128 轮容量或真实延迟改善。
+[验证范围与历史记录](docs/REMOTE_VALIDATION.md)
+
+更早的短文本路径验证：
 
 已完成一次真实 Drive/Docs 连接器 → 新原生 worker → 控制方接收结果的文本往返，
 最终为 `DELIVERED`、控制 epoch 5。五个真实消息对象、hash、依赖链和随机文本挑战均核对。
@@ -96,21 +118,33 @@ python3 -m remote_transport.demo --root /tmp/dots-drive-demo-UNIQUE
 ```
 
 - [远程安装配置](docs/REMOTE_SETUP.zh-CN.md)、[远程验证摘要](docs/REMOTE_VALIDATION.md)
+- [长会话安装与恢复](docs/REMOTE_LONG_SESSIONS.zh-CN.md)、[活跃 worker 契约](docs/ACTIVE_CONNECTOR_WORKER.md)
+- [并行连接器优化与运行](docs/CONNECTOR_LATENCY.md)、[离线优化验证与限制](docs/LATENCY_VALIDATION.md)
 - [Drive 设计](DRIVE_DESIGN.md)、[普通单 writer 模式](DRIVE_RUNBOOK.md)、[Docs CAS 细节](DOCS_CAS_RUNBOOK.md)
 - [原本地 README](LOCAL_BRIDGE_README.zh-CN.md)、[本地自动部署提示词](docs/AUTO_DEPLOY.zh-CN.md)、[本地验证摘要](docs/VALIDATION.md)
 - [会话固定分配](ROUTING_RUNBOOK.md)、[固定 nonce 工具验证](TOOL_PROBE.md)、[有界仓库研究](REPO_REVIEW_RUNBOOK.md)
 - [安全边界](SECURITY.md)、[角色契约](ROLE_CONTRACT.json)
 
 已有 `text_only`、`tool_probe`、`repo_review` 范围与本地实现保留。先前仓库研究的真实取数仍为
-`network_unavailable`，不能用新增 Drive 测试替代那项验证。远程模式只输出文本，不支持一般工具循环、
-自动接管、无人值守调度或 exactly-once 外部副作用。
+`network_unavailable`，不能用新增 Drive 测试替代那项验证。旧远程入口仍只输出文本。新工具作用域见上面的长会话说明；自动接管、无人值守调度或 exactly-once 外部副作用仍不支持。
 
 ## English summary
 
 An experimental bridge from the unmodified official Codex CLI to an already active,
 authorized native inference worker. The existing local POSIX bridge is preserved.
 The new independent transport uses immutable Drive blobs plus a pinned Docs revision-CAS
-control record. One same-principal connector/native text roundtrip was observed;
-independent-machine CLI integration, separate OAuth/app interoperability, unattended
-wake and exactly-once external effects remain unverified. No credentials, model
+control record. The long-session baseline completed four live Mac-controller/native
+requests, including one Mac function-tool continuation, in about 28 minutes. The
+session was explicitly closed and its worker stopped. The new parallel connector
+executor has offline validation only; multi-hour operation, full 128-request capacity,
+general cross-OAuth-app interoperability, unattended wake and exactly-once external
+effects remain unverified. No credentials, model
 backend, permanent scheduler or free inference entitlement is bundled.
+
+## Optional active-native connector latency candidate
+
+See [connector batching and timing](docs/CONNECTOR_LATENCY.md) for bounded parallel
+immutable uploads, grouped deterministic CAS steps, lossless input/plan files and
+offline validation. The reproducible 866 ms versus 444 ms (1.95×) result uses virtual
+delays and measures scheduling overlap only, not production speedup. Upgrade with a
+fresh manually admitted worker, new runtime and new pin. No live deployment is claimed.

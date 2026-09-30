@@ -11,7 +11,7 @@ from .control import binding_for, _ref
 
 class ControlReferenceView:
     """Snapshot-pinned reachable graph; never scans a Drive folder."""
-    def __init__(self,messages,control,pin):self.messages,self.control,self.pin=messages,control,pin
+    def __init__(self,messages,control,pin):self.messages,self.control,self.pin=messages,control,pin;self.cache={}
     def reserve(self):return self.messages.reserve()
     def publish(self,obj,reservation):return self.messages.publish(obj,reservation)
     def reference(self,obj,publication):return self.messages.reference(obj,publication)
@@ -31,7 +31,12 @@ class ControlReferenceView:
                 for ref in result['dependencies'].values():refs[ref['object_id']]=ref
             if record['receipt'] is not None:
                 ref=record['receipt'];refs[ref['object_id']]=ref
-        return [self.messages.fetch(ref) for ref in refs.values()]
+        out=[]
+        for ref in refs.values():
+            key=canonical(ref)
+            if key not in self.cache:self.cache[key]=self.messages.fetch(ref)
+            out.append(self.cache[key])
+        return out
 
 
 class _Controlled:
@@ -69,10 +74,17 @@ class CASController(_Controlled,Controller):
         super().__init__(journal,view)
 
     def _submit_payload(self,payload,idempotency_key):
+        current=self.coordinator.store.read().state
+        require(current['binding']==self._binding,'control_stale_worker_binding')
+        require(not current.get('closed',False),'control_session_closed')
         oid=super()._submit_payload(payload,idempotency_key)
         reference=self._published_reference(oid)
         self.coordinator.transition('admit',{'request':reference},self._operation('admit',oid))
         return oid
+
+    def close_session(self):
+        return self.coordinator.transition('close',{'binding':self._binding},
+            self._operation('close',self.pin.oid))
 
     def result(self,request_id):
         s=self.coordinator.store.read().state
@@ -102,7 +114,7 @@ class CASWorker(_Controlled,Worker):
     def start_next(self):
         snapshot=self.coordinator.store.read();s=snapshot.state
         require(s['binding']==self._binding,'control_stale_worker_binding')
-        if s['phase'] in {'IDLE','RESULT_COMMITTED','DELIVERED'}:return None
+        if s.get('closed',False) or s['phase'] in {'IDLE','RESULT_COMMITTED','DELIVERED'}:return None
         require(s['phase']=='REQUESTED','control_execution_or_claim_requires_reconciliation')
         # Parent implementation durably burns the local marker before exposing input.
         permit=super().start_next()

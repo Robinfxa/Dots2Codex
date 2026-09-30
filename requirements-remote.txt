@@ -1,0 +1,3 @@
+# Explicit long-session runtime dependencies (text and responses_tools).
+# Google SDK dependencies are separate and needed only by the Mac OAuth endpoint.
+jsonschema==4.26.0
