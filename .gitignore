@@ -45,3 +45,15 @@ dist/
 
 # Versioned protocol schemas are public source, not capability files
 !schemas/*.schema.json
+
+# Explicit endpoint setup files are private
+credentials.json
+authorized-user.json
+*pin.json
+*permit*.json
+*ready.json
+authorized-user*.json
+credentials*.json
+client_secret*.json
+ddv0-*.json
+consumed-*.json

@@ -1,0 +1,7 @@
+# Optional endpoint example only. Direct package versions checked offline on 2026-09-30.
+# These are not a complete transitive lockfile or proof of live API compatibility.
+google-api-python-client==2.200.0
+google-auth==2.59.1
+google-auth-httplib2==0.4.3
+httplib2==0.32.0
+requests==2.34.2
