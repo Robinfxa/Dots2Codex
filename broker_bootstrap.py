@@ -61,7 +61,7 @@ def begin(d,a,t):
    if ds['status']!='claimed':raise QueueError('inference_already_started_or_resolved')
    # Written BEFORE returning request. Any uncertain interruption requires explicit resolution.
    ds.update(status='started',started_at=time.time());d.save(s)
-   return {'contract':d.m['contract'],'deployment_id':d.m['deployment_id'],'job_id':j['id'],'request_sha256':j['request_sha256'],'deadline':j['deadline'],'lease_until':j['lease_until'],'scope':'text_only','request':stored['request']}
+   return {'contract':d.m['contract'],'deployment_id':d.m['deployment_id'],'job_id':j['id'],'request_sha256':j['request_sha256'],'deadline':j['deadline'],'lease_until':j['lease_until'],'scope':d.m['scope'],'request':stored['request']}
   finally:q.close()
 
 def renew(d,a,t,seconds=60):
@@ -73,12 +73,20 @@ def renew(d,a,t,seconds=60):
   return {**t,'job':{**j,**new}}
 
 def complete(d,a,t,result):
- if not isinstance(result,dict) or set(result)!={'kind','text'} or result['kind']!='message' or not isinstance(result['text'],str):raise QueueError('text_only_result_required')
+ if d.m['scope']=='text_only' and (not isinstance(result,dict) or set(result)!={'kind','text'} or result['kind']!='message' or not isinstance(result['text'],str)):raise QueueError('text_only_result_required')
  with d.locked() as s:
   d.live(s);cur,j,ds=_validate(d,s,a,t)
   if ds['status'] not in ('started','completed'):raise QueueError('inference_not_started')
   q=_job_scope(d,t)
   try:
+   if d.m['scope']=='tool_probe':
+    from tool_probe import validate_and_reserve
+    with q.locked():stored_request=q.load(j['id'])['request']
+    validate_and_reserve(d,s,j,stored_request,result)
+   if d.m['scope']=='repo_review':
+    from repo_review import validate_and_reserve
+    with q.locked():stored_request=q.load(j['id'])['request']
+    validate_and_reserve(d,s,j,stored_request,result)
    out=q.complete(j['id'],j['lease'],j['lease_epoch'],j['request_sha256'],owner=d.m['owner_id'],session='session_'+d.m['run_id'],result=result)
    stored=q.get(j['id'],owner=d.m['owner_id'],session='session_'+d.m['run_id'])
   finally:q.close()

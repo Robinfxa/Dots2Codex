@@ -1,0 +1,2 @@
+# Required for the full test suite and both optional tool scopes.
+jsonschema>=4,<5

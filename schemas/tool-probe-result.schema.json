@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "tool-probe-result",
+  "$comment": "Portable contract v1. Runtime cross-file scope, hashing, fencing and time rules are additionally enforced by code.",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "message"
+        },
+        "text": {
+          "type": "string",
+          "pattern": "^TOOL_OK:[0-9a-f]{24}$"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "function_call"
+        },
+        "name": {
+          "const": "exec_command"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "arguments": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "arguments"
+      ],
+      "additionalProperties": false
+    }
+  ]
+}

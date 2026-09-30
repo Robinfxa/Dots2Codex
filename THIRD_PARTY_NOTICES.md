@@ -21,6 +21,6 @@ The name `reference/bridge.py` refers to that earlier local implementation. Its 
 
 ## Separately installed software
 
-The runtime uses Python's standard library. Python and the user's official Codex installation retain their respective licenses and terms. The optional schema-conformance test uses an already installed [`jsonschema`](https://github.com/python-jsonschema/jsonschema) package; the package is not vendored, required at runtime, or automatically installed.
+The text-only runtime uses Python's standard library. Python and the user's official Codex installation retain their respective licenses and terms. The optional `tool_probe` and `repo_review` runtime scopes, and the complete test suite, require separately installed [`jsonschema`](https://github.com/python-jsonschema/jsonschema) 4.x to validate advertised schemas. The package is not vendored or automatically installed; it retains its own license. See `requirements-test.txt` and the dependency preflight in README.md.
 
 Protocol field names, URLs and compatibility references do not imply affiliation, endorsement or permission to access a service. If future changes copy third-party implementation code or assets, preserve their notices and review their licensing before redistributing them.

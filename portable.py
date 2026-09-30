@@ -1,5 +1,5 @@
 """Versioned portable control plane. Data only; no model/task/notification API."""
-import argparse,contextlib,fcntl,hashlib,json,math,os,re,stat,sys,time,uuid
+import argparse,contextlib,fcntl,hashlib,json,math,os,re,stat,sys,threading,time,uuid
 from pathlib import Path
 VENDOR=Path(__file__).resolve().parent/'vendor'
 sys.path.insert(0,str(VENDOR))
@@ -26,17 +26,18 @@ def private_dir(p):
  if not stat.S_ISDIR(st.st_mode) or st.st_uid!=os.getuid() or st.st_mode&0o077:raise QueueError('directory_not_private_owned')
  return p
 
-def init(root,owner,seconds=600,max_requests=3,broker_starts=3,notification='outbox_only'):
- label(owner);number(seconds,5,900);number(max_requests,1,3);number(broker_starts,1,3)
+def init(root,owner,seconds=600,max_requests=3,broker_starts=3,notification='outbox_only',scope='text_only'):
+ label(owner);number(seconds,5,900);number(max_requests,1,16 if scope=='repo_review' else 3);number(broker_starts,1,3)
  if type(max_requests) is not int or type(broker_starts) is not int:raise QueueError('invalid_limit')
  if notification not in ('outbox_only','parent_tool_attested'):raise QueueError('invalid_notification_mode')
+ if scope not in ('text_only','tool_probe','repo_review'):raise QueueError('invalid_scope')
  root=Path(root).absolute()
  if root.exists() or root.is_symlink():raise QueueError('deployment_already_exists')
  root.mkdir(mode=0o700,parents=True,exist_ok=False)
  for name in ('control','outbox','acks','observations','probe','runs','evidence'):(root/name).mkdir(mode=0o700)
  fd=os.open(root/'control/lock',os.O_CREAT|os.O_EXCL|os.O_RDWR,0o600);os.close(fd)
  now=time.time();run=uuid.uuid4().hex
- manifest={'contract':VERSION,'deployment_id':uuid.uuid4().hex,'run_id':run,'owner_id':owner,'created':now,'expires':now+seconds,'scope':'text_only','notification':notification,'policy':{'max_requests':max_requests,'max_broker_starts':broker_starts,'max_desktop_starts':1,'request_seconds':180,'lease_seconds':60,'claim_wait_seconds':20},'paths':{'queue':'runs/'+run+'/queue','cli':'runs/'+run+'/isolated-cli','evidence':'evidence'}}
+ manifest={'contract':VERSION,'deployment_id':uuid.uuid4().hex,'run_id':run,'owner_id':owner,'created':now,'expires':now+seconds,'scope':scope,'notification':notification,'policy':{'max_requests':max_requests,'max_broker_starts':broker_starts,'max_desktop_starts':1,'request_seconds':180,'lease_seconds':60,'claim_wait_seconds':20},'paths':{'queue':'runs/'+run+'/queue','cli':'runs/'+run+'/isolated-cli','evidence':'evidence'}}
  protocol.atomic_json(root/'deployment.json',manifest,exclusive=True)
  protocol.atomic_json(root/'control/state.json',{'contract':VERSION,'deployment_id':manifest['deployment_id'],'run_id':run,'blocked':None,'roles':{},'dispatch':{}},exclusive=True)
  return manifest
@@ -49,10 +50,10 @@ class Deployment:
   if not isinstance(m,dict) or m.get('contract')!=VERSION:raise QueueError('unsupported_contract')
   try:
    checked(m['deployment_id']);checked(m['run_id']);label(m['owner_id']);number(m['created'],0,1e12);number(m['expires']-m['created'],5,900)
-   if m['scope']!='text_only' or m['notification'] not in ('outbox_only','parent_tool_attested'):raise ValueError()
+   if m['scope'] not in ('text_only','tool_probe','repo_review') or m['notification'] not in ('outbox_only','parent_tool_attested'):raise ValueError()
    p=m['policy']
    if p!={'max_requests':p['max_requests'],'max_broker_starts':p['max_broker_starts'],'max_desktop_starts':1,'request_seconds':180,'lease_seconds':60,'claim_wait_seconds':20}:raise ValueError()
-   if type(p['max_requests']) is not int or not 1<=p['max_requests']<=3 or type(p['max_broker_starts']) is not int or not 1<=p['max_broker_starts']<=3:raise ValueError()
+   if type(p['max_requests']) is not int or not 1<=p['max_requests']<=(16 if m['scope']=='repo_review' else 3) or type(p['max_broker_starts']) is not int or not 1<=p['max_broker_starts']<=3:raise ValueError()
    if m['paths']!={'queue':'runs/'+m['run_id']+'/queue','cli':'runs/'+m['run_id']+'/isolated-cli','evidence':'evidence'}:raise ValueError()
   except (KeyError,TypeError,ValueError):raise QueueError('invalid_deployment') from None
   self.m=m
@@ -82,7 +83,14 @@ class Deployment:
   if s['blocked']:raise QueueError('deployment_blocked')
   if time.time()>=self.m['expires']:raise QueueError('deployment_expired')
   if (self.queue_root/'closed.json').exists() or (self.queue_root/'stop.requested').exists():raise QueueError('service_closed')
+ def routing_guard(self):
+  marker=self.root/'control/routing.json'
+  if marker.exists():
+   expected=read(marker,8192)
+   guard=getattr(self,'_routing_guard',None);token=getattr(guard,'token',None)
+   if getattr(guard,'marker',None)!=expected or not token or not token.get('active') or token.get('thread_id')!=threading.get_ident():raise QueueError('routed_session_requires_fenced_adapter')
  def current(self,s,a,allow_expired=False):
+  if isinstance(a,dict) and a.get('role')=='broker':self.routing_guard()
   if not isinstance(a,dict):raise QueueError('invalid_assignment')
   role=a.get('role');current=s['roles'].get(role)
   if current is None or any(a.get(k)!=current.get(k) for k in ('contract','deployment_id','run_id','owner_id','role','worker_id','assignment_id','epoch')):raise QueueError('stale_assignment')
@@ -95,7 +103,9 @@ class Deployment:
   try:
    with q.locked():return q.states()
   finally:q.close()
- def assign(self,owner,role,worker,lease=180,native_attested=False):
+ def assign(self,owner,role,worker,lease=180,native_attested=False,assignment_id=None,expected_epoch=None):
+  if role=='broker':self.routing_guard()
+  if assignment_id is not None:checked(assignment_id)
   self.scope(owner);label(worker);number(lease,.05,240)
   if role not in ROLES:raise QueueError('invalid_role')
   if role=='broker' and native_attested is not True:raise QueueError('native_capability_not_attested')
@@ -103,13 +113,14 @@ class Deployment:
    self.live(s);old=s['roles'].get(role)
    if old and old['status']=='active' and old['expires']>time.time():raise QueueError('role_already_assigned')
    epoch=1 if old is None else old['epoch']+1
+   if expected_epoch is not None and epoch!=expected_epoch:raise QueueError('assignment_epoch_conflict')
    if epoch>self.m['policy']['max_'+role+'_starts']:raise QueueError('restart_budget_exhausted')
    if role=='broker':
     for j in self.jobs():
      d=s['dispatch'].get(j['id'])
      if d and d['status']=='started' and not (j['state']=='completed' and j.get('completion_sha256')):raise QueueError('ambiguous_dispatch')
      if j['state']=='running':raise QueueError('prior_job_lease_active')
-   now=time.time();a={'contract':VERSION,'deployment_id':self.m['deployment_id'],'run_id':self.m['run_id'],'owner_id':owner,'role':role,'worker_id':worker,'assignment_id':uuid.uuid4().hex,'epoch':epoch,'issued':now,'expires':min(now+lease,self.m['expires']),'status':'active','native_capability':'operator_attested' if native_attested else 'not_required'}
+   now=time.time();a={'contract':VERSION,'deployment_id':self.m['deployment_id'],'run_id':self.m['run_id'],'owner_id':owner,'role':role,'worker_id':worker,'assignment_id':assignment_id or uuid.uuid4().hex,'epoch':epoch,'issued':now,'expires':min(now+lease,self.m['expires']),'status':'active','native_capability':'operator_attested' if native_attested else 'not_required'}
    s['roles'][role]=a;self.save(s);return dict(a)
  def heartbeat(self,a,state='ready',seconds=180):
   number(seconds,.05,240)
@@ -182,6 +193,7 @@ class Deployment:
    protocol.atomic_json(self.root/'observations'/(rid+'.json'),body)
    return {'receipt':r,'observation':body,'state':'acknowledged_parent' if self._acknowledged(rid,r['content_sha256']) else 'read_observer'}
  def resolve(self,owner,jid,outcome,evidence):
+  self.routing_guard()
   self.scope(owner);checked(jid);label(evidence)
   if outcome not in ('confirmed_not_started','confirmed_stopped'):raise QueueError('invalid_resolution')
   with self.locked() as s:
@@ -205,14 +217,14 @@ class Deployment:
 
 def main():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('--root',required=True);s=p.add_subparsers(dest='cmd',required=True)
- i=s.add_parser('init');i.add_argument('--owner',required=True);i.add_argument('--seconds',type=float,default=600);i.add_argument('--max-requests',type=int,default=3);i.add_argument('--notification',default='outbox_only',choices=['outbox_only','parent_tool_attested'])
+ i=s.add_parser('init');i.add_argument('--owner',required=True);i.add_argument('--seconds',type=float,default=600);i.add_argument('--max-requests',type=int,default=3);i.add_argument('--scope',choices=['text_only','tool_probe','repo_review'],default='text_only');i.add_argument('--notification',default='outbox_only',choices=['outbox_only','parent_tool_attested'])
  a=s.add_parser('assign');a.add_argument('--owner',required=True);a.add_argument('--role',required=True,choices=ROLES);a.add_argument('--worker',required=True);a.add_argument('--native-capability-attested',action='store_true');a.add_argument('--save',required=True)
  a=s.add_parser('recovery');a.add_argument('--owner',required=True)
  a=s.add_parser('observe-receipt');a.add_argument('--owner',required=True);a.add_argument('--receipt',required=True);a.add_argument('--observer',required=True)
  a=s.add_parser('resolve');a.add_argument('--owner',required=True);a.add_argument('--job',required=True);a.add_argument('--outcome',required=True,choices=['confirmed_not_started','confirmed_stopped']);a.add_argument('--evidence',required=True)
  a=s.add_parser('ack');a.add_argument('--owner',required=True);a.add_argument('--receipt',required=True);a.add_argument('--sha256',required=True);a.add_argument('--evidence',required=True);a.add_argument('--via',default='manual_parent')
  args=p.parse_args();os.umask(0o077)
- if args.cmd=='init':out=init(args.root,args.owner,args.seconds,args.max_requests,notification=args.notification)
+ if args.cmd=='init':out=init(args.root,args.owner,args.seconds,args.max_requests,notification=args.notification,scope=args.scope)
  else:
   d=Deployment(args.root)
   if args.cmd=='assign':out=d.assign(args.owner,args.role,args.worker,native_attested=args.native_capability_attested);protocol.atomic_json(Path(args.save),out,exclusive=True)

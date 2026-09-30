@@ -1,0 +1,90 @@
+{
+  "contract": "dots-sticky-routing/1",
+  "scope": "bounded single-owner multi-session routing; text_only default; strict optional tool_probe and repo_review",
+  "identity": [
+    "registry_id",
+    "session_key",
+    "deployment_id",
+    "run_id",
+    "generation",
+    "admission_id",
+    "worker_id",
+    "worker_instance",
+    "assignment_id",
+    "broker_epoch"
+  ],
+  "authoritative_session": "private provisioned deployment and per-session endpoint, never inferred from request IDs or prompt cache keys",
+  "admission_states": [
+    "pending",
+    "dispatch_started",
+    "uncertain",
+    "binding",
+    "confirmed",
+    "failed"
+  ],
+  "route_phases": [
+    "initializing",
+    "awaiting_admission",
+    "binding",
+    "active",
+    "blocked_admission",
+    "closed"
+  ],
+  "admission_actor": "authorized active parent using supported native platform tools; no Python spawning implementation",
+  "normal_data_path": [
+    "official Codex CLI",
+    "same-namespace loopback facade",
+    "private session queue",
+    "bound worker fenced adapter",
+    "actual native inference"
+  ],
+  "lock_order": [
+    "registry",
+    "deployment",
+    "queue"
+  ],
+  "no_locks_during_native_inference": true,
+  "failover": {
+    "requires": [
+      "worker closed or lease expired",
+      "safe queue state",
+      "no unresolved tool execution",
+      "fresh native context",
+      "new generation"
+    ],
+    "blocks": [
+      "live worker",
+      "started inference without durable completion or explicit verified resolution",
+      "active prior claim lease",
+      "ambiguous delivery",
+      "unresolved tool execution",
+      "exhausted admission budget",
+      "repo_review scope: replacement is disabled"
+    ],
+    "resolution": "explicit actual-platform evidence; original ambiguous job is retired, never replayed"
+  },
+  "bounds": {
+    "sessions_max": 16,
+    "session_seconds_max": 900,
+    "registry_seconds_max": 3600,
+    "requests_per_session_max": 16,
+    "admissions_per_session_max": 3,
+    "requests_per_session_by_scope": {
+      "text_only": 3,
+      "tool_probe": 3,
+      "repo_review": 16
+    },
+    "repo_review_tool_calls_max": 12
+  },
+  "native_context_reuse": "prohibited across all admission history",
+  "legacy": "unmarked deployments use original API; routed deployments reject unfenced broker entrypoints",
+  "trust_boundary": "cooperative same-user processes with private filesystem access; not hostile multi-tenant authentication",
+  "not_implemented": [
+    "native spawn API inside Python",
+    "persistent scheduler",
+    "automatic file-to-agent wake",
+    "generic tool executor",
+    "public network listener",
+    "live legacy-session migration"
+  ]
+}

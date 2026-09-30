@@ -12,7 +12,7 @@
       └──────── 私有共享文件目录 ──────────┘
 ```
 
-**当前范围：text-only、有界运行、单会话。** 已观察到实际桌面文本往返；没有证明通用工具执行闭环、用户 Mac 部署或全天候无人值守服务。
+**默认范围：text-only、有界运行。** 可显式启用同一用户的多会话固定分配，以及两种严格受限的工具测试。已观察到实际桌面文本、固定 nonce 命令和安全空闲换人的往返；仓库研究的真实取数仍被网络阻塞。没有证明通用工具执行、用户 Mac 部署或全天候无人值守服务。
 
 ## 这能做什么
 
@@ -29,6 +29,7 @@
 - 桌面端已安装来自官方来源的 Codex CLI；实际文本测试使用过 `0.159.0-alpha.7`，兼容性源码核对还覆盖 `0.159.2`。其他版本须自行验证
 - CLI 与 facade 必须处在能互通 loopback 的同一环境
 - 两端都能读写同一私有共享目录；本地绝对路径可以不同
+- 完整测试及可选 `tool_probe` / `repo_review` 范围需要 `jsonschema` 4.x；纯文本运行只依赖标准库。先运行 `python3 -c "import jsonschema"` 检查；若缺少，按当前环境的安装授权规则使用 `python3 -m pip install -r requirements-test.txt`
 - broker 必须是已经活跃、获授权、具备实际推理能力的原生 agent。普通 Python 进程不会因此获得平台任务工具或模型权限
 
 仓库不包含 Codex 二进制、凭据、认证配置或真实会话记录。
@@ -110,6 +111,22 @@ python3 desktop_bootstrap.py --root "$BRIDGE_ROOT" --owner "$OWNER" --codex "$CO
 
 完整顺序见 [START_HERE.zh-CN.md](START_HERE.zh-CN.md)。首次接手可先做 [确定性交接练习](HANDOFF_TEST.zh-CN.md)，它明确不调用真实模型。
 
+## 可选：会话固定分配与有界工具循环
+
+默认快速开始和自动部署提示词仍只做文本验证。需要扩展时，先阅读相应 runbook，在新 registry 中显式选择范围：
+
+- `text_only`：每个会话最多 3 次模型请求，独立队列和固定原生 worker；多个会话可并行，同一会话串行
+- `tool_probe`：仍最多 3 次模型请求，只允许一条固定 nonce 命令；由桌面 CLI 执行，worker 读取关联输出后回复
+- `repo_review`：最多 16 次模型请求、12 次工具调用、900 秒；只允许固定 helper 匿名读取本公开仓库，先固定 commit，再读或搜实际目录中的文件；禁止中途更换 worker
+
+首次分配或明确允许的安全换人仍需要活跃协调方调用环境实际提供的原生任务工具。普通后续消息和工具回执直接进入已绑定会话，无须逐条调用模型路由器。Python 本身不创建原生 agent，文件写入也不会自动唤醒协调方。
+
+严格工具范围不是通用 shell 或任意长任务服务。真实仓库研究运行只完成了一次失败的 `tree` 调用，返回 `network_unavailable`；未取得任何仓库内容或 commit，不能视为成功的多轮研究。详见[验证摘要](docs/VALIDATION.md)。
+
+- [固定分配设计](ROUTING_DESIGN.md)、[操作流程](ROUTING_RUNBOOK.md)与[契约](ROUTING_CONTRACT.json)
+- [单命令工具验证](TOOL_PROBE.md)
+- [有界仓库研究流程](REPO_REVIEW_RUNBOOK.md)
+
 ## 文档和契约
 
 - [broker 交接](BROKER_HANDOFF.zh-CN.md)：claim、read、结果提交、续租与停止
@@ -135,4 +152,4 @@ python3 desktop_bootstrap.py --root "$BRIDGE_ROOT" --owner "$OWNER" --codex "$CO
 
 ## English summary
 
-Dots2Codex is an experimental, single-user, text-only shared-file bridge between an unmodified official Codex CLI and an already active, authorized native inference agent. The CLI and loopback facade run together; the broker exchanges data through a private directory. No model backend, native-task endpoint, permanent scheduler, authentication credentials or free inference entitlement is bundled. Keep sandboxing and approvals enabled, verify the actual environment, and do not treat local outbox writes as delivered parent notifications.
+Dots2Codex is an experimental, single-user shared-file bridge with text-only defaults between an unmodified official Codex CLI and an already active, authorized native inference agent. The CLI and loopback facade run together; the broker exchanges data through a private directory. Optional bounded scopes add sticky per-session workers, one fixed nonce command, and a fixed public-repository reader. Successful multi-read repository research remains unverified because the live fetch was network-blocked. No model backend, native-task endpoint, permanent scheduler, authentication credentials or free inference entitlement is bundled. Keep sandboxing and approvals enabled, verify the actual environment, and do not treat local outbox writes as delivered parent notifications.

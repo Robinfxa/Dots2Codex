@@ -1,6 +1,6 @@
 {
   "contract": "file-ipc-portable/1",
-  "protocol_scope": "text_only",
+  "protocol_scope": "text_only by default; explicit tool_probe permits one fixed nonce command; explicit repo_review permits bounded read-only calls to the fixed public repository helper",
   "roles": {
     "parent_driver": {
       "executes": "uses only actually available supported task tools or an explicit operator; schedules bounded workers",

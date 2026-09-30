@@ -1,6 +1,6 @@
 # Security policy
 
-Dots2Codex is an experimental, single-user, text-only bridge. Treat deployment directories as private: tickets contain lease capabilities, and queued requests can contain sensitive context.
+Dots2Codex is an experimental, single-user bridge with text-only defaults. Treat deployment directories as private: tickets contain lease capabilities, and queued requests can contain sensitive context.
 
 ## Supported boundary
 
@@ -20,3 +20,38 @@ There is no 24/7 monitoring or automatic security-update guarantee. Review chang
 If this repository offers private vulnerability reporting, use that channel. Otherwise, open an issue asking for a private reporting route without posting exploitation details or private data. Do not include credentials, request bodies, tickets, user transcripts, CLI home directories or raw runtime archives in a public issue.
 
 For a reproducible report, prefer a small synthetic test, affected revision, expected behavior and observed error code. Public GitHub issues are not a secure credential channel.
+
+## Sticky-routing extension
+
+`routing.py` adds bounded multiple logical sessions for the same owner, not a
+multi-tenant service. Use fresh dedicated native contexts; never reuse a native
+task ID for another session/generation. Routing credentials and markers do not
+create platform authority. Only the actual authorized parent can admit a task.
+The deterministic guard is active only inside the current registry lock/thread,
+and stale/expired generations cannot renew, read or complete.
+
+Do not call lower-level FileQueue APIs directly for routed worker activity.
+Same-user write access can bypass cooperative fencing; protecting against a
+malicious same-UID process is outside this prototype's supported boundary.
+Unknown inference, delivery and tool outcomes require actual evidence. Resolving
+an inference retires its original job and does not prove a tool never ran.
+
+## Optional tool scopes
+
+Enabling `tool_probe` admits only one immutable nonce command. Enabling
+`repo_review` admits only `repo_fetch.py` with the exact checked arguments and
+public repository destination. Both require `jsonschema` validation of the
+currently advertised tool schema and fail closed when validation is unavailable.
+The broker produces an intent; only the official desktop CLI executes it.
+
+Repository text is untrusted data. It cannot authorize a new command, destination,
+credential, permission, or change in scope. Repository review pins the commit,
+checks paths against the returned tree, reserves every intent, and pins correlated
+output hashes. An ambiguous or running execution remains unresolved and is never
+automatically replayed. A terminal fetch failure permits only a factual final.
+
+The helper uses anonymous GET, rejects redirects, disables proxy-environment use,
+and has strict time/body/output limits. It does not provide general network access.
+The observed live attempt returned `network_unavailable`; the exact underlying
+DNS/proxy/sandbox cause was not established. Do not relax permissions or switch
+execution paths to bypass an access restriction.
