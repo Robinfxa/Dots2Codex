@@ -1,46 +1,25 @@
 {
   "contract": "dots2codex-desktop-global-pilot/1",
-  "base_commit": "f4ef05ded45a2391be8715db2cec64a22fcbdd9a",
-  "base_source_tree_sha256": "f1dd2ade5de38bfc1f87525348ca5dc8a069b21755840b0c44615e89c5346966",
+  "base_commit": "62e3218fad6347253e66e00e6216b7a766eae4ad",
+  "base_source_tree_sha256": "091ed895060ed4a0d1703b8e1ecf8392d9039e6418c6754a6ead254746974cce",
   "input_launcher_source_tree_sha256": "7774123803de7f12e89b8cb8be7a510f5cfc2e829572921c0fde33632d4e096e",
   "input_gateway_source_tree_sha256": "ab3026308c240f613b8be00b623cfa3eb67cd73fcac4e87556da7d1619215891",
-  "source_tree_sha256": "091ed895060ed4a0d1703b8e1ecf8392d9039e6418c6754a6ead254746974cce",
+  "source_tree_sha256": "27ac724e38fe140b81602be39695972b6695852066da47955796bb5d7923c636",
   "source_tree_hash_algorithm": "SHA-256 of UTF-8 canonical JSON files array (sort_keys=true,separators=comma/colon,ensure_ascii=false); array sorted by path",
-  "hashed_file_count": 212,
+  "hashed_file_count": 213,
   "manifest_self_excluded": true,
   "changed_files": [
-    "GLOBAL_GATEWAY_CONTRACT.json",
-    "GLOBAL_GATEWAY_README.txt",
     "README.md",
-    "README_ROUTER.txt",
     "docs/DESKTOP_GLOBAL.zh-CN.md",
-    "docs/DESKTOP_GLOBAL_VALIDATION.md",
-    "docs/EXPERIMENTAL_PREVIEW_VALIDATION.md",
-    "docs/GLOBAL_GATEWAY.zh-CN.md",
-    "docs/GLOBAL_NATIVE_CONTROLLER.md",
-    "docs/UNIFIED_MAC_LAUNCHER.zh-CN.md",
-    "remote_tests/test_global_desktop.py",
-    "remote_tests/test_global_pilot.py",
-    "remote_tests/test_mac_global_launcher.py",
-    "remote_tests/test_mac_launcher.py",
-    "remote_transport/global_config.py",
-    "remote_transport/global_desktop.py",
-    "remote_transport/global_pilot.py",
-    "remote_transport/mac_environment.py",
-    "remote_transport/mac_launcher.py"
+    "remote_tests/test_codex_home_resolution.py",
+    "remote_transport/global_desktop.py"
   ],
   "added_files": [
-    "docs/DESKTOP_GLOBAL.zh-CN.md",
-    "docs/DESKTOP_GLOBAL_VALIDATION.md",
-    "remote_tests/test_global_desktop.py",
-    "remote_tests/test_global_pilot.py",
-    "remote_tests/test_mac_global_launcher.py",
-    "remote_transport/global_desktop.py",
-    "remote_transport/global_pilot.py"
+    "remote_tests/test_codex_home_resolution.py"
   ],
   "all_six_source_bindings_preserved": true,
   "existing_runtime_migration": "fresh_paired_session_required",
-  "status": "desktop-global-flow-integrated-awaiting-live-acceptance",
+  "status": "desktop-global-codex-home-auto-resolution",
   "launcher_global_menu_supported": true,
   "production_ready": false,
   "ready_for_config": false,
@@ -52,10 +31,12 @@
   "native_inference_calls": 0,
   "google_writes": 0,
   "test_results": {
-    "focused_discovered_distinct": 190,
-    "focused_executed_pass": 181,
-    "real_parser_skipped": 9,
-    "independent_offline_probes": 8
+    "focused_discovered": 53,
+    "focused_passed": 53,
+    "focused_skipped": 0,
+    "new_resolver_tests": 17,
+    "independent_resolver_checks": 18,
+    "full_historical_suites_rerun": false
   },
   "files": [
     {
@@ -144,8 +125,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 17855,
-      "sha256": "87aefbcacd76a5b7228eab4479c1b35722f672a6affad6d01f74c89726a734b3",
+      "bytes": 17947,
+      "sha256": "c847ece584e47f01f08ec9cacf831889ce1333a0ae9947efcfc4ee22a41e1e02",
       "mode": "0644"
     },
     {
@@ -276,8 +257,8 @@
     },
     {
       "path": "docs/DESKTOP_GLOBAL.zh-CN.md",
-      "bytes": 4982,
-      "sha256": "0d8e03c15e539de9e1423a6ab009b361a10f10d61951315d392f3e87db83847c",
+      "bytes": 5250,
+      "sha256": "6b11dfd7d818738a9083ad28557115c75cca111dead5181f2b07532d1357f65f",
       "mode": "0644"
     },
     {
@@ -713,6 +694,12 @@
       "mode": "0644"
     },
     {
+      "path": "remote_tests/test_codex_home_resolution.py",
+      "bytes": 7731,
+      "sha256": "57d2c65ae7b180e7e9400fd246298222806e1132e9e9defc2b4447240e74be6a",
+      "mode": "0644"
+    },
+    {
       "path": "remote_tests/test_connector_batch.py",
       "bytes": 10297,
       "sha256": "5cb1d92ee375515c4acd44468cc232895dfd89839145e3d530eed7775f4c7230",
@@ -960,8 +947,8 @@
     },
     {
       "path": "remote_transport/global_desktop.py",
-      "bytes": 27312,
-      "sha256": "4a0b81bd301adddc62f124e086d7d12a526ece5dee2a05eba264e208fec65ddc",
+      "bytes": 29835,
+      "sha256": "4cdcfb3e48b618cf7dc00445717af6c2999daa5417eb81e8d53f533f69d0344d",
       "mode": "0644"
     },
     {
@@ -1331,7 +1318,7 @@
       "mode": "0644"
     }
   ],
-  "parent_commit": "f4ef05ded45a2391be8715db2cec64a22fcbdd9a",
+  "parent_commit": "62e3218fad6347253e66e00e6216b7a766eae4ad",
   "global_config_pilot_gate_implemented": true,
   "global_config_pilot_runtime_exercised": false,
   "input_desktop_global_source_tree_sha256": "7999cd2b2a5e028bc706760d7a290f44a3b5365b76c5f38f88a4d9478a89b4f3",
@@ -1340,7 +1327,7 @@
     "docs/GLOBAL_GATEWAY.zh-CN.md",
     "docs/UNIFIED_MAC_LAUNCHER.zh-CN.md"
   ],
-  "publication_test_results": {
+  "inherited_publication_test_results": {
     "python_discovered": 710,
     "python_passed": 701,
     "python_skipped_real_toml_parser": 9,

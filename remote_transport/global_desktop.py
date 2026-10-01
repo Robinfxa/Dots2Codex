@@ -68,6 +68,54 @@ def check_binary(evidence):
             and hash_bytes(path.read_bytes()) == evidence['sha256'], 'global_codex_binary_changed')
 
 
+def resolve_codex_home(*, explicit=None, saved=None, environ=None, home=None, ui=None):
+    """Resolve only known homes; normal startup never opens a folder chooser.
+
+    A prior explicit selection is reused unless the current terminal environment
+    contradicts it. A custom terminal home and an existing default desktop home
+    need a path choice; an environment variable alone cannot prove the desktop
+    uses that same directory. Missing saved paths are stale, unsafe paths are not.
+    """
+    env = os.environ if environ is None else environ
+    default = (Path.home() if home is None else Path(home)) / '.codex'
+    def checked(value):
+        # Preserve the original traversal for safety validation first. Only
+        # then collapse harmless lexical aliases, avoiding duplicate choices.
+        return Path(os.path.normpath(str(config_tx.known_home(value))))
+    if explicit is not None:
+        return checked(explicit)
+    saved_path = None
+    if saved:
+        try: saved_path = checked(saved)
+        except FileNotFoundError: pass
+    raw_env = env.get('CODEX_HOME')
+    env_path = None
+    if raw_env:
+        require(Path(raw_env).expanduser().is_absolute(), 'global_codex_home_environment_must_be_absolute')
+        try: env_path = checked(raw_env)
+        except FileNotFoundError:
+            raise ProtocolError('global_codex_home_environment_missing') from None
+    if saved_path is not None and (env_path is None or env_path == saved_path):
+        return saved_path
+    default_path = None
+    try: default_path = checked(default)
+    except FileNotFoundError: pass
+    if env_path is None:
+        require(default_path is not None, 'global_codex_home_missing_start_codex_once')
+        return default_path
+    candidates = []
+    for path, label in ((saved_path, 'saved setting'), (env_path, 'CODEX_HOME'),
+                        (default_path, 'standard desktop location')):
+        if path is not None and path not in [p for p, _ in candidates]: candidates.append((path, label))
+    if len(candidates) == 1: return candidates[0][0]
+    require(ui is not None, 'global_codex_home_conflict_requires_selection')
+    choices = [str(path) + ' (' + label + ')' for path, label in candidates]
+    chosen = ui.choose('Codex has different known configuration homes. Choose the one your desktop and terminal should share. '
+                       'The exact file will be shown again before any settings are changed.', choices)
+    require(chosen in choices, 'global_codex_home_selection_invalid')
+    return checked(candidates[choices.index(chosen)][0])
+
+
 class DesktopPorts:
     def binary(self, path): return binary_evidence(path)
     def copy(self, text): return router._copy_clipboard(text)
@@ -244,8 +292,8 @@ class DesktopGlobal:
         cfg = router._validate_config(strict_json(raw))
         selected = router._resolve_selection(args, cfg)
         require(selected is not None, 'global_default_selection_required')
-        home = getattr(args, 'codex_home', None) or self.ui.folder('Choose the CODEX_HOME shared by your desktop and terminal', os.environ.get('CODEX_HOME', str(Path.home() / '.codex')))
-        home = config_tx.known_home(home)
+        home = resolve_codex_home(explicit=getattr(args, 'codex_home', None),
+            saved=active['spec'].get('codex_home') if active is not None else None, ui=self.ui)
         cli = self.ports.binary(cfg['codex'])
         desktop_path = getattr(args, 'desktop_codex', None) or '/Applications/Codex.app/Contents/Resources/codex'
         if not Path(desktop_path).is_file(): desktop_path = self.ui.file('Select the installed Codex desktop bundled codex executable')

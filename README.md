@@ -60,7 +60,7 @@ Drive folder、Codex、工作目录、model/effort 设置；以后复用健康�
 
 使用 Global 时选择 **Start Global desktop routing**：
 
-1. 核对终端与桌面内置 CLI 均为 `codex-cli 0.159.2`，并选择二者实际共用的 `CODEX_HOME`
+1. 核对终端与桌面内置 CLI 均为 `codex-cli 0.159.2`；程序自动使用已保存或环境变量指定的 `CODEX_HOME`，通常直接采用 `~/.codex`，只有已知目录冲突时才询问
 2. 确认本轮 Google 控制流程，发送一次私有 `DOTS2CODEX_GLOBAL_JOIN_V1` 给 Dots，建立持续活跃的原生控制器
 3. 一次激活最长 **4 小时、最多 3 个原生子任务**；其中 1 个用于预检，另外 2 个供新工作线程使用，仍受平台剩余槽位限制
 4. 必须完成签名队列、独立子任务和真实原生预检，再逐项确认 `config.toml` 的准确改动；仅有监听器或布尔开关不能启用配置
