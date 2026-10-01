@@ -20,6 +20,7 @@ import threading
 import time
 
 from . import global_config as config_tx, router_mac as router
+from . import codex_desktop as app_identity
 from .backend import read_private_file
 from .global_gateway import Store, Gateway, DEFAULT_PORT, private_dir, private_write, probe, strict_json
 from .mac_environment import private_lock
@@ -116,7 +117,47 @@ def resolve_codex_home(*, explicit=None, saved=None, environ=None, home=None, ui
     return checked(candidates[choices.index(chosen)][0])
 
 
+def client_arguments(spec):
+    if 'desktop_app' in spec:
+        require('desktop' not in spec, 'global_client_evidence_profile_conflict')
+        return {'cli_version':spec['cli']['version'],'desktop_version':None,'desktop_app':spec['desktop_app']}
+    return {'cli_version':spec['cli']['version'],'desktop_version':spec['desktop']['version']}
+
+
+def check_clients(spec):
+    check_binary(spec['cli'])
+    if 'desktop_app' in spec: app_identity.check_application(spec['desktop_app'])
+    else: check_binary(spec['desktop'])
+
+
+def client_route_observation(runtime, transaction):
+    """Post-commit client traffic, never desktop identity or config attestation.
+
+    No request bodies or prompts leave the local store. A changed/restored config,
+    stale activation, or preflight route cannot count as this trial's result.
+    """
+    result={'completed_client_routes':0,'client_route_observed':False,
+            'desktop_new_thread_verified':False,'desktop_compatibility_verified':False}
+    if transaction.get('phase')!='committed' or not transaction.get('committed_at'): return result
+    current=config_tx.snapshot(transaction['config_path'])
+    if not current['exists'] or current['hash']!=transaction['after_hash']:
+        return {**result,'client_observation_state':'config_changed_revalidate'}
+    store=Store(Path(runtime)/'gateway');activation=store.activation()
+    if activation['id']!=transaction['generation'] or not activation['enabled'] or activation['expires']<=time.time():
+        return {**result,'client_observation_state':'activation_inactive'}
+    with store.transaction() as db:
+        rows=db.execute("SELECT DISTINCT r.id,r.identity FROM routes r JOIN requests q ON q.route=r.id "
+                        "WHERE r.generation=? AND r.created>=? AND q.created>=? "
+                        "AND q.state IN ('text_complete','tool_complete') AND q.backend_response_id IS NOT NULL",
+                        (transaction['generation'],transaction['committed_at'],transaction['committed_at'])).fetchall()
+    count=sum(1 for row in rows if row['id']!=transaction.get('preflight_route_id')
+              and not strict_json(row['identity']).get('session-id','').startswith('dots-pilot-'))
+    return {**result,'completed_client_routes':count,'client_route_observed':bool(count),
+            'client_observation_state':'client_route_seen_app_identity_unverified' if count else 'awaiting_new_client_thread'}
+
+
 class DesktopPorts:
+    def desktop_app(self, explicit, ui): return app_identity.discover_application(explicit=explicit, ui=ui)
     def binary(self, path): return binary_evidence(path)
     def copy(self, text): return router._copy_clipboard(text)
     def owned(self, active): return router._owned_process(active)
@@ -187,6 +228,7 @@ class DesktopGlobal:
         if result['config_changed']:
             result['restart_required'] = True
             result['desktop_new_thread_verified'] = False
+            result.update(client_route_observation(runtime, transaction))
         return result
 
     def _transaction(self, active):
@@ -232,7 +274,7 @@ class DesktopGlobal:
             return {**self.status(), 'next': 'Global start can resume this same activation after the controller and preflight finish.'}
         from . import global_pilot as pilot
         try:
-            pilot.require_pilot(runtime / 'gateway', status['pilot_proof_id'], spec['cli']['version'], spec['desktop']['version'])
+            pilot.require_pilot(runtime / 'gateway', status['pilot_proof_id'], **client_arguments(spec))
         except ProtocolError as exc:
             if str(exc) not in {'pilot_proof_expired', 'pilot_preflight_expired'}: raise
             if not self.ui.confirm('The native preflight is too old to authorize a config write. Run a fresh small preflight on the same pinned child? '
@@ -249,22 +291,26 @@ class DesktopGlobal:
             status = self._wait_stage(active, 180, {'PREFLIGHT_VERIFIED'}, prior_proof=previous_proof)
             if status['stage'] != 'PREFLIGHT_VERIFIED' or status.get('pilot_proof_id') == previous_proof: return self.status()
         require(not (runtime / 'stop.json').exists(), 'global_stop_requested')
-        check_binary(spec['cli']); check_binary(spec['desktop'])
+        check_clients(spec)
         plan = config_tx.preview(runtime / 'gateway', spec['codex_home'],
-            cli_version=spec['cli']['version'], desktop_version=spec['desktop']['version'])
-        message = ('Apply this verified PILOT routing to desktop and terminal new threads?\n'
+            **client_arguments(spec))
+        trial = ('desktop_app' in spec)
+        target = ('Detected app: ' + spec['desktop_app']['path'] + ' (app ' + spec['desktop_app']['app_version'] + ').\n'
+            'Desktop engine/catalog compatibility has not been verified. This is a reversible configuration trial.\n'
+            if trial else '')
+        message = ('Apply this PILOT routing configuration for new threads?\n' + target +
             'Target: ' + plan['config_path'] + '\n' + plan['diff'] + '\n'
-            'A real native preflight has completed through this activation. Fully quit and reopen Codex, '
-            'then create a new thread. Existing or resumed threads retain their previous provider. '
+            'The native BACKEND preflight passed; this does not test the desktop app. Fully quit and reopen Codex, '
+            'then create a new thread and check Global status for a completed client route. If the app rejects the catalog or no request reaches this gateway, use Restore Global config. Existing or resumed threads retain their previous provider. '
             'Profiles, CLI overrides, or managed settings may override this file. '
             'The bounded native controller must stay active. A private exact backup enables restore.\n'
             'Only the displayed owned settings are changed. Proceed?')
         if not self.ui.confirm(message): raise Cancelled()
         # Recheck immediately after the potentially slow consent interaction.
         require(self.ports.owned(active) and not (runtime / 'stop.json').exists(), 'global_supervisor_not_owned_or_stopping')
-        check_binary(spec['cli']); check_binary(spec['desktop'])
+        check_clients(spec)
         applied = config_tx.apply(runtime / 'gateway', spec['codex_home'],
-            cli_version=spec['cli']['version'], desktop_version=spec['desktop']['version'],
+            **client_arguments(spec),
             expected_before_hash=plan['before_hash'], expected_after_hash=plan['after_hash'],
             confirm=True, pilot_proof_id=status['pilot_proof_id'])
         save(runtime / 'config-applied.json', applied)
@@ -295,9 +341,14 @@ class DesktopGlobal:
         home = resolve_codex_home(explicit=getattr(args, 'codex_home', None),
             saved=active['spec'].get('codex_home') if active is not None else None, ui=self.ui)
         cli = self.ports.binary(cfg['codex'])
-        desktop_path = getattr(args, 'desktop_codex', None) or '/Applications/Codex.app/Contents/Resources/codex'
-        if not Path(desktop_path).is_file(): desktop_path = self.ui.file('Select the installed Codex desktop bundled codex executable')
-        desktop = self.ports.binary(desktop_path)
+        explicit_binary = getattr(args, 'desktop_codex', None)
+        explicit_app = getattr(args, 'desktop_app', None)
+        require(not (explicit_binary and explicit_app), 'global_choose_one_desktop_evidence_mode')
+        if explicit_binary:
+            # Legacy opt-in CLI flag only; no file chooser or guessed binary path.
+            desktop_evidence = {'desktop': self.ports.binary(explicit_binary)}
+        else:
+            desktop_evidence = {'desktop_app': self.ports.desktop_app(explicit_app, self.ui)}
         if not self.ui.confirm('Start GLOBAL desktop routing for up to four hours?\n'
             'Dedicated Google folder: ' + cfg['folder_id'] + '\nCODEX_HOME: ' + str(home) + '\n'
             'Creates one signed control queue, then separate pairing/control Docs and probes for each admitted thread. '
@@ -317,7 +368,7 @@ class DesktopGlobal:
                 seconds=seconds, max_children=3, max_pending=3, idle_seconds=min(1800, seconds))
             private_write(runtime / 'router-config.json', raw)
             spec = {'contract': CONTRACT, 'run_id': run_id, 'runtime': str(runtime), 'generation': generation,
-                    'codex_home': str(home), 'cli': cli, 'desktop': desktop, 'config_hash': hash_bytes(raw),
+                    'codex_home': str(home), 'cli': cli, **desktop_evidence, 'config_hash': hash_bytes(raw),
                     'stop_intent_id': stop_intent,
                     'expires': store.activation()['expires'], 'created': self.ports.now()}
             save(runtime / 'spec.json', spec)
@@ -438,9 +489,11 @@ def supervise(runtime):
                     handled = read(runtime / 'refresh-handled.json') if (runtime / 'refresh-handled.json').exists() else {}
                     if candidate['request_id'] != handled.get('request_id'): refresh = candidate
                 if (future is None or refresh is not None) and current['state'] == 'controller_active':
-                    check_binary(spec['cli']); check_binary(spec['desktop'])
-                    versions = pilot.observe_versions(store, spec['cli'].get('invocation_path', spec['cli']['path']),
-                                                      spec['desktop'].get('invocation_path', spec['desktop']['path']))
+                    check_clients(spec)
+                    cli_path = spec['cli'].get('invocation_path', spec['cli']['path'])
+                    versions = (pilot.observe_desktop_app(store, cli_path, spec['desktop_app']) if 'desktop_app' in spec
+                                else pilot.observe_versions(store, cli_path,
+                                    spec['desktop'].get('invocation_path', spec['desktop']['path'])))
                     prior = plan['plan_id'] if refresh is not None else None
                     if refresh is not None: save(runtime / 'refresh-handled.json', {**refresh, 'state': 'issued_outcome_unknown'})
                     plan = pilot.prepare_preflight(store, version_evidence=versions, previous_plan_id=prior)

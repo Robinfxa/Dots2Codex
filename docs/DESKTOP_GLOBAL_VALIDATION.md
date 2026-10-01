@@ -2,7 +2,11 @@
 
 This continuation starts from published combined source f4ef05ded45a2391be8715db2cec64a22fcbdd9a. Its Global menu, owned supervisor, native preflight and exact config-confirmation flow are integrated. The six original worker bindings, per-child JOIN/receipt protocol, tool loop, and published source artifacts remain preserved.
 
-## Checks completed
+## Later app-discovery update
+
+The normal flow now uses the separately versioned `desktop-app-config-trial/1` profile: exact terminal adapter plus signed app identity, with desktop compatibility explicitly unverified. The strict two-binary evidence below describes the earlier profile and remains available only via its explicit legacy flag. See [discovery/trial design and validation limits](DESKTOP_APP_DISCOVERY.md).
+
+## Original integration checks completed
 
 The integrated focused run covered 187 tests: 178 passed and nine real tomlkit tests were skipped. Three additional reviewer-derived desktop regressions were then added and passed in an 11-test desktop suite. Distinct focused coverage is therefore 190 tests: 181 executed successfully, nine skipped. This is a focused regression, not a new claim that every unchanged historical suite was rerun.
 

@@ -333,7 +333,8 @@ def parser():
     p.add_argument('--state', default=str(DEFAULT_STATE))
     p.add_argument('--credentials'); p.add_argument('--folder-id'); p.add_argument('--workdir'); p.add_argument('--codex')
     p.add_argument('--codex-home', help='Explicit existing Codex desktop home for Global routing')
-    p.add_argument('--desktop-codex', help='Explicit installed Codex desktop executable for Global verification')
+    p.add_argument('--desktop-app', help='Advanced: explicit installed .app folder; normally detected automatically')
+    p.add_argument('--desktop-codex', help='Legacy strict two-binary verification; explicit engine path only')
     p.add_argument('--model','-m'); p.add_argument('--effort'); p.add_argument('--catalog')
     p.add_argument('--no-launch-codex', action='store_true')
     return p
@@ -367,7 +368,7 @@ def main(argv=None):
         except Exception: pass
     if python is not None and absolute_path(sys.prefix) != python.parent.parent:
         forwarded = [args.operation]
-        for key in ('config','active','state','credentials','folder_id','workdir','codex','codex_home','desktop_codex','model','effort','catalog'):
+        for key in ('config','active','state','credentials','folder_id','workdir','codex','codex_home','desktop_codex','desktop_app','model','effort','catalog'):
             value = getattr(args, key)
             if value is not None: forwarded.extend(['--' + key.replace('_', '-'), value])
         if args.no_launch_codex: forwarded.append('--no-launch-codex')

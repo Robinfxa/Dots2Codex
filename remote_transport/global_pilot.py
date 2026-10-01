@@ -20,6 +20,7 @@ import time
 import uuid
 
 from . import global_control as queue
+from . import codex_desktop as app_identity
 from .backend import read_private_file
 from .codex_catalog import CODEX_VERSION
 from .global_gateway import (Store, PROTOCOL, endpoint, global_catalog, private_dir,
@@ -111,35 +112,60 @@ def _binary_file(path):
     return {**_file(resolved,executable=True),'invocation_path':str(invocation)}
 
 
+def _observe_binary(path):
+    before=_binary_file(path)
+    try:
+        result=subprocess.run([before['path'],'--version'],capture_output=True,text=True,timeout=10,check=False)
+    except (OSError,subprocess.SubprocessError):raise ProtocolError('pilot_binary_version_observation_failed') from None
+    require(result.returncode==0 and result.stdout.strip()==CODEX_VERSION,'pilot_binary_version_mismatch')
+    require(_binary_file(path)==before,'pilot_binary_changed_during_observation')
+    return {**before,'version':result.stdout.strip(),'output_sha256':hash_bytes(result.stdout.encode())}
+
+
 def observe_versions(store,cli_path,desktop_path):
-    """Run only the two explicitly selected installed binaries' --version."""
-    store=_store(store);observed={}
-    for name,path in (('cli',cli_path),('desktop',desktop_path)):
-        before=_binary_file(path)
-        try:
-            result=subprocess.run([before['path'],'--version'],capture_output=True,text=True,timeout=10,check=False)
-        except (OSError,subprocess.SubprocessError):raise ProtocolError('pilot_binary_version_observation_failed') from None
-        require(result.returncode==0 and result.stdout.strip()==CODEX_VERSION,'pilot_binary_version_mismatch')
-        require(_binary_file(path)==before,'pilot_binary_changed_during_observation')
-        observed[name]={**before,'version':result.stdout.strip(),'output_sha256':hash_bytes(result.stdout.encode())}
-    value={'id':secrets.token_hex(16),'observed_at':time.time(),'binaries':observed,
+    """Legacy strict profile: both explicitly selected binaries must match."""
+    store=_store(store)
+    value={'id':secrets.token_hex(16),'observed_at':time.time(),
+           'profile':'strict-client-binaries/1',
+           'binaries':{'cli':_observe_binary(cli_path),'desktop':_observe_binary(desktop_path)},
            'parser':_parser_binding(),'package':_sources()}
     return _save(store,'versions',value)
 
 
-def _versions(store,evidence,cli_version=CODEX_VERSION,desktop_version=CODEX_VERSION):
+def observe_desktop_app(store,cli_path,desktop_app):
+    """Config trial: exact terminal adapter, signed app identity, unknown app engine.
+
+    This never substitutes an app's display version for an engine version and
+    cannot produce the legacy two-binary profile.
+    """
+    store=_store(store);app_identity.check_application(desktop_app)
+    value={'id':secrets.token_hex(16),'observed_at':time.time(),'profile':app_identity.TRIAL,
+           'binaries':{'cli':_observe_binary(cli_path)},'desktop_app':copy.deepcopy(desktop_app),
+           'desktop_compatibility_verified':False,'parser':_parser_binding(),'package':_sources()}
+    app_identity.check_application(desktop_app)
+    return _save(store,'versions',value)
+
+
+def _versions(store,evidence):
     value=_unseal(store,'versions',evidence)
-    require(cli_version==CODEX_VERSION and desktop_version==CODEX_VERSION,'pilot_both_verified_versions_required')
+    profile=value.get('profile','strict-client-binaries/1')
+    require(profile in ('strict-client-binaries/1',app_identity.TRIAL),'pilot_unknown_evidence_profile')
     now=time.time()
     require(type(value.get('observed_at')) in (int,float) and 0<=now-value['observed_at']<VERSION_SECONDS,
             'pilot_version_evidence_expired')
     require(value.get('package')==_sources(),'pilot_package_source_changed')
     require(value.get('parser')==_parser_binding(),'pilot_parser_evidence_changed')
-    for name in ('cli','desktop'):
+    names=('cli','desktop') if profile=='strict-client-binaries/1' else ('cli',)
+    require(set(value.get('binaries',{}))==set(names),'pilot_evidence_profile_mismatch')
+    for name in names:
         record=value['binaries'][name]
         require(record['version']==CODEX_VERSION and _binary_file(record['invocation_path'])==
                 {k:record[k] for k in ('path','sha256','identity','invocation_path')},'pilot_binary_evidence_changed')
-    # The version observation must also remain the same private persisted record.
+    if profile==app_identity.TRIAL:
+        require(value.get('desktop_compatibility_verified') is False,'pilot_evidence_profile_mismatch')
+        app_identity.check_application(value.get('desktop_app'))
+    else:
+        require('desktop_app' not in value,'pilot_evidence_profile_mismatch')
     require(_load(store,'versions',value['id'])==value,'pilot_version_evidence_changed')
     return value
 
@@ -180,7 +206,7 @@ def prepare_preflight(store,*,version_evidence,previous_plan_id=None):
         require(previous['binding']==binding,'pilot_activation_or_controller_changed')
         old_versions=_unseal(store,'versions',previous['version_evidence'])
         new_versions=_unseal(store,'versions',version_evidence)
-        require(all(old_versions[k]==new_versions[k] for k in ('binaries','package','parser')),
+        require(all(old_versions.get(k)==new_versions.get(k) for k in ('profile','binaries','desktop_app','package','parser')),
                 'pilot_refresh_evidence_changed')
         route,_,prior=_request(store,previous,controller);cfg=store.config()
         with store.transaction() as db:
@@ -295,11 +321,18 @@ def verify_preflight(store,plan_id,*,queue_state,join_code):
             'native_task_id':route['native_task'],'request_digest':plan['request_digest'],'production_ready':False}
 
 
-def require_pilot(state_dir,proof_id,cli_version,desktop_version):
+def require_pilot(state_dir,proof_id,cli_version,desktop_version,*,desktop_app=None):
     store=_store(state_dir);proof=_load(store,'proof',proof_id);now=time.time()
     require(proof['created']<=now<proof['expires'],'pilot_proof_expired')
     plan,info,controller=_fresh_plan(store,proof['plan_id'])
-    _versions(store,plan['version_evidence'],cli_version,desktop_version)
+    versions=_versions(store,plan['version_evidence'])
+    require(cli_version==CODEX_VERSION,'pilot_verified_cli_version_required')
+    profile=versions.get('profile','strict-client-binaries/1')
+    if profile==app_identity.TRIAL:
+        require(desktop_version is None and desktop_app is not None
+                and desktop_app==versions['desktop_app'],'pilot_trial_app_evidence_required')
+    else:
+        require(desktop_version==CODEX_VERSION and desktop_app is None,'pilot_both_verified_versions_required')
     require(proof['binding']==plan['binding'],'pilot_proof_binding_mismatch')
     queue.validate_root(proof['queue_root'])
     require(proof['queue_root_sha256']==hash_bytes(canonical(proof['queue_root']))
@@ -308,4 +341,6 @@ def require_pilot(state_dir,proof_id,cli_version,desktop_version):
     route,pin,request=_request(store,plan,controller)
     require({k:route[k] for k in proof['route']}==proof['route'] and request==proof['request'],
             'pilot_completed_route_evidence_changed')
-    return {**info,'pilot_proof_id':proof_id,'pilot_ready':True,'production_ready':False,'ready_for_config':False}
+    return {**info,'pilot_proof_id':proof_id,'pilot_ready':True,'production_ready':False,'ready_for_config':False,
+            'client_evidence_profile':profile,'desktop_compatibility_verified':False,
+            'preflight_route_id':plan['route_id']}

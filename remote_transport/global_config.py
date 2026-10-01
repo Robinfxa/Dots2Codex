@@ -37,7 +37,7 @@ WARNINGS=[
     'Only the explicit CODEX_HOME/config.toml is managed; auth.json and login are untouched.',
     'Restart each target client. Existing/resumed threads may retain their old provider.',
     'CLI -m/-c, selected profile files, permitted project model/effort and managed policy can override this file.',
-    'Desktop bundled CLI and terminal CLI versions require separate live verification.',
+    'Terminal adapter compatibility and desktop app compatibility are separate; app identity is not a runtime test.',
     'Gateway fail-closed behavior covers requests reaching it, not arbitrary client startup fallback.',
     'Locks are cooperative. A noncooperating editor can race the final compare and atomic replacement.',
 ]
@@ -147,9 +147,13 @@ def readiness(state_dir,live=False):
     return info
 
 
-def versions(cli_version,desktop_version=None):
+def versions(cli_version,desktop_version=None,desktop_app=None):
     require(cli_version==CODEX_VERSION,'unsupported_or_unverified_cli_version')
     require(desktop_version is None or desktop_version==CODEX_VERSION,'unsupported_or_unverified_desktop_bundled_version')
+    if desktop_app is not None:
+        from .codex_desktop import check_application
+        require(desktop_version is None,'desktop_app_trial_cannot_assert_engine_version')
+        check_application(desktop_app)
 
 
 def render_patch(raw,info):
@@ -175,11 +179,14 @@ def render_patch(raw,info):
     return result
 
 
-def preview(state_dir,codex_home,*,cli_version,desktop_version=None,profile=None):
-    versions(cli_version,desktop_version);home=known_home(codex_home);info=readiness(state_dir)
+def preview(state_dir,codex_home,*,cli_version,desktop_version=None,desktop_app=None,profile=None):
+    versions(cli_version,desktop_version,desktop_app);home=known_home(codex_home);info=readiness(state_dir)
     before=snapshot(home/'config.toml');after=render_patch(before['raw'],info)
     warnings=list(WARNINGS)
-    if desktop_version is None:warnings.append('Desktop bundled version not supplied: desktop coverage remains unverified.')
+    if desktop_app is not None:
+        warnings.append('Desktop config compatibility trial for '+desktop_app['path']+' (app '+desktop_app['app_version']+'). '
+                        'Engine/catalog compatibility is unverified. Restart, create a new thread, and inspect its route; restore if unsupported.')
+    elif desktop_version is None:warnings.append('Desktop bundled version not supplied: desktop coverage remains unverified.')
     if profile is not None:
         require(isinstance(profile,str) and profile and '/' not in profile and '\\' not in profile and profile not in ('.','..'),
                 'invalid_profile_name')
@@ -245,17 +252,19 @@ def commit(path,expected,raw,*,delete=False,before_commit=None,after_replace=Non
 
 
 def apply(state_dir,codex_home,*,cli_version,expected_before_hash,confirm=False,desktop_version=None,
-          pilot_proof_id=None,expected_after_hash=None,before_commit=None,after_replace=None):
+          pilot_proof_id=None,expected_after_hash=None,before_commit=None,after_replace=None,desktop_app=None):
     require(confirm is True,'explicit_global_config_confirmation_required')
-    versions(cli_version,desktop_version);home=known_home(codex_home)
+    versions(cli_version,desktop_version,desktop_app);home=known_home(codex_home)
     # Production readiness is unchanged. The separate, short-lived PILOT proof
     # is evidence-bound, never a caller-supplied readiness boolean.
     def gate():
-        if pilot_proof_id is None:return readiness(state_dir,live=True)
+        if pilot_proof_id is None:
+            require(desktop_app is None,'desktop_app_trial_requires_pilot_proof')
+            return readiness(state_dir,live=True)
         from .global_pilot import require_pilot
         require(isinstance(expected_after_hash,str) and len(expected_after_hash)==64,
                 'pilot_exact_preview_confirmation_required')
-        return require_pilot(state_dir,pilot_proof_id,cli_version,desktop_version)
+        return require_pilot(state_dir,pilot_proof_id,cli_version,desktop_version,desktop_app=desktop_app)
     info=gate()  # Before any target-home mutation, including the lock.
     with home_lock(home):
         path=home/'config.toml';before=snapshot(path)
@@ -277,7 +286,10 @@ def apply(state_dir,codex_home,*,cli_version,expected_before_hash,confirm=False,
                   'after_hash':hash_bytes(after),'before_exists':before['exists'],'before_identity':before['identity'],
                   'before_mode':before['mode'],'backup':str(backup),'postimage':str(postimage),
                   'cli_version_evidence':cli_version,'desktop_version_evidence':desktop_version,
+                  'desktop_app_evidence':desktop_app,'client_evidence_profile':info.get('client_evidence_profile'),
+                  'desktop_compatibility_verified':False,'preflight_route_id':info.get('preflight_route_id'),
                   'restart_required':True,'live_route_observed':pilot_proof_id is not None,
+                  'live_route_observed_scope':'backend_preflight' if pilot_proof_id is not None else None,
                   'pilot_proof_id':pilot_proof_id,'production_ready':False}
         journal=directory/(tid+'.json');save_manifest(journal,manifest)
         def final_check():
@@ -286,10 +298,12 @@ def apply(state_dir,codex_home,*,cli_version,expected_before_hash,confirm=False,
             require(all(fresh.get(k)==info.get(k) for k in ('generation','base_url','catalog_path','selection')),
                     'gateway_activation_mismatch')
         written=commit(path,before,after,before_commit=final_check,after_replace=after_replace)
-        manifest.update(phase='committed',after_identity=written['identity']);save_manifest(journal,manifest)
+        manifest.update(phase='committed',after_identity=written['identity'],committed_at=time.time());save_manifest(journal,manifest)
         return {'transaction_id':tid,'phase':'committed','config_path':str(path),'restart_required':True,
                 'live_route_observed':pilot_proof_id is not None,'auth_file_touched':False,
-                'pilot_proof_id':pilot_proof_id,'production_ready':False}
+                'live_route_observed_scope':'backend_preflight' if pilot_proof_id is not None else None,
+                'pilot_proof_id':pilot_proof_id,'production_ready':False,
+                'client_evidence_profile':info.get('client_evidence_profile'),'desktop_compatibility_verified':False}
 
 
 def load_transaction(state_dir,tid):

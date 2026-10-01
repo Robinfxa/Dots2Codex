@@ -18,7 +18,7 @@
 > **本次新增功能是桌面 Global 有界试用流程。**
 > `START.command` 菜单已接通稳定网关、独立 Global 原生控制器 JOIN、真实原生预检与精确配置差异确认。
 > `production_ready` / `ready_for_config` 仍为 `false`；独立试用门槛要求活跃控制器、
-> 新鲜原生预检、已安装的真实 TOML parser、匹配的桌面与终端 CLI，以及用户明确确认配置差异。
+> 新鲜原生后端预检、已安装的真实 TOML parser、单独核验的终端 CLI、自动识别的已签名桌面 App，以及用户明确确认兼容试用配置差异。桌面引擎兼容性仍需实际新线程验收。
 > 发布源码不会自动启用你的 Mac。真实 Mac / Google / native 现场验收仍未完成；
 > 9 个真实 parser 测试因可选依赖未安装而跳过。
 > 详见[桌面 Global 启用步骤](docs/DESKTOP_GLOBAL.zh-CN.md)与[本次集成验证](docs/DESKTOP_GLOBAL_VALIDATION.md)。
@@ -60,7 +60,7 @@ Drive folder、Codex、工作目录、model/effort 设置；以后复用健康�
 
 使用 Global 时选择 **Start Global desktop routing**：
 
-1. 核对终端与桌面内置 CLI 均为 `codex-cli 0.159.2`；程序自动使用已保存或环境变量指定的 `CODEX_HOME`，通常直接采用 `~/.codex`，只有已知目录冲突时才询问
+1. 程序单独核验终端 CLI `codex-cli 0.159.2` 并自动识别桌面 App，不再选择包内可执行文件；程序自动使用已保存或环境变量指定的 `CODEX_HOME`，通常直接采用 `~/.codex`，只有已知目录冲突时才询问
 2. 确认本轮 Google 控制流程，发送一次私有 `DOTS2CODEX_GLOBAL_JOIN_V1` 给 Dots，建立持续活跃的原生控制器
 3. 一次激活最长 **4 小时、最多 3 个原生子任务**；其中 1 个用于预检，另外 2 个供新工作线程使用，仍受平台剩余槽位限制
 4. 必须完成签名队列、独立子任务和真实原生预检，再逐项确认 `config.toml` 的准确改动；仅有监听器或布尔开关不能启用配置
@@ -249,3 +249,7 @@ Router defaults to four hours / 128 model requests, with an eight-hour / 128-req
 hard maximum. Native admission remains manual. No model entitlement, free quota,
 automatic wake, uptime, exactly-once external effects, or security guarantee is
 provided. Read the [disclaimer](DISCLAIMER.md) before operating it.
+
+### 桌面 App 自动识别
+
+Global 正常启动不再要求选择 Codex 包内可执行文件。程序自动识别已安装 App，原生后端预检后展示可恢复的配置试用；App 兼容性需要重启后实际新线程验证。详情见 [App 发现与试用边界](docs/DESKTOP_APP_DISCOVERY.md)。
