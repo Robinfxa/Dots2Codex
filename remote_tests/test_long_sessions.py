@@ -225,6 +225,30 @@ class LongHTTPTests(Fixture):
         calls=len(self.drive.create_calls)
         status,raw,_=self.post(wire('x'*MAX_WIRE_BYTES))
         self.assertEqual(status,400);self.assertEqual(len(self.drive.create_calls),calls)
+    def test_status_cannot_observe_half_published_facade_request_index(self):
+        import threading
+        staged=threading.Event();release=threading.Event();reader_started=threading.Event()
+        original=self.controller.submit_request
+        def paused_submit(*args,**kwargs):
+            rid=original(*args,**kwargs);staged.set()
+            if not release.wait(3):raise RuntimeError('synthetic_barrier_timeout')
+            return rid
+        def read():
+            reader_started.set();return self.facade.read_state()
+        with patch.object(self.controller,'submit_request',side_effect=paused_submit), \
+             concurrent.futures.ThreadPoolExecutor() as pool:
+            pending=pool.submit(self.post,wire('one'))
+            self.assertTrue(staged.wait(3))
+            reading=pool.submit(read);self.assertTrue(reader_started.wait(3))
+            try:
+                # The request journal is durable, but its facade job is not yet
+                # saved. A concurrent read must wait, not report corruption.
+                time.sleep(.03);self.assertFalse(reading.done())
+            finally:release.set()
+            self.assertEqual(len(reading.result(timeout=3)['jobs']),1)
+            status,raw,_=self.post({'confirm':True},'/v1/bridge/close')
+            self.assertEqual(status,200,raw);self.facade.close();pending.result(timeout=3)
+
     def test_close_while_request_inflight(self):
         with concurrent.futures.ThreadPoolExecutor() as pool:
             pending=pool.submit(self.post,wire('one'))

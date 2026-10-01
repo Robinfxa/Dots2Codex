@@ -1,0 +1,45 @@
+Offline setup-helper unit tests, 2026-10-01 UTC.
+Standard-library mocks only; no OAuth consent, browser, network or real cloud writes.
+
+test_authorize_success_exact_sdk_contract_and_private_output (test_mac_google_setup.FlowAndReceiptTests.test_authorize_success_exact_sdk_contract_and_private_output) ... ok
+test_bad_auth_endpoint_rejected_before_sdk (test_mac_google_setup.FlowAndReceiptTests.test_bad_auth_endpoint_rejected_before_sdk) ... ok
+test_bad_token_endpoint_rejected_before_sdk (test_mac_google_setup.FlowAndReceiptTests.test_bad_token_endpoint_rejected_before_sdk) ... ok
+test_check_folder_read_shape_and_scope_of_result (test_mac_google_setup.FlowAndReceiptTests.test_check_folder_read_shape_and_scope_of_result) ... ok
+test_denied_scope_never_writes (test_mac_google_setup.FlowAndReceiptTests.test_denied_scope_never_writes) ... ok
+test_dual_config_rejected_before_sdk_or_browser (test_mac_google_setup.FlowAndReceiptTests.test_dual_config_rejected_before_sdk_or_browser) ... ok
+test_existing_output_is_unchanged_without_consent (test_mac_google_setup.FlowAndReceiptTests.test_existing_output_is_unchanged_without_consent) ... ok
+test_folder_success_receipt_and_one_attempt (test_mac_google_setup.FlowAndReceiptTests.test_folder_success_receipt_and_one_attempt) ... ok
+test_folder_unknown_stops_and_receipt_blocks_rerun (test_mac_google_setup.FlowAndReceiptTests.test_folder_unknown_stops_and_receipt_blocks_rerun) ... ok
+test_helper_import_does_not_execute_authorization (test_mac_google_setup.FlowAndReceiptTests.test_helper_import_does_not_execute_authorization) ... ok
+test_missing_client_secret_rejected_before_sdk (test_mac_google_setup.FlowAndReceiptTests.test_missing_client_secret_rejected_before_sdk) ... ok
+test_missing_refresh_token_never_writes (test_mac_google_setup.FlowAndReceiptTests.test_missing_refresh_token_never_writes) ... ok
+test_missing_scope_record_never_writes (test_mac_google_setup.FlowAndReceiptTests.test_missing_scope_record_never_writes) ... ok
+test_missing_serialized_refresh_token_never_writes (test_mac_google_setup.FlowAndReceiptTests.test_missing_serialized_refresh_token_never_writes) ... ok
+test_noninteractive_stops_before_sdk (test_mac_google_setup.FlowAndReceiptTests.test_noninteractive_stops_before_sdk) ... ok
+test_null_web_key_still_rejected (test_mac_google_setup.FlowAndReceiptTests.test_null_web_key_still_rejected) ... ok
+test_output_created_during_consent_is_not_overwritten (test_mac_google_setup.FlowAndReceiptTests.test_output_created_during_consent_is_not_overwritten) ... ok
+test_private_parent_required_before_consent (test_mac_google_setup.FlowAndReceiptTests.test_private_parent_required_before_consent) ... ok
+test_private_parent_required_for_input (test_mac_google_setup.FlowAndReceiptTests.test_private_parent_required_for_input) ... ok
+test_raw_create_401_not_replayed (test_mac_google_setup.FlowAndReceiptTests.test_raw_create_401_not_replayed) ... ok
+test_raw_create_connection_failure_not_replayed (test_mac_google_setup.FlowAndReceiptTests.test_raw_create_connection_failure_not_replayed) ... ok
+test_raw_create_exact_request_and_bounded_reply (test_mac_google_setup.FlowAndReceiptTests.test_raw_create_exact_request_and_bounded_reply) ... ok
+test_raw_create_unexpected_metadata_rejected (test_mac_google_setup.FlowAndReceiptTests.test_raw_create_unexpected_metadata_rejected) ... ok
+test_receipt_finalization_failure_never_recreates (test_mac_google_setup.FlowAndReceiptTests.test_receipt_finalization_failure_never_recreates) ... ok
+test_receipt_reservation_failure_prevents_post (test_mac_google_setup.FlowAndReceiptTests.test_receipt_reservation_failure_prevents_post) ... ok
+test_sdk_exception_redacted_and_logging_restored (test_mac_google_setup.FlowAndReceiptTests.test_sdk_exception_redacted_and_logging_restored) ... ok
+test_web_only_rejected_before_sdk (test_mac_google_setup.FlowAndReceiptTests.test_web_only_rejected_before_sdk) ... ok
+test_bad_token_endpoint_rejected (test_mac_google_setup.SafetyTests.test_bad_token_endpoint_rejected) ... ok
+test_client_file_cannot_substitute_user_token (test_mac_google_setup.SafetyTests.test_client_file_cannot_substitute_user_token) ... ok
+test_create_private_no_overwrite (test_mac_google_setup.SafetyTests.test_create_private_no_overwrite) ... ok
+test_existing_receipt_not_reused (test_mac_google_setup.SafetyTests.test_existing_receipt_not_reused) ... ok
+test_refuse_readable_by_group (test_mac_google_setup.SafetyTests.test_refuse_readable_by_group) ... ok
+test_refuse_symlink (test_mac_google_setup.SafetyTests.test_refuse_symlink) ... ok
+test_relative_path_rejected (test_mac_google_setup.SafetyTests.test_relative_path_rejected) ... ok
+test_scope_check_and_no_cloud_call (test_mac_google_setup.SafetyTests.test_scope_check_and_no_cloud_call) ... ok
+test_unapproved_authorization_stops_before_sdk (test_mac_google_setup.SafetyTests.test_unapproved_authorization_stops_before_sdk) ... ok
+test_unapproved_create_stops_before_sdk (test_mac_google_setup.SafetyTests.test_unapproved_create_stops_before_sdk) ... ok
+
+----------------------------------------------------------------------
+Ran 37 tests in 0.025s
+
+OK

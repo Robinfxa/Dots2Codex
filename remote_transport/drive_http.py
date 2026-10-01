@@ -47,6 +47,15 @@ class DriveHTTPClient:
         except (OSError, urllib.error.URLError):
             raise ProtocolError('drive_network_outcome_unknown') from None
 
+    def create_document_once(self, folder, name):
+        """Single POST, no SDK/auth/status replay; lost response remains unknown."""
+        body = {'name': name, 'parents': [folder], 'mimeType': 'application/vnd.google-apps.document'}
+        result = json.loads(self._call('drive/v3/files', query={'fields': 'id,name,parents',
+            'supportsAllDrives': 'true'}, data=json.dumps(body).encode(), content_type='application/json'))
+        require(isinstance(result, dict) and isinstance(result.get('id'), str) and result['id'] and
+                result.get('name') == name and result.get('parents') == [folder], 'drive_document_create_unverified')
+        return result['id']
+
     def generate_id(self):
         data = json.loads(self._call('drive/v3/files/generateIds', query={'count': 1, 'space': 'drive', 'type': 'files'}))
         require(type(data.get('ids')) is list and len(data['ids']) == 1, 'invalid_generated_ids')

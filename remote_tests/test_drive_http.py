@@ -30,6 +30,23 @@ class HTTPContractTests(unittest.TestCase):
         self.client=DriveHTTPClient(lambda:'synthetic-test-token')
     def tearDown(self):self.patch.stop()
 
+    def test_router_document_create_is_single_post_and_exact_parent(self):
+        self.opener.body=b'{"id":"doc","name":"router","parents":["folder"]}'
+        self.assertEqual(self.client.create_document_once('folder','router'),'doc')
+        req,_=self.opener.calls[0]
+        self.assertEqual(req.get_method(),'POST')
+        self.assertEqual(json.loads(req.data)['mimeType'],'application/vnd.google-apps.document')
+        self.assertEqual(len(self.opener.calls),1)
+        self.opener.body=b'{"id":"doc","name":"router","parents":["other"]}'
+        with self.assertRaisesRegex(ProtocolError,'unverified'):
+            self.client.create_document_once('folder','router')
+
+    def test_router_document_unknown_post_is_not_repeated(self):
+        self.opener.error=OSError('lost response')
+        with self.assertRaisesRegex(ProtocolError,'outcome_unknown'):
+            self.client.create_document_once('folder','router')
+        self.assertEqual(len(self.opener.calls),1)
+
     def test_generated_ids_request(self):
         self.opener.body=b'{"ids":["preallocated"]}'
         self.assertEqual(self.client.generate_id(),'preallocated')

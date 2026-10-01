@@ -32,7 +32,11 @@ class RemoteStore:
         except ProtocolError as exc: raise QueueError(str(exc)) from None
 
     def enqueue(self, request, session, deadline):
-        return self._call(self._enqueue,request,session,deadline)
+        # Publish the controller request index and matching facade job as one
+        # in-process observation window. read_state keeps its strict equality
+        # check; status/stop readers cannot see the intermediate disk pair.
+        with self.owner.lock:
+            return self._call(self._enqueue,request,session,deadline)
 
     def _enqueue(self, request, session, deadline):
         owner=self.owner

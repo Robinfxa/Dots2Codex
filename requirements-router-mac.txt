@@ -1,0 +1,3 @@
+-r requirements-remote.txt
+-r requirements-google-example.txt
+google-auth-oauthlib==1.2.2

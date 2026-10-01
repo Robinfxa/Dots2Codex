@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from .backend import read_private_file
 from .cli import write_new
-from .model import require
+from .model import require, hash_bytes
 
 
 def main():
@@ -22,6 +22,14 @@ def main():
     from .connector_worker import ConnectorWorker
     w=ConnectorWorker(a.root,a.native_task_id)
     release=Path(__file__).resolve().parents[1]
+    with w.locked() as state:
+        if state.get('router_execution_mode') == 'router_parallel_cells_v1':
+            hashes=state.get('router_source_hashes')
+            expected={'remote_transport/connector_cell.py','remote_transport/connector_worker.py',
+                      'native_connector/runner.js','native_connector/tool_adapter.js'}
+            require(isinstance(hashes,dict) and set(hashes)==expected and all(
+                not (release/name).is_symlink() and hash_bytes((release/name).read_bytes())==digest
+                for name,digest in hashes.items()),'router_parallel_runtime_source_changed')
     config={'cwd':str(release),'root':str(w.root.resolve()),'nativeTaskId':a.native_task_id,
             'manifest':str(Path(a.manifest).resolve()),'documentId':w.config['document_id']}
     require(a.phase!='upload-commit' or type(a.seq) is int and a.seq>0,'sequence_required')

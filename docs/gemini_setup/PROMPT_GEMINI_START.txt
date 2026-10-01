@@ -1,0 +1,14 @@
+我正在配置 Dots2Codex 修复合并版 Router，在 Mac 上运行官方 Codex CLI，
+用 Google Drive 保存协议消息，用 Google Docs requiredRevisionId 做条件更新，
+远端 Dots 使用它已经连接的 Google 插件。你只负责 Google Cloud 配置辅助。
+
+请先说明你现在能读取哪些资源、能否执行写入、是否有实际可调用的专业子代理。
+不要虚构 OAuth 设置工具，也不要把云侧 IAM 当作个人 Drive 文件授权。
+每次只做一个步骤，输出：当前事实、建议操作、影响范围、所需确认、验证方法。
+任何 API 启用、IAM、结算、OAuth 设置、共享或删除，先等待我明确确认。
+禁止索取或回显 client secret、OAuth token、refresh token、完整 OAuth URL、
+Router join_code 或凭据 JSON。敏感页面请先提醒我关闭 page context sharing。
+
+该路径不部署 Cloud Run/VM/Vertex AI，不需要 Gemini API Key。
+Mac Python 的授权只在我自己的 Mac 浏览器完成，不能放进 Cloud Shell。
+现在只问我目标 project ID 与实际授权账号类型，不执行写入。

@@ -160,6 +160,9 @@ class ConnectorWorker:
             require(phase in {'DISPATCH_INTENT','AMBIGUOUS'},'unexpected_worker_phase')
             if record['phase']=='result_saved':
                 batch=record.get('upload_batch')
+                if s.get('router_execution_mode') == 'router_parallel_cells_v1' and not batch:
+                    return {'action':'reconcile_uploads','native_retry':False,
+                            'no_automatic_upload_retry':True,'reason':'router_parallel_upload_batch_required'}
                 if batch and not all(i['status']=='verified' for i in batch['items'].values()):
                     return {'action':'reconcile_uploads','native_retry':False,
                             'no_automatic_upload_retry':True,'reason':'all_uploads_must_be_verified'}
@@ -246,6 +249,11 @@ class ConnectorWorker:
             packets=[self.save_object(obj) for obj in (claim,started,result)]
             record.update(phase='result_saved',claim=claim.oid,started=started.oid,result=result.oid)
             self.save(s)  # all upload intents fixed before any uploads are suggested
+            if s.get('router_execution_mode') == 'router_parallel_cells_v1':
+                return {'action':'prepare_parallel_upload_cell','seq':seq,
+                        'module':'remote_transport.connector_cell','phase':'upload-commit',
+                        'upload_batch_required':True,'native_retry':False,
+                        'on_unknown':'preserve exact evidence; never substitute serial uploads or repeat inference'}
             return {'action':'upload_once','objects':packets,'verify_exact_bytes_and_metadata':True,
                     'on_unknown':'reconcile exact file IDs; do not repeat inference or blindly upload'}
 

@@ -40,6 +40,38 @@ def _credentials():
         raise ProtocolError("authorized_user_credentials_invalid") from None
 
 
+
+def authorized_scopes():
+    """Recorded existing grant only; never requests new OAuth scopes."""
+    value = _credential_info().get("scopes", [])
+    if isinstance(value, str): value = value.split()
+    require(type(value) is list and all(isinstance(x, str) and x for x in value),
+            "authorized_user_scopes_missing")
+    return frozenset(value)
+
+
+def authorized_credentials():
+    """Explicit endpoint credentials only; no login/discovery."""
+    return _credentials()
+
+
+def create_drive_sdk_service():
+    """Read-compatible official SDK factory; Router writes use raw no-replay port.
+
+    httplib2 may resend a socket-failed POST. Do not use this factory for Router
+    non-idempotent document creation; use DriveHTTPClient.create_document_once.
+    """
+    import httplib2
+    from google_auth_httplib2 import AuthorizedHttp
+    from googleapiclient.discovery import build
+    try:
+        http = httplib2.Http(timeout=20); http.follow_redirects = False
+        authorized = AuthorizedHttp(_credentials(), http=http, max_refresh_attempts=0)
+        return build("drive", "v3", http=authorized, cache_discovery=False,
+                     static_discovery=True, num_retries=0)
+    except Exception:
+        raise ProtocolError("drive_sdk_initialization_failed") from None
+
 def create_drive_client():
     credentials = _credentials()
     from google.auth.transport.requests import Request

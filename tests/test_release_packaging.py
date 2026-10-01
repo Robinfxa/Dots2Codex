@@ -22,8 +22,8 @@ class ReleasePackaging(unittest.TestCase):
     def copy_checkout(self, parent, name='checkout'):
         target = Path(parent) / name
         shutil.copytree(ROOT, target, ignore=shutil.ignore_patterns(
-            'runtime', 'runtimes', 'runs', 'evidence', 'audit', '__pycache__', '*.pyc',
-            '.git', '.venv', 'venv', '.codex', 'release', 'dist', 'outbox', 'acks',
+            'runtime', 'runtimes', 'router-sessions', 'router-join-state', 'router-joins', 'runs', 'evidence', 'audit', '__pycache__', '*.pyc',
+            '.git', '.venv', '.venv-router', 'venv', '.codex', 'release', 'dist', 'outbox', 'acks',
             'observations', 'control', '.env', '.env.*', '*.log', '*.jsonl',
             '*.sqlite*', '*.db', 'auth.json'))
         return target
@@ -41,7 +41,7 @@ class ReleasePackaging(unittest.TestCase):
             self.assertFalse((checkout / 'evidence').exists())
             self.run_python(checkout, 'freeze_routing.py')
             self.assertTrue((checkout / 'evidence/routing-source-freeze.json').is_file())
-            for excluded in ('.venv', 'venv', 'runtime', 'runtimes', 'runs', 'evidence',
+            for excluded in ('.venv', '.venv-router', 'venv', 'runtime', 'runtimes', 'router-sessions', 'router-join-state', 'router-joins', 'runs', 'evidence',
                              '.git', '.codex', 'release', 'dist'):
                 (checkout / excluded).mkdir(exist_ok=True)
                 (checkout / excluded / 'excluded.py').write_text('# private fixture\n')

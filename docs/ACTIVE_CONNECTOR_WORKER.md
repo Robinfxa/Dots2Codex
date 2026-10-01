@@ -106,3 +106,13 @@ it must not be regenerated. A missing runtime cannot be rebuilt from the pin.
 Do not promise the user that resource access, long uptime, latency, or actual Mac
 provider/tool behavior was verified by the offline tests. Escalate a disconnected
 executor or stopped native task as a real blocker; a file arriving does not wake you.
+
+
+## Router sessions require parallel cells
+
+When provisioned by `router_join`, the private worker journal is marked
+`router_execution_mode=router_parallel_cells_v1`. Use the generated
+`connector_cell claim-begin` and `connector_cell upload-commit` workflows in
+[CONNECTOR_LATENCY.md](CONNECTOR_LATENCY.md). The result planner refuses the legacy
+serial no-batch path for these sessions. A failed/lost cell requires exact-evidence
+reconciliation, not a fallback upload, repeated input exposure, or another inference.

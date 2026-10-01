@@ -1,5 +1,9 @@
 # 从这里开始：两端角色不能混淆
 
+Mac + Drive/Docs 新会话的单消息 Router 入口：
+[安装与启动](docs/ROUTER_ONE_CLICK.zh-CN.md)、[升级与验收](docs/ROUTER_UPGRADE.zh-CN.md)。
+以下内容仍是原有共享目录模式，不能拿来替代 Router 的独立 CAS / 原生 worker 流程。
+
 本包用于有界、文本推理桥接。桌面端运行官方Codex和同一网络环境中的loopback facade；broker端运行一个已经活跃、获授权、能实际推理的原生agent。两端只需共享文件，不假定共享localhost。Python只能管理数据，不能自动调用平台原生agent工具。
 
 ## 目录和所有权
