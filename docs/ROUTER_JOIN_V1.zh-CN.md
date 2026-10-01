@@ -51,6 +51,12 @@ python3 -m remote_transport.router_join inspect \
 
 ## 2. 平台接纳与双向 raw-file probe
 
+若 `inspect.required_selection` 不为空，必须先按[模型选择规程第 3 节](MODEL_SELECTION.zh-CN.md#3-dots-端必须真实接纳指定组合)
+运行 `plan-native`，由可信父上下文实际调用计划中的 `collaboration.spawn_agent`，再运行
+`record-native` 保存真实返回证据。此路径使用 bootstrap V3；后续 `plan-admit` 必须增加
+`--admission-receipt NATIVE_ADMISSION.json`。禁止复用已有其他模型 worker、遗漏 effort 或默认回退。
+`inspect.required_selection=null` 才沿用下述旧 V2 接纳路径，底层模型与 effort 未验证。
+
 使用平台实际支持的接纳机制创建本轮专用 native worker，记录真实 `ACTUAL_NATIVE_TASK_ID`。
 不要把未来模型请求正文放入 spawn prompt，也不要把计划中的身份当作已接纳身份。
 

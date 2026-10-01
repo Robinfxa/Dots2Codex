@@ -62,8 +62,27 @@ git rev-parse HEAD
 
 - 默认 **4 小时 / 128 次模型请求**；硬上限 **8 小时 / 128 次**，工具结果续轮也计入预算
 - Router 要求保留的 parallel connector-cell runner；不能静默回退到旧串行提交路径
-- 内部 bootstrap 协议为 V2；入口消息保留 `DOTS2CODEX_ROUTER_JOIN_V1` 标记，不表示兼容旧 V1 helper
+- 未选模型的内部 bootstrap 协议为 V2；显式选择模型/effort 使用 V3。入口消息保留
+  `DOTS2CODEX_ROUTER_JOIN_V1` 标记，不表示兼容旧 V1 helper
 - 可选[设置辅助工具](docs/gemini_setup/tools/README.zh-CN.md)只由操作者主动运行，不随安装或启动执行
+
+### 4. 为新会话固定真实 native admission 的模型与 effort
+
+```sh
+# 离线查看本版本支持的组合；不是实时账号权限检查
+python3 -m remote_transport.router_mac models
+# 两个参数必须同时给出；也可以使用 -m
+./START_ROUTER.command --model gpt-6.1-sol --effort xhigh
+```
+
+新会话把选择写入签名 bootstrap，要求 Dots 父上下文**实际提交相同模型、effort 和
+`fork_turns="none"` 的 native 接纳**，并将真实返回的任务身份与提交参数记录到不可变 pin。
+每轮请求严格核对组合，不支持会话内换模型或 effort；改组合须重新配对，保留旧记录。
+
+官方 CLI 使用私有本地 `model_catalog_json` 提供当前组合；不依赖 `/v1/models` 自动驱动
+`/model`，也不只更改显示名称。未选择时保持 `native-subagent-bridge` legacy 模式，
+底层模型未知。接纳回执是可信父上下文记录的证据，不是独立底层模型证明。
+`ultra` 因 CLI 会改写而不开放；详情见[模型选择与验收边界](docs/MODEL_SELECTION.zh-CN.md)。
 
 ## 工作原理
 
@@ -100,9 +119,12 @@ Mac / controller                        已活跃的原生 worker
 | --- | --- | --- |
 | 原长会话基线 | 2026-09-30 约 28 分钟、4 次真实模型请求全部 `DELIVERED`；含 Mac 工具执行与匹配的 `function_call_output` 续轮；已 CAS 关闭并停止 worker | 多小时存活、完整 128 请求现场容量 |
 | 修复版 Router 与并行执行器 | 离线覆盖签名状态历史、私有配对 ledger、双向 probe、启动/停止竞争、PID 身份与未知写入处理 | 新单消息启动的真实 Mac/Google/native 端到端验收、跨 OAuth app 实际互通、真实延迟改善 |
+| 每会话模型/effort 固定选择 | 离线覆盖完整组合、真实接纳参数/回执绑定、不可变 pin、请求拒绝及 launcher；官方 CLI 本地目录解析 | 新选择路径的真实 native 推理、Mac/Google 端到端验收；底层实际模型独立证明 |
+| 显式模型/effort 选择 | 版本化 25 组合、签名接纳绑定与工具续轮离线测试；官方 CLI 已实际解析全部 25 个目录 | 本环境阻塞实际 HTTP 抓取；真实 native 模型、Mac/Google 新路径与交互菜单仍未验收 |
 | Google Cloud / Gemini 指南与可选 helper | 统一 Markdown/HTML/PDF/Word，离线测试与文档版面核查 | 本次未执行真实授权、Google 创建/写入或现场安装 |
 
-本次合并代码的完整离线套件：**478 个 Python 测试 + 25 个 Node 测试**。
+此前合并基线的完整离线套件：**478 个 Python 测试 + 25 个 Node 测试**。
+新增模型选择路径的验证范围见[模型选择说明](docs/MODEL_SELECTION.zh-CN.md)。
 独立离线审查另覆盖 **26 个 Router 案例 + 17 个 helper 案例**；手册完成 27 页版面核查。
 详见 [Router 验证](docs/ROUTER_VALIDATION.md)、[指南迁移验证](docs/GUIDES_MIGRATION_VALIDATION.md)
 与[历史真实验证](docs/REMOTE_VALIDATION.md)。
@@ -115,6 +137,7 @@ Mac / controller                        已活跃的原生 worker
 ### 使用与设置
 
 - Router：[安装 / 启动 / 停止](docs/ROUTER_ONE_CLICK.zh-CN.md) · [Dots 配对规程](docs/ROUTER_JOIN_V1.zh-CN.md) · [升级与验收](docs/ROUTER_UPGRADE.zh-CN.md)
+- 模型选择：[新会话的 model + effort、真实接纳、官方 CLI 与旧配置兼容](docs/MODEL_SELECTION.zh-CN.md)
 - Google Cloud / Gemini：[总入口](START_HERE_GEMINI_GUIDES.md) · [章节索引](docs/gemini_setup/00_README.zh-CN.md) · [离线 HTML](docs/gemini_setup/ALL_GUIDES.html) · [PDF](docs/gemini_setup/HANDBOOK.pdf) · [Word](docs/gemini_setup/HANDBOOK.docx)
 - Gemini 辅助：[启动提示词](docs/gemini_setup/PROMPT_GEMINI_START.txt) · [13 段提示词](docs/gemini_setup/02_GEMINI_PROMPTS.zh-CN.md) · [可选设置 helper](docs/gemini_setup/tools/README.zh-CN.md)
 - 手动远程：[安装配置](docs/REMOTE_SETUP.zh-CN.md) · [长会话与恢复](docs/REMOTE_LONG_SESSIONS.zh-CN.md) · [活跃 worker 契约](docs/ACTIVE_CONNECTOR_WORKER.md)

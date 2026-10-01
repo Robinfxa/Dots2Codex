@@ -52,3 +52,20 @@ operation ID/返回 ID 后人工对账，不能假称未创建。停止本地进
 
 离线通过仅说明合成端口/本地执行路径满足测试，不证明 Google 实际工具形状、Mac OS PID/启动行为、
 网络权限、端到端延迟改善或平台任务持续性。最新测试实录见 [ROUTER_VALIDATION.md](ROUTER_VALIDATION.md)。
+
+
+## 模型选择版本迁移
+
+显式选择模型/effort 的新会话使用 bootstrap V3 和带 `inference` 的部署 pin；
+正式 Control binding 也带 `selection`。普通对象 envelope 仍为 `dots-drive-objects/0`，
+其中部署 payload 的带版本 `inference` 扩展是新代码必需识别的字段。旧代码会拒绝此 pin，
+不能混用旧 worker 或伪装成 legacy。两个端点须使用同一完整新版本。
+
+无选择的旧 pin/V2 可以读取并按原来 `native-subagent-bridge` 语义运行，
+不会推断它实际运行哪个模型或 effort。不要把新字段追加到已有 pin、CAS、journal 或 ledger。
+升级、选不同模型和选不同 effort 均使用全新 session ID、runtime、native admission 和 pin；
+旧历史、未知工具结果和迟到响应保留在原会话，不自动迁移或重放。
+
+通用 CAS `rebind` 明确禁止从或到 selected binding，哪怕会话当前 IDLE/DELIVERED；
+本版本没有实现同会话热切换。新 checkout 的 worker 源 hash 列表还覆盖选择验证器和能力快照，
+正在运行的旧 materialization 不可原地覆盖。

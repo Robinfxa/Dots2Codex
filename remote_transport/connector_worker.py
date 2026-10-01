@@ -16,7 +16,7 @@ from .cli import write_new
 from .connector_smoke import ConnectorEvidenceMessages, prepare, verify, consume_begin, structured
 from .control import GoogleDocsCASControlStore, binding_for, _ref, MAX_CONTROL_BYTES
 from .model import Object, canonical, hash_bytes, require, MAX_BYTES
-from .session import _save, _check_payload, MAX_STATE
+from .session import _save, _check_payload, _check_request_binding, MAX_STATE
 from .timing import timed_stage
 
 
@@ -215,11 +215,13 @@ class ConnectorWorker:
                 require(receipt.body['identity']==self.pin.body['identity'] and receipt.body['deployment']==self.pin.oid and
                         receipt.body['seq']==seq-1 and receipt.body['links']=={'request':previous['request']['object_id'],
                         'result':previous['result']},'previous_receipt_mismatch')
+            _check_request_binding(request.body['payload'],self.pin)
             self.save_object(request)
             record['phase']='input_exposed';self.save(s)  # irreversible before plaintext is returned
             value={'action':'native_inference_once','native_task_id':s['native_task_id'],
                     'request_id':request.oid,'seq':seq,'payload':request.body['payload'],
-                    'native_invoked_by_python':False,'no_automatic_retry':True}
+                    'native_invoked_by_python':False,'no_automatic_retry':True,
+                    'inference_binding':self.pin.body['payload'].get('inference')}
             if expose_path is not None:
                 path=Path(expose_path)
                 require(path.parent.resolve()==self.root.resolve(),'input_file_must_be_in_runtime')

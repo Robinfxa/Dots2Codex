@@ -10,11 +10,25 @@ The top-level MIT license applies to the original Python code, tests, schemas an
 - `vendor/bridge_core/file_queue.py`, `facade.py`, `broker.py`
 - `vendor/bridge_core/reference/bridge.py`, the original project-authored Responses/file-queue prototype
 
-The name `reference/bridge.py` refers to that earlier local implementation. Its SHA-256 is pinned by the project loader to detect accidental changes. No upstream Rust source, Codex executable, bundled model prompt, CC Switch implementation or MCP SDK is distributed here.
+The name `reference/bridge.py` refers to that earlier local implementation. Its SHA-256 is pinned by the project loader to detect accidental changes. No upstream Rust source, Codex executable, CC Switch implementation or MCP SDK is distributed here.
+
+## Redistributed OpenAI Codex fallback instructions
+
+`remote_transport/codex_instructions_0_159_2.txt` is an **unmodified** copy of
+[codex-rs/models-manager/prompt.md](https://github.com/openai/codex/blob/ff6aec96948b70d94983af2641a6b67c94faeff5/codex-rs/models-manager/prompt.md)
+from OpenAI Codex `rust-v0.159.2`, commit `ff6aec96948b70d94983af2641a6b67c94faeff5`.
+It preserves the official CLI's existing fallback prompt when creating the
+bridge-specific session catalog; it is not a model implementation.
+
+- Copyright 2025 OpenAI; licensed under Apache-2.0, not this repository's MIT license
+- License copy: [OPENAI_CODEX_LICENSE](OPENAI_CODEX_LICENSE)
+- Unmodified upstream notice: [OPENAI_CODEX_NOTICE](OPENAI_CODEX_NOTICE)
+- Upstream Git blob: `907ff8b877026871b088f01f4366cea36e1f02cd`
+- File SHA-256: `ac8ae107a0d72fe3476b430afb161ea4e67da2e446d778aefc44828160559807`
 
 ## External projects consulted, not redistributed
 
-- [OpenAI Codex](https://github.com/openai/codex), especially tags `rust-v0.159.2` and `rust-v0.159.0-alpha.7`: consulted for provider configuration, request headers and Responses event compatibility. Codex has its own [Apache-2.0 license](https://github.com/openai/codex/blob/rust-v0.159.2/LICENSE). Users obtain the official executable separately; this repository does not modify or ship it.
+- [OpenAI Codex](https://github.com/openai/codex), especially tags `rust-v0.159.2` and `rust-v0.159.0-alpha.7`: consulted for provider configuration, request headers, model-catalog schema and Responses event compatibility. Except for the explicitly listed fallback instructions above, its implementation is not redistributed. Codex has its own [Apache-2.0 license](https://github.com/openai/codex/blob/rust-v0.159.2/LICENSE). Users obtain the official executable separately; this repository does not modify or ship it.
 - [CC Switch](https://github.com/farion1231/cc-switch): consulted for configuration preservation, error handling and protocol design ideas. Its [MIT license](https://github.com/farion1231/cc-switch/blob/main/LICENSE) remains its own; no CC Switch code or assets are included.
 - [multi-subflow](https://github.com/Robinfxa/multi-subflow): its public README was a conceptual reference for file handshakes. No scripts or other implementation were copied.
 - [JSON Schema Draft 2020-12](https://json-schema.org/draft/2020-12/json-schema-core): the repository's original schema documents declare this dialect. The specification and its implementation are not bundled.

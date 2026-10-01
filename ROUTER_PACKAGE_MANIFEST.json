@@ -1,16 +1,25 @@
 {
-  "contract": "dots2codex-router-guides-release/1",
-  "base_commit": "689efa055e6bb2d290f8870e25ff1ebb3a3109bd",
-  "input_router_zip_sha256": "42d5008e1287fa3ee30e822a1e5eb4787d0465c857c8fb7100c879ea6cc143e6",
-  "source_tree_sha256": "b6398955ed38e1bcc82d9251ade3887dd137d707a2644725e2684c268440f157",
-  "hashed_file_count": 165,
+  "contract": "dots2codex-model-selection-release/1",
+  "base_commit": "4508189d58ca641abbf5278101f65c254f67cc73",
+  "previous_manifest_sha256": "832fd4be937480957fd180a81b8f25275e5b0c9e2a97ecfc10cfa1119b7e2fec",
+  "source_tree_sha256": "91924c8eabb84afa22fcb381850f2788c6eb2b6f486d0bf71c46923ab1a18621",
+  "source_tree_hash_algorithm": "SHA-256 of UTF-8 canonical JSON files array (sort_keys=true,separators=comma/colon,ensure_ascii=false); array sorted by path",
+  "hashed_file_count": 176,
   "manifest_self_excluded": true,
+  "native_inference_live_tested": false,
   "one_click_bootstrap_live_tested": false,
+  "emitted_codex_wire_live_tested": false,
+  "official_codex_catalog_parse_pairs_passed": 25,
+  "test_results": {
+    "python_passed": 519,
+    "node_passed": 25,
+    "independent_adversarial_passed": 20
+  },
   "files": [
     {
       "path": ".gitignore",
-      "bytes": 1075,
-      "sha256": "94ac818700356b8aaddb780ba8af30bbf4f9cc7c0c46b7e84aad7ec408cf9e0e",
+      "bytes": 1271,
+      "sha256": "5f3ae2209d4b1837aa779f049961734aee28f9763c5d68c19ac77cb521006dbe",
       "mode": "0644"
     },
     {
@@ -68,9 +77,21 @@
       "mode": "0644"
     },
     {
+      "path": "OPENAI_CODEX_LICENSE",
+      "bytes": 10926,
+      "sha256": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc",
+      "mode": "0644"
+    },
+    {
+      "path": "OPENAI_CODEX_NOTICE",
+      "bytes": 242,
+      "sha256": "9d71575ecfd9a843fc1677b0efb08053c6ba9fd686a0de1a6f5382fd3c220915",
+      "mode": "0644"
+    },
+    {
       "path": "README.md",
-      "bytes": 12762,
-      "sha256": "c3ed3dc1a490e0185466494942817279801ae40fb281f326a3a286f9f85d9a39",
+      "bytes": 14660,
+      "sha256": "f0bf4ef18569246ff59cf6116ac3f82504872a0c9aafe9e51c2a77cb13c7bca4",
       "mode": "0644"
     },
     {
@@ -153,8 +174,8 @@
     },
     {
       "path": "THIRD_PARTY_NOTICES.md",
-      "bytes": 2964,
-      "sha256": "70ea18ec0bb3f7fac6942dd3d81d0f736b1f6217985d231e6d0a7d0cd272e8fd",
+      "bytes": 3945,
+      "sha256": "e04dda92b824c6711fa38f612318632f89d1c4c1d073c1b046c5c20b8ee02a02",
       "mode": "0644"
     },
     {
@@ -206,6 +227,18 @@
       "mode": "0644"
     },
     {
+      "path": "docs/MODEL_SELECTION.zh-CN.md",
+      "bytes": 10907,
+      "sha256": "2996b5679f2f49eef9aa690ec26c21ec91d105c7ed5e05e91fce378511817328",
+      "mode": "0644"
+    },
+    {
+      "path": "docs/MODEL_SELECTION_VALIDATION.md",
+      "bytes": 4507,
+      "sha256": "0e74484fdfd463b889728f545142353b10d71040d4e2dd7bd8ff7657dc8af9c3",
+      "mode": "0644"
+    },
+    {
       "path": "docs/REMOTE_LONG_SESSIONS.zh-CN.md",
       "bytes": 11006,
       "sha256": "66f454d73aba075d42b0bfe7399f0455d8793399c459a3d8d904ebe78e7fec0f",
@@ -225,8 +258,8 @@
     },
     {
       "path": "docs/ROUTER_JOIN_V1.zh-CN.md",
-      "bytes": 13796,
-      "sha256": "430034bb8865811c3060dc1212099d43f5b1f0a8d6c6bef8d270ec639942e4da",
+      "bytes": 14393,
+      "sha256": "920f69e27c49dff81782c55486a38f486e5e37a115d3d90d9c7c896b8d18ee66",
       "mode": "0600"
     },
     {
@@ -237,8 +270,8 @@
     },
     {
       "path": "docs/ROUTER_UPGRADE.zh-CN.md",
-      "bytes": 4376,
-      "sha256": "ea0e6743dcf375010ca3c3678f7af9244863e00848f41e134f4478d519507c4c",
+      "bytes": 5503,
+      "sha256": "6153f359d5808c1d091cb631c406dbc10e8c477af5ff65715b2939bfecaad607",
       "mode": "0644"
     },
     {
@@ -542,6 +575,12 @@
       "mode": "0644"
     },
     {
+      "path": "remote_tests/test_codex_catalog.py",
+      "bytes": 3699,
+      "sha256": "bff0013db902da948480ff40a1bc7a199ecf0d50e865fe35eb208633f9dea114",
+      "mode": "0644"
+    },
+    {
       "path": "remote_tests/test_connector_batch.py",
       "bytes": 10297,
       "sha256": "5cb1d92ee375515c4acd44468cc232895dfd89839145e3d530eed7775f4c7230",
@@ -590,6 +629,18 @@
       "mode": "0644"
     },
     {
+      "path": "remote_tests/test_model_selection.py",
+      "bytes": 17681,
+      "sha256": "f2be09014fe155b560d86a7697a17bbe9ef5c67a8150558f8e3b470538a98bc8",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_tests/test_model_selection_launcher.py",
+      "bytes": 13149,
+      "sha256": "13f9a615affa8445bd6df20344e4081b824d4863697b1a4caff9a5ffa994ec36",
+      "mode": "0644"
+    },
+    {
       "path": "remote_tests/test_remote_facade.py",
       "bytes": 4999,
       "sha256": "c6e4fc8f753883d38e2f09977e794a3451b9b143c3f0a97e368f87a48628dc7a",
@@ -598,7 +649,7 @@
     {
       "path": "remote_tests/test_router_bootstrap.py",
       "bytes": 24394,
-      "sha256": "05e7f495014cf357beb03696ba2fd22cfde06a7ed4bbfa43e8c3d0930c95e228",
+      "sha256": "6a97dd21ef4a340eb3db72f5889420a8ddb6dfc53a80265d395ae5e85f44230b",
       "mode": "0600"
     },
     {
@@ -639,8 +690,20 @@
     },
     {
       "path": "remote_transport/cli.py",
-      "bytes": 9888,
-      "sha256": "4caf20212b084ee603c982d766eda0b2f3e24931d983d46f1d4884f7c7d36a01",
+      "bytes": 11304,
+      "sha256": "5c97dd1764b672be6bf361f5b4beecad8d8b43b87706a66235d81fdcbda8d31c",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/codex_catalog.py",
+      "bytes": 4749,
+      "sha256": "f2b9f54e8bc0e9d4531950f7f1b3befa6e2556b2adcb38c75573eacbe0e4f3ee",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/codex_instructions_0_159_2.txt",
+      "bytes": 20903,
+      "sha256": "ac8ae107a0d72fe3476b430afb161ea4e67da2e446d778aefc44828160559807",
       "mode": "0644"
     },
     {
@@ -669,14 +732,14 @@
     },
     {
       "path": "remote_transport/connector_worker.py",
-      "bytes": 19851,
-      "sha256": "142357abdc33999cd2ae6d200fa86c427a0bcf289a82966bb4df6d8a886f7be2",
+      "bytes": 20027,
+      "sha256": "37460d34c2a08dce6b435b2573f2f8d267a40f3706a68ba7f34b9483b8061ecb",
       "mode": "0644"
     },
     {
       "path": "remote_transport/control.py",
-      "bytes": 25091,
-      "sha256": "3659a482b917bc4598bfebf2166d7b1d928e841b96e3a6a03a227588b50761cc",
+      "bytes": 25916,
+      "sha256": "255fc3d7adeea08a0f2c359d87c23d9bc0fe6784cdcaf4c111f2907df4a50578",
       "mode": "0644"
     },
     {
@@ -699,26 +762,32 @@
     },
     {
       "path": "remote_transport/facade.py",
-      "bytes": 25535,
-      "sha256": "6f55a1f70383c0ed0e8f74cb9cb92c7e3d789c186f01622cc90cdc01a6b20fd8",
+      "bytes": 25845,
+      "sha256": "89f39e5aef0bee9e23186f97a65af76ca19e36c3540f4298906b071d57519fdb",
       "mode": "0644"
     },
     {
       "path": "remote_transport/model.py",
-      "bytes": 6961,
-      "sha256": "81fc624512f3deb7e2be55cfbae26372d0ba2343988463641471c069102467c3",
+      "bytes": 7416,
+      "sha256": "47e222531809e0aeb0f69610653d278a6d571275902ad2f1108a45014c99eb32",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/native_capabilities.json",
+      "bytes": 2143,
+      "sha256": "a19e20d55215a29d8d32eaa0ba963fed898faa744511863bab774f1ad27489e9",
       "mode": "0644"
     },
     {
       "path": "remote_transport/operator.py",
-      "bytes": 4925,
-      "sha256": "e5a7bc1d96e2f865be3f7f00633994ee40fce399cf691c3260c1b4b1d701ef84",
+      "bytes": 7659,
+      "sha256": "187e3a6bd60f670998608bfd66500f9c40fed7cc1861c3903978466b184f793c",
       "mode": "0644"
     },
     {
       "path": "remote_transport/router_bootstrap.py",
-      "bytes": 27123,
-      "sha256": "ff7f07d7e86a8b6938a9d1ea98c42145a8dc3723b837ebe266dc9e73d4217304",
+      "bytes": 29242,
+      "sha256": "05cd8237453c72eb269c1b6adac29c037e581bb769f36ddc71b6a3d50e9243a2",
       "mode": "0600"
     },
     {
@@ -729,20 +798,26 @@
     },
     {
       "path": "remote_transport/router_join.py",
-      "bytes": 21191,
-      "sha256": "349c88f99ac70dd6b078ee5687fd551871cf8f5549ff7415bc5109b844121ac1",
+      "bytes": 25636,
+      "sha256": "36f20059bb7578a524125ead7990c2debe409facdac9a7764d74cdac0c2167b9",
       "mode": "0600"
     },
     {
       "path": "remote_transport/router_mac.py",
-      "bytes": 42036,
-      "sha256": "67716a98e2a2663d9cebf54037a83409052d7bff33942c767d0f44591446f108",
+      "bytes": 46060,
+      "sha256": "4b406743ed8ab2392644c35dbb11baf57442015883f47dd32549de92c51b9164",
       "mode": "0600"
     },
     {
+      "path": "remote_transport/selection.py",
+      "bytes": 6458,
+      "sha256": "1fd2a81e6e2a95680131bdd5bc6e3d33177e8fdb6cf073bafc6652a4fddedfde",
+      "mode": "0644"
+    },
+    {
       "path": "remote_transport/session.py",
-      "bytes": 24835,
-      "sha256": "384a02eba8ac7b651d239460f73a9003895d1b3574ec19ac1a164a4888d72b17",
+      "bytes": 25738,
+      "sha256": "cbf94cd9724a523352790f5182170ac03932bb5c0fe61e246d6962da528be5f0",
       "mode": "0644"
     },
     {
@@ -753,8 +828,8 @@
     },
     {
       "path": "remote_transport/wire.py",
-      "bytes": 4352,
-      "sha256": "023957b360f2125d2ba8b1cc713b359cf14403649cb6196cac08c1948310329b",
+      "bytes": 5091,
+      "sha256": "ef5366a46f9fb8aab0466fd8bbdafea36e5811e63f31e48f95b861e0ee6ea8ad",
       "mode": "0644"
     },
     {
@@ -997,19 +1072,5 @@
       "sha256": "4a8b2f264ff4bfe9cad372ba069aa9fca5dfee19dc13f35a17f3d6d7c9ad6c5f",
       "mode": "0644"
     }
-  ],
-  "repaired_base_source_tree_sha256": "8da5c5ada6c3fa85dc64317653f5f7961b8adf4eed73ae9a44563e8141a4e5c8",
-  "guide_input_zip_sha256": "1bda15a9c8f68f461211edaec75b810a749dafba97abe8a535f031800f057f17",
-  "repaired_base_public_paths_preserved": 144,
-  "baseline_runtime_files_unchanged": true,
-  "optional_setup_helper_live_tested": false,
-  "guide_and_helper_paths_imported": 20,
-  "source_package_sha256": "d49803ce79e750bbb39972a74a306cb83a38f70ce3493c79a06915281b793dcb",
-  "source_package_public_tree_sha256": "2d022c8105251984cf22f3ec20f324f508a3df04181a0d292c7157f518f31327",
-  "publication_documentation_adjustments": [
-    "README.md",
-    "DISCLAIMER.md",
-    "docs/gemini_setup/GUIDE_BUILD_VERIFICATION.json"
-  ],
-  "publication_pdf_optimization": "Same public handbook content; compact font programs with original page streams, Unicode maps, and links preserved; validation recorded in guide metadata"
+  ]
 }

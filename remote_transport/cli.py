@@ -10,6 +10,7 @@ from . import deployment, Object, ProtocolError, Journal, Controller, Worker, Lo
 from .backend import read_private_file, fsync_dir
 from .model import canonical, require, MAX_BYTES
 from .facade import RemoteResponsesFacade
+from .selection import load_catalog, select, pin_selection, validate_admission
 
 
 def write_new(path, raw):
@@ -56,6 +57,8 @@ def main():
     p.add_argument('--port',type=int,default=0);p.add_argument('--deadline',type=float,default=60)
     p.add_argument('--seconds',type=int,default=600);p.add_argument('--max-requests',type=int,default=3)
     p.add_argument('--scope',choices=['text_only','responses_tools'],default='text_only')
+    p.add_argument('-m','--model');p.add_argument('--effort');p.add_argument('--catalog')
+    p.add_argument('--admission-receipt')
     p.add_argument('--long-session',action='store_true')
     p.add_argument('--poll-interval',type=float,default=5);p.add_argument('--heartbeat-interval',type=float,default=15)
     p.add_argument('--wait',type=float,default=10)
@@ -69,9 +72,17 @@ def main():
     require(a.pin is not None,'pin_path_required')
     if a.operation=='new-deployment':
         require(a.session and a.native_task_id,'session_and_native_task_identity_required')
-        pin=deployment(a.session,a.native_task_id,seconds=a.seconds,max_requests=a.max_requests,scope=a.scope)
+        inference=None
+        if any((a.model,a.effort,a.admission_receipt,a.catalog)):
+            require(a.model and a.effort and a.admission_receipt,'model_effort_and_admission_receipt_required')
+            selection=select(load_catalog(a.catalog),a.model,a.effort)
+            receipt=json.loads(read_private_file(a.admission_receipt,131072))
+            validate_admission(receipt,selection,a.native_task_id)
+            inference={'selection':selection,'admission':receipt}
+        pin=deployment(a.session,a.native_task_id,seconds=a.seconds,max_requests=a.max_requests,scope=a.scope,inference=inference)
         write_new(a.pin,pin.raw)
-        return {'deployment':pin.oid,'native_admission_verified':False,'next':'provision each role journal once with this trusted pin'}
+        return {'deployment':pin.oid,'native_admission_verified':False,'selection':pin_selection(pin),'underlying_model_verified':False,'next':'provision each role journal once with this trusted pin'}
+    require(not any((a.model,a.effort,a.catalog,a.admission_receipt)),'selection_is_immutable_use_new_deployment')
     pin=Object.parse(read_private_file(a.pin,131072))
     require(a.journal is not None,'journal_path_required')
     if a.operation=='provision-journal':
@@ -136,9 +147,18 @@ def main():
             return {'receipt':facade.confirm_delivery(a.request_id,a.evidence)}
         require(a.operation=='serve','unsupported_operation')
         facade.start()
+        selection=pin_selection(pin)
+        catalog_path=None
+        if selection is not None:
+            from .codex_catalog import write_catalog
+            catalog_path=write_catalog(Path(a.journal)/'codex-model-catalog.json',selection)
         ready={'base_url':facade.base_url,'pid':os.getpid(),'deployment':pin.oid,
                'transport':a.transport,'session_control':'docs_cas' if a.control_document_id else 'single_writer',
                'native_invoked_by_python':False,'scope':pin.body['payload']['scope'],
+               'selection':selection,'codex_model_catalog':catalog_path,
+               'selection_mode':'explicit' if selection else 'legacy_unverified',
+               'inference_evidence':pin.body['payload'].get('inference'),
+               'underlying_model_verified':False,
                'expires':pin.body['payload']['expires'],'max_requests':pin.body['payload']['max_requests'],
                'request_bytes_limit':1048576,'journal_bytes_limit':100663296,'session_transcript_bytes_limit':67108864,
                'late_result_recovery':a.long_session,'automatic_wake':False}

@@ -69,3 +69,11 @@ private-pairing.json
 router-join-state/
 router-joins/
 router-active.json.*-intent.json
+
+# Private native-admission plans and exact tool evidence
+NATIVE_PLAN.json
+NATIVE_ADMISSION.json
+ACTUAL_NATIVE_ARGUMENTS.json
+ACTUAL_NATIVE_RESULT.json
+WORKER_MESSAGE.txt
+codex-model-catalog.json

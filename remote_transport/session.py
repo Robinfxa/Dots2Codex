@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 from .backend import fsync_dir, read_private_file
 from .model import Object, ProtocolError, canonical, hash_bytes, require
+from .selection import pin_selection, validate_request_selection
 
 MAX_STATE = 96 * 1024 * 1024
 MAX_TRANSCRIPT_BYTES = 64 * 1024 * 1024
@@ -131,6 +132,14 @@ def _check_payload(obj):
     require(set(links) == wanted, 'invalid_link_shape')
 
 
+def _check_request_binding(payload, pin):
+    selection = pin_selection(pin)
+    if 'responses_request' in payload:
+        validate_request_selection(payload['responses_request'], selection)
+    else:
+        require(selection is None, 'selected_session_requires_explicit_responses_request')
+
+
 def _index(values, pin):
     slots, objects = {}, {}
     for oid, val in values.items():
@@ -140,6 +149,8 @@ def _index(values, pin):
                 (obj._body['kind'] != 'deployment' and obj._body['deployment'] == pin.oid), 'deployment_hash_mismatch')
         require(obj._body['seq'] <= pin._body['payload']['max_requests'], 'request_budget_exceeded')
         _check_payload(obj)
+        if obj._body['kind'] == 'request':
+            _check_request_binding(obj._body['payload'], pin)
         if 'scope' in obj._body['payload']:
             require(obj._body['payload']['scope']==pin._body['payload']['scope'],'request_scope_mismatch')
         if 'response_result' in obj._body['payload']:
@@ -348,6 +359,7 @@ class Controller(_Participant):
         return self._submit_payload({'responses_request':request, 'scope':self.pin._body['payload']['scope']}, idempotency_key)
 
     def _submit_payload(self, payload, idempotency_key):
+        _check_request_binding(payload, self.pin)
         require(isinstance(idempotency_key, str) and 1 <= len(idempotency_key) <= 128,
                 'invalid_idempotency_key')
         with self.journal.locked() as s:
@@ -437,8 +449,11 @@ class Worker(_Participant):
             self.journal.save(s)
             self._publish(s, started)
             self._live()
-            return dict(request_id=req.oid, dispatch_id=dispatch_id, request=req._body['payload'],
-                        native_task_id=self.pin._body['identity']['native_task_id'])
+            permit = dict(request_id=req.oid, dispatch_id=dispatch_id, request=req._body['payload'],
+                          native_task_id=self.pin._body['identity']['native_task_id'])
+            if 'inference' in self.pin._body['payload']:
+                permit['inference_binding'] = self.pin.body['payload']['inference']
+            return permit
 
     def complete(self, permit, text):
         with self.journal.locked() as s:
@@ -446,6 +461,9 @@ class Worker(_Participant):
             require(s['blocked'] is None, 'session_blocked')
             require(isinstance(permit, dict), 'invalid_permit')
             require(permit.get('native_task_id') == self.pin._body['identity']['native_task_id'], 'native_identity_mismatch')
+            if 'inference' in self.pin._body['payload']:
+                require(permit.get('inference_binding') == self.pin._body['payload']['inference'],
+                        'permit_inference_binding_mismatch')
             matches = [(seq,e) for seq,e in s['executions'].items() if e['request'] == permit.get('request_id')]
             require(len(matches) == 1, 'unknown_execution')
             seq, execution = matches[0]

@@ -76,8 +76,12 @@ def decode_block(block):
 def binding_for(pin):
     pin.validate();require(pin.body['kind']=='deployment','deployment_pin_required')
     i=pin.body['identity']
-    return dict(deployment_hash=pin.oid,identity=copy.deepcopy(i),created=pin.body['payload']['created'],expires=pin.body['payload']['expires'],worker_id=i['worker_id'],generation=i['generation'],
+    value = dict(deployment_hash=pin.oid,identity=copy.deepcopy(i),created=pin.body['payload']['created'],expires=pin.body['payload']['expires'],worker_id=i['worker_id'],generation=i['generation'],
                 native_task_id=i['native_task_id'],journal_id=i['worker_journal_id'])
+    from .selection import pin_selection
+    selection = pin_selection(pin)
+    if selection is not None: value['selection'] = selection
+    return value
 
 
 def initial_state(pin, control_id):
@@ -102,13 +106,16 @@ def validate_state(s):
             type(s['max_requests']) is int and 1<=s['max_requests']<=MAX_REQUESTS and
             type(s['admissions']) is int and 0<=s['admissions']<=s['max_requests'],'invalid_control_budget')
     b=s['binding']
-    require(isinstance(b,dict) and set(b)=={'deployment_hash','identity','created','expires','worker_id','generation','native_task_id','journal_id'} and
+    require(isinstance(b,dict) and set(b)=={'deployment_hash','identity','created','expires','worker_id','generation','native_task_id','journal_id'} | ({'selection'} if 'selection' in b else set()) and
             valid_hash(b['deployment_hash']) and type(b['generation']) is int and b['generation']>=1 and
             all(isinstance(b[k],str) and re.fullmatch('[A-Za-z0-9_:/.-]{1,256}',b[k])
                 for k in ('worker_id','native_task_id','journal_id')) and isinstance(b['identity'],dict) and
             b['identity'].get('worker_id')==b['worker_id'] and b['identity'].get('generation')==b['generation'] and
             b['identity'].get('native_task_id')==b['native_task_id'] and b['identity'].get('worker_journal_id')==b['journal_id'] and
             b['identity'].get('session_id')==s['session_id'],'invalid_control_binding')
+    if 'selection' in b:
+        from .selection import validate_selection
+        validate_selection(b['selection'])
     require(type(b['created']) is int and type(b['expires']) is int and 1<=b['expires']-b['created']<=MAX_SESSION_SECONDS,'invalid_control_lifetime')
     # Validate the complete identity using the common envelope schema.
     Object.make(b['identity'],'deployment',0,None,{'created':0,'expires':1,'max_requests':s['max_requests'],
@@ -327,6 +334,11 @@ class SessionCoordinator:
             require(phase in {'IDLE','DELIVERED'},'control_request_inflight')
             require(s['admissions']<s['max_requests'],'control_request_budget_exceeded')
             req=self._fetch(args['request']);self._object_scope(req,s,'request')
+            if 'responses_request' in req.body['payload']:
+                from .selection import validate_request_selection
+                validate_request_selection(req.body['payload']['responses_request'],binding.get('selection'))
+            else:
+                require('selection' not in binding,'selected_session_requires_explicit_responses_request')
             if phase=='DELIVERED':
                 require(req.body['seq']==s['request']['message_seq']+1 and
                         req.body['links']=={'previous_receipt':s['receipt']['object_id']},'control_predecessor_mismatch')
@@ -339,6 +351,8 @@ class SessionCoordinator:
         elif kind=='rebind':
             require(phase in {'IDLE','REQUESTED','CLAIMED','DELIVERED'},'control_rebind_after_dispatch_forbidden')
             pin=Object.parse(canonical(args['deployment']));new=binding_for(pin)
+            require('selection' not in binding and 'selection' not in new,
+                    'selected_session_rebind_requires_new_session')
             require(time.time()<new['expires'],'control_rebind_deployment_expired')
             require(pin.body['identity']['session_id']==s['session_id'] and
                     new['generation']==binding['generation']+1 and new['journal_id']!=binding['journal_id'] and

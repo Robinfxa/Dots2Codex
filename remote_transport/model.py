@@ -134,7 +134,11 @@ class Object:
         if b['kind'] == 'deployment':
             p = b['payload']
             require(b['seq'] == 0 and b['deployment'] is None and not b['links'], 'invalid_deployment')
-            require(set(p) == {'created', 'expires', 'max_requests', 'scope', 'ownership'}, 'invalid_deployment')
+            require(set(p) in ({'created', 'expires', 'max_requests', 'scope', 'ownership'},
+                    {'created', 'expires', 'max_requests', 'scope', 'ownership', 'inference'}), 'invalid_deployment')
+            if 'inference' in p:
+                from .selection import validate_inference
+                validate_inference(p['inference'], ident['native_task_id'])
             require(type(p['created']) is int and type(p['expires']) is int and
                     1 <= p['expires'] - p['created'] <= MAX_SESSION_SECONDS, 'invalid_lifetime')
             require(type(p['max_requests']) is int and 1 <= p['max_requests'] <= MAX_REQUESTS and
@@ -146,7 +150,7 @@ class Object:
 
 
 def deployment(session_id, native_task_id, *, controller_id='controller', worker_id='worker',
-               generation=1, assignment_epoch=1, seconds=600, max_requests=3, scope='text_only', now=None):
+               generation=1, assignment_epoch=1, seconds=600, max_requests=3, scope='text_only', now=None, inference=None):
     """Create a fresh-session definition; never a recovery/failover operation."""
     now = int(time.time()) if now is None else now
     identity = dict(deployment_id=uuid.uuid4().hex, session_id=session_id,
@@ -154,5 +158,9 @@ def deployment(session_id, native_task_id, *, controller_id='controller', worker
                     generation=generation, assignment_epoch=assignment_epoch,
                     native_task_id=native_task_id, controller_journal_id=uuid.uuid4().hex,
                     worker_journal_id=uuid.uuid4().hex)
-    return Object.make(identity, 'deployment', 0, None, dict(created=now, expires=now + seconds,
-                       max_requests=max_requests, scope=scope, ownership='externally_pinned_single_writer'))
+    payload = dict(created=now, expires=now + seconds, max_requests=max_requests, scope=scope,
+                   ownership='externally_pinned_single_writer')
+    if inference is not None:
+        from .selection import validate_inference
+        payload['inference'] = validate_inference(inference, native_task_id)
+    return Object.make(identity, 'deployment', 0, None, payload)

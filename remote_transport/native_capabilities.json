@@ -1,0 +1,104 @@
+{
+  "contract": "dots-native-capabilities/1",
+  "version": "2026-10-01.codex-0.159.2.v1",
+  "adapter": "collaboration.spawn_agent",
+  "source": "Platform tool schema observed 2026-10-01; capability snapshot, not live account entitlement",
+  "codex_version": "codex-cli 0.159.2",
+  "native_identity_verification": "parent_recorded_platform_admission",
+  "models": {
+    "gpt-6.1-sol": {
+      "native_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "bridge_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default_effort": "low"
+    },
+    "gpt-6-astra": {
+      "native_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "bridge_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default_effort": "medium"
+    },
+    "gpt-6-sol": {
+      "native_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "bridge_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default_effort": "medium"
+    },
+    "gpt-6-luna": {
+      "native_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "bridge_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default_effort": "low"
+    },
+    "gpt-5.6-sol": {
+      "native_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "bridge_efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default_effort": "low"
+    }
+  },
+  "limits": [
+    "Session selection is immutable; changes require a new paired session",
+    "Codex CLI rewrites ultra, so ultra is not exposed as a bridge effort",
+    "Availability still requires successful actual native platform admission; no fallback"
+  ]
+}

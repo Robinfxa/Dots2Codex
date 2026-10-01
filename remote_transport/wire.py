@@ -8,9 +8,22 @@ from core import protocol, QueueError  # verifies frozen source hashes
 from facade import ResponsesHandler, ResponsesServer
 
 
+def _structural_request(request):
+    # Only the frozen validator's old alias check is adapted. The original
+    # request is never rewritten, stored with a substitute model, or rehashed.
+    from .selection import load_catalog, select, validate_request_selection, LEGACY_MODEL
+    if isinstance(request, dict) and request.get('model') != LEGACY_MODEL:
+        reasoning = request.get('reasoning')
+        require(isinstance(reasoning, dict), 'explicit_reasoning_effort_required')
+        selection = select(load_catalog(), request.get('model'), reasoning.get('effort'))
+        validate_request_selection(request, selection)
+        return {**request, 'model': LEGACY_MODEL}
+    return request
+
+
 def validate_text_request(request):
     try:
-        unknown = protocol.validate_request(request)
+        unknown = protocol.validate_request(_structural_request(request))
     except protocol.BridgeError as exc:
         raise ProtocolError(exc.code) from None
     require(not unknown, 'unsupported_input')
@@ -24,7 +37,7 @@ def validate_text_request(request):
 def validate_remote_request(request,scope):
     if scope=='text_only':return validate_text_request(request)
     require(scope=='responses_tools','unsupported_scope')
-    try:unknown=protocol.validate_request(request)
+    try:unknown=protocol.validate_request(_structural_request(request))
     except protocol.BridgeError as exc:raise ProtocolError(exc.code) from None
     require(not unknown,'unsupported_input')
     require(len(canonical(request))<=MAX_WIRE_BYTES,'wire_request_too_large')

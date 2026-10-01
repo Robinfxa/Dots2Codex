@@ -30,7 +30,8 @@ from .cli import write_new
 from .control import (_document_text, GoogleDocsCASControlStore, SessionCoordinator,
                       binding_for, CASConflict)
 from .model import canonical, require, hash_bytes
-from .operator import codex_command
+from .operator import codex_command, ready_selection, selection_status
+from .selection import load_catalog, select, validate_selection, catalog_hash
 from .router_bootstrap import (
     block_for as bootstrap_block_for,
     initial_state as bootstrap_initial_state,
@@ -78,7 +79,8 @@ def _validate_config(c):
                 "worker_writer_identity", "seconds", "max_requests", "scope", "port",
                 "deadline", "poll_interval", "heartbeat_interval", "bootstrap_ttl",
                 "bootstrap_poll_interval", "codex", "expected_codex_version"}
-    require(isinstance(c, dict) and set(c) == required, "invalid_router_config")
+    optional = {"model_selection", "catalog"}
+    require(isinstance(c, dict) and required <= set(c) <= required | optional, "invalid_router_config")
     require(isinstance(c["folder_id"], str) and c["folder_id"], "router_folder_required")
     require(Path(c["authorized_user_file"]).expanduser().is_absolute(), "absolute_authorized_user_file_required")
     require(Path(c["workdir"]).expanduser().is_absolute(), "absolute_workdir_required")
@@ -90,11 +92,36 @@ def _validate_config(c):
     require(type(c["bootstrap_ttl"]) is int and 300 <= c["bootstrap_ttl"] <= 7200, "invalid_bootstrap_ttl")
     require(type(c["bootstrap_poll_interval"]) in (int, float) and 2 <= c["bootstrap_poll_interval"] <= 30,
             "invalid_bootstrap_poll_interval")
+    if c.get("model_selection") is not None: validate_selection(c["model_selection"])
+    if "catalog" in c:
+        require(isinstance(c["catalog"], str) and c["catalog"] and Path(c["catalog"]).expanduser().is_absolute(),
+                "absolute_catalog_path_required")
     return c
 
 
 def _load_config(path):
     return _validate_config(_load_private_json(_config_path(path), 131072))
+
+
+def _resolve_selection(args, config):
+    """Choose only before pairing. Partial overrides never inherit another effort."""
+    model = getattr(args, "model", None); effort = getattr(args, "effort", None)
+    require((model is None) == (effort is None), "model_and_effort_required_together")
+    path = getattr(args, "catalog", None) or config.get("catalog")
+    existing = config.get("model_selection")
+    if model is None and existing is None and path is None: return None
+    catalog = load_catalog(_config_path(path) if path is not None else None)
+    if model is not None: return select(catalog, model, effort)
+    return validate_selection(existing, catalog) if existing is not None else None
+
+
+def models(args):
+    """Offline supported snapshot, not a live account or native inference probe."""
+    catalog = load_catalog(_config_path(args.catalog) if args.catalog else None)
+    return {"catalog_version": catalog["version"], "catalog_sha256": catalog_hash(catalog),
+            "source": catalog["source"], "models": catalog["models"],
+            "native_admission_required": True, "live_availability_verified": False,
+            "inference_calls": 0, "limits": catalog["limits"]}
 
 
 def _create_workspace_doc(drive, folder_id, title):
@@ -291,13 +318,18 @@ def _check_existing_active(active_path):
 
 
 def _join_message(active, join_code):
+    selection = active.get("model_selection")
+    requirement = (f"\nrequired_model={selection['model']}\n"
+                   f"required_reasoning_effort={selection['reasoning_effort']}\n"
+                   "请同时遵循 docs/MODEL_SELECTION.zh-CN.md：从已验证 bootstrap 的 required_selection "
+                   "显式提交真实 native admission；不得回退或复用其他模型的任务。") if selection else ""
     return ("DOTS2CODEX_ROUTER_JOIN_V1\n"
             f"bootstrap_document_id={active['bootstrap_document_id']}\n"
             f"bootstrap_tab_id={active['bootstrap_tab_id']}\n"
             f"join_code={join_code}\n"
             "请按当前 Dots2Codex checkout 的 docs/ROUTER_JOIN_V1.zh-CN.md 完成本轮 router join。"
             "必须使用平台实际返回的 native task identity；不要向我索取 OAuth、pin 或 worker-config，"
-            "Mac 会在独立 bootstrap Doc 中发布并在 ready 后清空当前正文；历史版本可能保留。")
+            "Mac 会在独立 bootstrap Doc 中发布并在 ready 后清空当前正文；历史版本可能保留。" + requirement)
 
 
 def _copy_clipboard(text):
@@ -383,6 +415,7 @@ def _bridge_call(ready, journal, operation, **kwargs):
 
 
 def configure(args):
+    selection = _resolve_selection(args, {})
     target = _config_path(args.config)
     target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     default_cred = str((Path.home() / ".config" / "dots2codex" / "authorized-user-bidir.json").resolve())
@@ -390,7 +423,7 @@ def configure(args):
     cred = args.credentials or input(f"Authorized-user file [{default_cred}]: ").strip() or default_cred
     default_work = str((Path.home() / "Dots2Codex-workspace").resolve())
     workdir = args.workdir or input(f"Codex workspace [{default_work}]: ").strip() or default_work
-    config = _validate_config({
+    config = {
         "folder_id": folder,
         "authorized_user_file": str(Path(cred).expanduser().resolve()),
         "workdir": str(Path(workdir).expanduser().resolve()),
@@ -407,7 +440,10 @@ def configure(args):
         "bootstrap_poll_interval": 5,
         "codex": args.codex or "codex",
         "expected_codex_version": EXPECTED_CODEX,
-    })
+    }
+    if selection is not None: config["model_selection"] = selection
+    if getattr(args, "catalog", None): config["catalog"] = str(_config_path(args.catalog))
+    config = _validate_config(config)
     Path(config["workdir"]).mkdir(parents=True, exist_ok=True)
     _set_google_env(config)
     from examples.google_clients import create_drive_client, authorized_scopes
@@ -420,6 +456,7 @@ def configure(args):
             "router_folder_access_not_verified")
     _private_json(target, config)
     return {"configured": True, "config": str(target), "folder_verified": True,
+            **selection_status(selection),
             "credentials_copied": False, "oauth_token_in_config": False}
 
 
@@ -597,7 +634,10 @@ def _launch_facade(active_path, active, config):
         require(ready.get("pid") == proc.pid and ready.get("deployment") == active["deployment"] and
                 ready.get("session_control") == "docs_cas" and ready.get("expires") == active["pin_expires"],
                 "router_facade_ready_binding_mismatch")
-        codex_command(ready["base_url"], config["workdir"])
+        selection = ready_selection(ready)
+        require(selection == active.get("model_selection"), "router_facade_ready_selection_mismatch")
+        codex_command(ready["base_url"], config["workdir"], selection,
+                      catalog_path=ready.get("codex_model_catalog"))
         _check_cancelled(active)
         active = _write_active(active_path, active, stage="READY")
         return active, ready
@@ -607,11 +647,16 @@ def _launch_facade(active_path, active, config):
 
 
 def _start_locked(args, active_path, intent_id):
-    config = _load_config(args.config); _set_google_env(config)
+    config = _load_config(args.config)
+    # Unsupported choices fail before Google clients, resource creation or pairing.
+    selection = _resolve_selection(args, config)
+    _set_google_env(config)
     _check_existing_active(active_path)
     version = subprocess.run([config["codex"], "--version"], capture_output=True, text=True,
                              timeout=10, check=True).stdout.strip()
     require(version == config["expected_codex_version"], "codex_version_requires_live_acceptance")
+    if selection is not None:
+        require(version == load_catalog()["codex_version"], "selected_codex_version_requires_live_acceptance")
     from examples.google_clients import create_docs_client, create_drive_client
     from examples.remote_setup import initialize_blank
     docs = create_docs_client(); raw_drive = create_drive_client(); drive = raw_drive
@@ -628,6 +673,7 @@ def _start_locked(args, active_path, intent_id):
         "pin_file": str(runtime / "pin.json"), "worker_config_file": str(runtime / "worker-config.json"),
         "facade_pid": None, "facade_identity": None, "facade_log": str(runtime / "facade.log"),
         "deployment": None, "native_task_id": None, "pin_expires": None,
+        "model_selection": selection,
         "control_initialization_attempted": False}
     _private_json(active_path, active)
     join_code = secrets.token_urlsafe(24).rstrip("=")
@@ -644,7 +690,7 @@ def _start_locked(args, active_path, intent_id):
             control_tab_id=active["control_tab_id"], control_id=active["control_id"],
             mac_writer_identity=config["mac_writer_identity"], worker_writer_identity=config["worker_writer_identity"],
             bootstrap_document_id=active["bootstrap_document_id"], bootstrap_tab_id=active["bootstrap_tab_id"],
-            forward_probe=forward_probe)
+            forward_probe=forward_probe, required_selection=selection)
         active = _write_active(active_path, active, bootstrap_root=root_context(initial))
         _initialize_bootstrap(docs, active["bootstrap_document_id"], active["bootstrap_tab_id"], initial, runtime)
         active = _write_active(active_path, active, stage="WAITING_FOR_WORKER")
@@ -658,8 +704,10 @@ def _start_locked(args, active_path, intent_id):
         native_task_id = verify_worker_admission(snap.state, join_code)
         _verify_reverse_probe(raw_drive, snap.state)
         _check_cancelled(active)
+        inference = {"selection": selection, "admission": snap.state["worker"]["admission"]} if selection else None
         pin = deployment(session_id, native_task_id, seconds=config["seconds"],
-                         max_requests=config["max_requests"], scope=config["scope"])
+                         max_requests=config["max_requests"], scope=config["scope"],
+                         **({"inference": inference} if inference is not None else {}))
         write_new(runtime / "pin.json", pin.raw)
         active = _write_active(active_path, active, deployment=pin.oid, native_task_id=native_task_id,
                                pin_expires=pin.body["payload"]["expires"])
@@ -700,11 +748,13 @@ def start(args):
         _private_json(Path(str(active_path) + ".start-intent.json"), {"intent_id": intent_id})
         config, active, ready = _start_locked(args, active_path, intent_id)
     result = {"router_ready": True, "base_url": ready["base_url"], "runtime": active["runtime"],
+              **selection_status(active.get("model_selection")),
               "facade_pid": active["facade_pid"], "closed": False}
     print("[router] ROUTER_READY " + ready["base_url"], flush=True)
     # Interactive Codex does not hold the lifecycle lock; stop remains usable.
     if args.launch_codex and sys.stdin.isatty() and not _cancelled(active):
-        command = codex_command(ready["base_url"], config["workdir"]); command[0] = config["codex"]
+        command = codex_command(ready["base_url"], config["workdir"], active.get("model_selection"),
+                                catalog_path=ready.get("codex_model_catalog")); command[0] = config["codex"]
         result["codex_exit"] = subprocess.run(command, cwd=config["workdir"], env=dict(os.environ)).returncode
     else: result["codex_launched"] = False
     return result
@@ -715,6 +765,7 @@ def status(args):
     active = _load_private_json(active_path); config = _load_config(args.config); _set_google_env(config)
     # No join-code, bundles, operation arguments, credentials or log contents in status.
     out = {k: active.get(k) for k in ("session_id", "stage", "closed", "runtime", "deployment", "pin_expires")}
+    out.update(selection_status(active.get("model_selection")))
     out.update(facade_alive=_pid_alive(active.get("facade_pid")), facade_owned=_owned_process(active),
                stop_requested=_cancelled(active), worker_stop_confirmed=False)
     try:
@@ -761,11 +812,20 @@ def stop(args):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("operation", choices=["configure", "start", "status", "stop"])
+    p.add_argument("operation", choices=["configure", "start", "status", "stop", "models"])
     p.add_argument("--config", default=str(DEFAULT_CONFIG)); p.add_argument("--active", default=str(DEFAULT_ACTIVE))
     p.add_argument("--folder-id"); p.add_argument("--credentials"); p.add_argument("--workdir"); p.add_argument("--codex")
     p.add_argument("--launch-codex", action="store_true")
+    p.add_argument("--model", "-m", help="Native model for a new session; requires --effort")
+    p.add_argument("--effort", help="Explicit reasoning effort for a new session; requires --model")
+    p.add_argument("--catalog", help="Supported capability snapshot JSON; never a live entitlement probe")
     a = p.parse_args(); os.umask(0o077)
+    if a.operation == "models":
+        require(a.model is None and a.effort is None, "models_operation_does_not_select")
+        return models(a)
+    if a.operation not in {"configure", "start"}:
+        require(a.model is None and a.effort is None and a.catalog is None,
+                "selection_flags_require_new_session_start")
     if a.operation == "configure": return configure(a)
     if a.operation == "start": return start(a)
     if a.operation == "status": return status(a)

@@ -329,7 +329,7 @@ class RouterJoinDurabilityTests(RouterBootstrapFixtures, unittest.TestCase):
         ready, pin = self.verified_bundle(); root = self.directory / "runtime"
         result = self.call("materialize", ready, root=root)
         self.assertEqual(result["execution_mode"], "router_parallel_cells_v1")
-        self.assertEqual(len(result["source_hashes"]), 4)
+        self.assertEqual(len(result["source_hashes"]), 6)
         self.assertIn("remote_transport.connector_cell", result["claim_begin_command"])
         worker_state = json.loads((root / "worker.json").read_bytes())
         self.assertEqual(worker_state["router_execution_mode"], "router_parallel_cells_v1")

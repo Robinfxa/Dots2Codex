@@ -19,10 +19,14 @@ from dataclasses import dataclass
 
 from .control import _document_text
 from .model import Object, canonical, hash_bytes, require, valid_hash
+from .selection import validate_selection, validate_admission
 
 BOOT_BEGIN = "DOTS2CODEX_ROUTER_BOOTSTRAP_BEGIN_V2\n"
 BOOT_END = "\nDOTS2CODEX_ROUTER_BOOTSTRAP_END_V2\n"
 BOOT_CONTRACT = "dots-router-bootstrap/2"
+SELECTED_CONTRACT = "dots-router-bootstrap/3"
+SELECTED_BEGIN = "DOTS2CODEX_ROUTER_BOOTSTRAP_BEGIN_V3\n"
+SELECTED_END = "\nDOTS2CODEX_ROUTER_BOOTSTRAP_END_V3\n"
 MAX_BOOT_BYTES = 256 * 1024
 STAGES = {"WAITING_FOR_WORKER", "WORKER_ADMITTED", "BUNDLE_READY", "WORKER_POLLING",
           "CONSUMED", "CLOSED", "ABORTED"}
@@ -77,7 +81,8 @@ def verify_proof(join_code, purpose, value, expected):
 
 
 def root_context(state):
-    return copy.deepcopy({key: state[key] for key in ROOT_KEYS})
+    return copy.deepcopy({key: state[key] for key in ROOT_KEYS |
+                          ({"required_selection"} if state.get("contract") == SELECTED_CONTRACT else set())})
 
 
 def context_hash(state):
@@ -161,7 +166,8 @@ def _validate_logical(value):
                                   ("worker", "bundle_hashes", "worker_ack", "bundle_commitment"))
     if worker is not None:
         require(isinstance(worker, dict) and set(worker) ==
-                {"native_task_id", "admitted_at", "probe", "proof"}, "invalid_bootstrap_worker")
+                {"native_task_id", "admitted_at", "probe", "proof"} |
+                ({"admission"} if "admission" in worker else set()), "invalid_bootstrap_worker")
         _safe_id(worker["native_task_id"]); _probe(worker["probe"])
         require(type(worker["admitted_at"]) is int and valid_hash(worker["proof"]),
                 "invalid_bootstrap_worker")
@@ -209,7 +215,7 @@ def _validate_transition(before, after, kind, actor):
 
 def initial_state(*, bootstrap_id, session_id, created, expires, join_code, folder_id,
                   control_document_id, control_tab_id, control_id, mac_writer_identity,
-                  worker_writer_identity, bootstrap_document_id, bootstrap_tab_id, forward_probe):
+                  worker_writer_identity, bootstrap_document_id, bootstrap_tab_id, forward_probe, required_selection=None):
     state = {"contract": BOOT_CONTRACT, "bootstrap_id": bootstrap_id, "session_id": session_id,
         "created": created, "expires": expires, "join_code_sha256": join_code_hash(join_code),
         "folder_id": folder_id, "bootstrap_document_id": bootstrap_document_id,
@@ -219,16 +225,31 @@ def initial_state(*, bootstrap_id, session_id, created, expires, join_code, fold
                     "worker_writer_identity": worker_writer_identity},
         "epoch": 0, "stage": "WAITING_FOR_WORKER", "worker": None, "bundle": None,
         "bundle_hashes": None, "worker_ack": None, "events": []}
+    if required_selection is not None:
+        state["contract"] = SELECTED_CONTRACT
+        state["required_selection"] = validate_selection(required_selection)
     state["root_mac"] = proof(join_code, "root", root_context(state))
     validate_state(state)
     return state
 
 
+def _validate_selected_logical(state, value):
+    worker = value['worker']
+    if worker is not None:
+        if state['contract'] == SELECTED_CONTRACT:
+            validate_admission(worker.get('admission'), state['required_selection'], worker['native_task_id'])
+        else:
+            require('admission' not in worker, 'legacy_bootstrap_cannot_claim_selection')
+
+
 def validate_state(state):
-    require(isinstance(state, dict) and set(state) == ROOT_KEYS | {
+    require(isinstance(state, dict), 'invalid_bootstrap_state')
+    extra = {'required_selection'} if state.get('contract') == SELECTED_CONTRACT else set()
+    require(set(state) == ROOT_KEYS | extra | {
             "root_mac", "epoch", "stage", "worker", "bundle", "bundle_hashes", "worker_ack", "events"},
             "invalid_bootstrap_state")
-    require(state["contract"] == BOOT_CONTRACT, "invalid_bootstrap_contract")
+    require(state["contract"] in {BOOT_CONTRACT, SELECTED_CONTRACT}, "invalid_bootstrap_contract")
+    if extra: validate_selection(state["required_selection"])
     _safe_id(state["bootstrap_id"], max_len=64)
     for key in ("session_id", "folder_id", "bootstrap_document_id", "bootstrap_tab_id"):
         _safe_id(state[key])
@@ -253,6 +274,7 @@ def validate_state(state):
                 and all(valid_hash(bundle[k]) for k in ("deployment_hash", "mac")) and
                 all(isinstance(bundle[k], str) for k in ("pin_b64", "config_b64")), "invalid_bootstrap_bundle")
     _validate_logical(_logical(state))
+    _validate_selected_logical(state, _logical(state))
     events = state["events"]
     require(type(state["epoch"]) is int and 0 <= state["epoch"] <= 6 and
             type(events) is list and len(events) == state["epoch"], "invalid_bootstrap_events")
@@ -272,6 +294,7 @@ def validate_state(state):
         if event["kind"] not in {"closed", "aborted"}:
             require(event["at"] < state["expires"], "bootstrap_expired_event")
         _validate_transition(before, event["after"], event["kind"], event["actor"])
+        _validate_selected_logical(state, event["after"])
         before, parent, last_at = event["after"], hash_bytes(canonical(event)), event["at"]
         operations.add(event["operation_id"])
     require(before == _logical(state), "bootstrap_logical_state_mismatch")
@@ -324,17 +347,19 @@ def _event(state, join_code, kind, actor, now, changes, reason=""):
 
 def block_for(state):
     validate_state(state)
-    value = BOOT_BEGIN + canonical(state, max_bytes=MAX_BOOT_BYTES).decode("utf-8") + BOOT_END
+    begin, end = (SELECTED_BEGIN, SELECTED_END) if state["contract"] == SELECTED_CONTRACT else (BOOT_BEGIN, BOOT_END)
+    value = begin + canonical(state, max_bytes=MAX_BOOT_BYTES).decode("utf-8") + end
     require(len(value.encode("utf-8")) <= MAX_BOOT_BYTES, "bootstrap_block_too_large")
     return value
 
 
 def decode_block(block):
+    begin, end = (SELECTED_BEGIN, SELECTED_END) if isinstance(block, str) and block.startswith(SELECTED_BEGIN) else (BOOT_BEGIN, BOOT_END)
     require(isinstance(block, str) and len(block.encode("utf-8")) <= MAX_BOOT_BYTES and
-            block.startswith(BOOT_BEGIN) and block.endswith(BOOT_END) and
-            block.count(BOOT_BEGIN) == 1 and block.count(BOOT_END) == 1, "invalid_bootstrap_block")
+            block.startswith(begin) and block.endswith(end) and
+            block.count(begin) == 1 and block.count(end) == 1, "invalid_bootstrap_block")
     try:
-        state = json.loads(block[len(BOOT_BEGIN):-len(BOOT_END)])
+        state = json.loads(block[len(begin):-len(end)])
     except Exception:
         raise ValueError("invalid_bootstrap_json") from None
     validate_state(state)
@@ -420,7 +445,7 @@ def verify_update(plan, response, readback, *, join_code, now=None):
     return fresh.state
 
 
-def worker_admitted(state, *, join_code, native_task_id, probe, now=None):
+def worker_admitted(state, *, join_code, native_task_id, probe, now=None, admission=None):
     verify_join_code(state, join_code); now = check_fresh(state, now)
     require(state["stage"] == "WAITING_FOR_WORKER", "bootstrap_not_waiting_for_worker")
     _probe(probe)
@@ -429,6 +454,10 @@ def worker_admitted(state, *, join_code, native_task_id, probe, now=None):
             probe["sha256"] == hash_bytes(canonical({"contract": "dots-router-probe/1",
               "bootstrap_id": state["bootstrap_id"], "native_task_id": native_task_id})),
             "bootstrap_reverse_probe_mismatch")
+    if state["contract"] == SELECTED_CONTRACT:
+        value["admission"] = validate_admission(admission, state["required_selection"], native_task_id)
+    else:
+        require(admission is None, "legacy_bootstrap_cannot_claim_selection")
     value["proof"] = proof(join_code, "worker_admitted", _bound(state, value))
     return _event(state, join_code, "worker_admitted", "worker", now,
                   {"worker": value, "stage": "WORKER_ADMITTED"})
@@ -447,6 +476,12 @@ def _validate_bundle_raw(state, pin_raw, config_raw, deployment_hash, now):
             pin.body["identity"]["session_id"] == state["session_id"] and
             pin.body["identity"]["native_task_id"] == state["worker"]["native_task_id"],
             "bootstrap_pin_identity_mismatch")
+    inference = pin.body['payload'].get('inference')
+    if state['contract'] == SELECTED_CONTRACT:
+        require(inference == {'selection': state['required_selection'], 'admission': state['worker']['admission']},
+                'bootstrap_pin_inference_mismatch')
+    else:
+        require(inference is None, 'legacy_bootstrap_cannot_claim_selection')
     require(state["created"] <= pin.body["payload"]["created"] <= now < pin.body["payload"]["expires"],
             "bootstrap_pin_expired_or_not_yet_valid")
     try:

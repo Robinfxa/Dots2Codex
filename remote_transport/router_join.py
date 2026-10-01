@@ -27,6 +27,7 @@ from .router_bootstrap import (
     extract_bundle, plan, verify_context, root_context, context_hash, forward_probe_bytes,
 )
 from .session import _save
+from .selection import spawn_arguments, admission_receipt, validate_admission
 
 MAX = 2 * 1024 * 1024
 DEFAULT_STATE_DIR = Path.home() / ".config" / "dots2codex" / "router-joins"
@@ -151,7 +152,8 @@ def verify_forward_probe(state, metadata, raw):
 def _source_hashes():
     release = Path(__file__).resolve().parents[1]
     files = ("remote_transport/connector_cell.py", "remote_transport/connector_worker.py",
-             "native_connector/runner.js", "native_connector/tool_adapter.js")
+             "native_connector/runner.js", "native_connector/tool_adapter.js",
+             "remote_transport/selection.py", "remote_transport/native_capabilities.json")
     hashes = {}
     for name in files:
         path = release / name
@@ -204,7 +206,7 @@ def main(argv=None):
             "join_code_argument_removed_use_private_file")
     p = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     p.add_argument("operation", choices=["inspect", "prepare-probe", "verify-forward-probe", "plan-admit",
-                                        "verify", "materialize", "plan-ready"])
+                                        "verify", "materialize", "plan-ready", "plan-native", "record-native"])
     p.add_argument("--snapshot"); p.add_argument("--bootstrap-snapshot"); p.add_argument("--control-snapshot")
     p.add_argument("--document-id"); p.add_argument("--tab-id"); p.add_argument("--join-code-file", required=True)
     p.add_argument("--state-dir", default=str(DEFAULT_STATE_DIR))
@@ -213,6 +215,8 @@ def main(argv=None):
     p.add_argument("--probe-metadata"); p.add_argument("--probe-raw")
     p.add_argument("--root"); p.add_argument("--plan-file"); p.add_argument("--response"); p.add_argument("--readback")
     p.add_argument("--save")
+    p.add_argument("--task-name"); p.add_argument("--message-file")
+    p.add_argument("--actual-arguments"); p.add_argument("--native-result"); p.add_argument("--admission-receipt")
     a = p.parse_args(argv); os.umask(0o077)
     join_code = _read_code(a.join_code_file)
 
@@ -256,8 +260,50 @@ def main(argv=None):
             return {"stage": state["stage"], "session_id": state["session_id"], "expires": state["expires"],
                     "bootstrap_id": state["bootstrap_id"], "context_hash": context_hash(state),
                     "control": state["control"], "folder_id": state["folder_id"],
-                    "forward_probe": state["forward_probe"], "native_task_id":
+                    "forward_probe": state["forward_probe"], "required_selection": state.get("required_selection"),
+                    "native_admission_tool": "collaboration.spawn_agent",
+                    "selection_mode": "explicit" if "required_selection" in state else "legacy_unverified",
+                    "native_task_id":
                     None if state["worker"] is None else state["worker"]["native_task_id"]}
+        if a.operation in {'plan-native', 'record-native'}:
+            require(state['stage'] == 'WAITING_FOR_WORKER' and 'required_selection' in state,
+                    'selected_waiting_bootstrap_required')
+            if a.operation == 'plan-native':
+                require(saved.get('native_admission') is None and a.save and not Path(a.save).exists(),
+                        'native_admission_already_reserved_no_replay')
+                message = read_private_file(Path(a.message_file), MAX).decode('utf-8') if a.message_file else None
+                arguments = spawn_arguments(state['required_selection'], a.task_name, message)
+                packet = {'contract': 'dots-native-admission-plan/1', 'context_hash': context_hash(state),
+                          'tool': 'collaboration.spawn_agent', 'arguments': arguments,
+                          'selection': state['required_selection']}
+                saved['native_admission'] = {'status': 'reserved_outcome_unknown',
+                    'plan_sha256': hash_bytes(canonical(packet)), 'plan_path': str(Path(a.save).absolute()),
+                    'receipt': None}
+                ledger.save(saved)  # never issue the native call twice, including after a crash
+                write_new(a.save, canonical(packet))
+                return {'plan_file': a.save, 'tool': packet['tool'], 'arguments': arguments,
+                        'native_invoked_by_python': False, 'one_attempt_only': True,
+                        'next': 'Trusted parent calls the actual native tool once; record exact arguments and result. Never retry unknown admission.'}
+            pending = saved.get('native_admission')
+            require(pending and pending['status'] == 'reserved_outcome_unknown', 'native_admission_plan_required')
+            packet = _read(a.plan_file)
+            require(str(Path(a.plan_file).absolute()) == pending['plan_path'] and
+                    hash_bytes(canonical(packet)) == pending['plan_sha256'] and
+                    packet['context_hash'] == context_hash(state), 'native_admission_plan_mismatch')
+            actual, result = _read(a.actual_arguments), _read(a.native_result)
+            require(actual == packet['arguments'], 'native_admission_arguments_mismatch')
+            require(isinstance(result, dict) and not result.get('error') and isinstance(result.get('task_name'), str),
+                    'successful_native_admission_result_required')
+            receipt = admission_receipt(state['required_selection'], actual, result['task_name'])
+            require(a.save and not Path(a.save).exists(), 'new_admission_receipt_path_required')
+            require(saved['native_task_id'] in (None, receipt['native_task_id']), 'bootstrap_local_native_identity_changed')
+            pending.update(status='recorded', receipt=receipt, result_sha256=hash_bytes(canonical(result)),
+                           arguments_sha256=hash_bytes(canonical(actual)))
+            saved['native_task_id'] = receipt['native_task_id']; ledger.save(saved)
+            write_new(a.save, canonical(receipt))
+            return {'admission_receipt': a.save, 'native_task_id': receipt['native_task_id'],
+                    'selection': state['required_selection'], 'underlying_model_verified': False,
+                    'verification': receipt['verification']}
         require(a.native_task_id, "native_task_id_required")
         require(state["stage"] not in {"CLOSED", "ABORTED", "CONSUMED"}, "bootstrap_pairing_finished")
         if a.operation == "verify-forward-probe":
@@ -281,7 +327,14 @@ def main(argv=None):
             require(a.writer_identity == state["control"]["worker_writer_identity"], "worker_writer_identity_mismatch")
             require(saved["probe"] is not None and a.probe_name == saved["probe"]["file_name"] and
                     a.probe_sha256 == saved["probe"]["sha256"], "worker_probe_local_evidence_required")
-            nxt = worker_admitted(state, join_code=join_code, native_task_id=a.native_task_id,
+            admission = None
+            if 'required_selection' in state:
+                admission = _read(a.admission_receipt)
+                validate_admission(admission, state['required_selection'], a.native_task_id)
+                recorded = saved.get('native_admission')
+                require(recorded and recorded['status'] == 'recorded' and recorded['receipt'] == admission,
+                        'parent_native_admission_record_required')
+            nxt = worker_admitted(state, join_code=join_code, native_task_id=a.native_task_id, admission=admission,
                                   probe={"file_id": a.probe_file_id, "name": a.probe_name, "sha256": a.probe_sha256})
             return ledger.prepare(saved, "admit", snap, nxt, join_code, a.save)
         if a.operation == "materialize":

@@ -12,6 +12,7 @@ from pathlib import Path
 from .model import ProtocolError, canonical, hash_bytes, require, MAX_WIRE_BYTES
 from .backend import read_private_file
 from .session import Controller, _save
+from .selection import pin_selection, validate_request_selection
 from .wire import ResponsesHandler, ResponsesServer, QueueError, protocol, validate_text_request, validate_remote_request, result_item
 
 
@@ -41,6 +42,7 @@ class RemoteStore:
     def _enqueue(self, request, session, deadline):
         owner=self.owner
         scope=owner.controller.pin.body['payload']['scope']
+        validate_request_selection(request,pin_selection(owner.controller.pin))
         validate_remote_request(request,scope)
         require(session == owner.controller.pin.body['identity']['session_id'], 'session_scope_mismatch')
         identity=getattr(owner.context,'identity',None)
@@ -348,6 +350,8 @@ class LongSessionHandler(RemoteHandler):
                     'native_task_id':owner.controller.pin.body['identity']['native_task_id'],
                     'expires':owner.controller.pin.body['payload']['expires'],
                     'max_requests':owner.controller.pin.body['payload']['max_requests'],
+                    'selection':pin_selection(owner.controller.pin),
+                    'inference_evidence':owner.controller.pin.body['payload'].get('inference'),
                     'admitted_requests':len(state['jobs']),'jobs':state['jobs'],
                     'closed':owner.closed_for_admission(),'scope':owner.controller.pin.body['payload']['scope'],'automatic_wake':False})
             match=re.fullmatch(r'/v1/bridge/requests/([0-9a-f]{64})(/result)?',self.path)
