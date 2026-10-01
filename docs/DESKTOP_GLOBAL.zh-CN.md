@@ -28,7 +28,7 @@ Global restore 使用私有备份撤回本次受管设置。原文件未被其�
 
 控制器运行说明见 [GLOBAL_NATIVE_CONTROLLER.md](GLOBAL_NATIVE_CONTROLLER.md)。JOIN 只授权指定队列、文件夹、生命周期和已审阅协议，不授予任意文件操作、OAuth、共享、更宽权限或下一次激活的永久授权。每条桌面线程在首次有效请求之前固定模型与推理档位。
 
-本版本不宣称无限线程、永久后台原生服务、自动唤醒或旧线程无缝迁移。首次新线程会有最多 180 秒的配对等待，使用有效 Responses 事件维持客户端流；超时或配对前断开不保存提示词供后来执行。已有执行结果不明时禁止自动重放。
+本版本不宣称无限线程、永久后台原生服务、自动唤醒或旧线程无缝迁移。首次新线程会有最多 1800 秒（30 分钟安全上限，并非预计时长）的配对等待，使用有效 Responses 事件维持客户端流；超时或配对前断开不保存提示词供后来执行。已有执行结果不明时禁止自动重放。
 
 ## 验证状态
 
@@ -41,3 +41,13 @@ Global restore 使用私有备份撤回本次受管设置。原文件未被其�
 - 显式 `--desktop-codex /path/to/codex`：保留 `strict-client-binaries/1`，要求终端及指定的桌面引擎都实际报告精确 `codex-cli 0.159.2`
 
 这三个 profile 不能互相冒充或用缺失证据自动降级。客户端兼容性、桌面验收和 `production_ready` 不会因看到新路由而自动通过。详见 [实现、CC Switch 参考与验证边界](DESKTOP_APP_DISCOVERY.md)。
+
+
+## 新激活的预检准备顺序
+
+预检先预留唯一专用 route，等待真实子任务完成 v3 配对、WORKER_POLLING 和本地 facade 绑定；此时不发送模型 HTTP 请求。route ready 后重新核验同一客户端、配置目标和源码，再创建 600 秒 nonce plan 并只发送一次 POST。失败或未知结果不重发、不新建替代子任务。
+
+新桌面激活的准备和子任务 bootstrap 上限为 1800 秒（30 分钟），并受原签名 activation、controller 和 route 到期时间约束。它是安全上限，不是预计等待时间。600 秒 POST、600 秒 nonce plan、300 秒 proof、180 秒 controller heartbeat freshness 不变。窗口到期需要保留证据、Stop 后显式新激活；不修改旧签名根、延长旧 lease 或重复旧请求。Continue 的 180 秒 UI 等待结束不代表后台准备已失败，可查看当前准备阶段及 setup_expires。
+
+
+普通新桌面 thread 的首个请求也会等待其独立 worker 的冷启动，最多使用同一 1800 秒准备上限，并持续发送 SSE progress；模型输入只保留在有界请求内存中，ready 前不会 dispatch。等待可能持续数分钟，30 分钟不是预计延迟。每次只按首次 route 创建时间计算剩余窗口，重新连接或新 heartbeat 不会重置它；持续检查 controller freshness、activation/route/controller lease、暂停与 Stop。客户端主动断开后不延迟执行该输入，未知请求不自动重试。通用 Gateway 默认不等待，独立 global_google 命令保持其原 180 秒设置；该配置仅用于本桌面监督流程。

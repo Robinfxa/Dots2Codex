@@ -29,6 +29,15 @@
 
 ## 1. 保存配对消息、验证签名根
 
+Global controller 已经接纳的 child 例外：先等待父上下文完成
+`global_native import-child-admission`，并收到真实 admission receipt 和固定的 `child_state_dir`。
+等待期间不要运行任何 `router_join` helper 或 probe。父上下文会验证它自己的实际 native
+接纳记录及已确认的 signed queue admission CAS，再通过专用 API 写入全新的 child ledger；
+不复制 parent ledger，不把 global JOIN code 交给 child。以下全部命令必须使用该固定
+`--state-dir`，不使用默认值或自选新目录。此 child 不再运行 `plan-native` / `record-native`；
+后续 `plan-admit` 仍须提交完全相同的 `--admission-receipt`，不能仅凭 receipt 绕过本地证据。
+详见 [Global parent import procedure](GLOBAL_NATIVE_CONTROLLER.md#active-native-controller-procedure)。
+
 消息包含 bootstrap_document_id、bootstrap_tab_id、join_code。通过受信任的文件写入方式把
 join_code 保存到 `JOIN_CODE_PRIVATE.txt`，权限 0600，父目录 0700。不要把 code 插入 shell 命令、
 CLI 参数或环境变量。其余证据文件也应是 0600。

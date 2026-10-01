@@ -29,7 +29,7 @@ python3 -m unittest discover -s remote_tests -p 'test_global_*.py' -v
 
 ## 首次请求、重启和停止
 
-Mac supervisor 为新线程最多等待 180 秒，让已活动的原生控制线程创建专属子线程。用户提示只保留在有上限的当前 HTTP handler 内存，不写入 admission Doc；验证就绪后才持久保留一次 dispatch intent 并传给该线程。等待期间发送真正的 response.created / response.in_progress JSON 事件，不能只靠 SSE 注释刷新 Codex 的解析事件超时。
+桌面 Global supervisor 为新线程最多等待 1800 秒（30 分钟安全上限，并非预计延迟；独立 global_google 命令仍为 180 秒），让已活动的原生控制线程创建专属子线程。用户提示只保留在有上限的当前 HTTP handler 内存，不写入 admission Doc；验证就绪后才持久保留一次 dispatch intent 并传给该线程。等待期间发送真正的 response.created / response.in_progress JSON 事件，不能只靠 SSE 注释刷新 Codex 的解析事件超时。
 
 同一 gateway response ID 覆盖等待和实际响应；只统一 Responses 外层 ID。原后端 response ID 私下保留，所有 tool item/call ID 与完整历史保持不变。断连发生在 dispatch 前不会稍后自动执行这次提示；超时或取消后需要用户再次提交。dispatch 之后结果未知则永不自动重放。低级 gateway CLI 默认仍是 fail-fast 的 409 admission_pending；Mac supervisor 启用有界等待，真实 Codex 兼容性仍需验收。
 

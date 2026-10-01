@@ -1,38 +1,46 @@
 {
   "contract": "dots2codex-desktop-global-pilot/1",
-  "base_commit": "e665a9613f24dc42361f4fed0accb1547462795e",
-  "base_source_tree_sha256": "e1b2bcaec8c04487d0fe7e1d251834d88f4ea543a7b0e5783460b90052a605c5",
+  "base_commit": "280d0eb060c9d43aead631313ed7438e7fb63339",
+  "base_source_tree_sha256": "630f7c0eeddb5f0183ed20afc6fae5696d751c4034bedf9a311fbfba2e196558",
   "input_launcher_source_tree_sha256": "7774123803de7f12e89b8cb8be7a510f5cfc2e829572921c0fde33632d4e096e",
   "input_gateway_source_tree_sha256": "ab3026308c240f613b8be00b623cfa3eb67cd73fcac4e87556da7d1619215891",
-  "source_tree_sha256": "630f7c0eeddb5f0183ed20afc6fae5696d751c4034bedf9a311fbfba2e196558",
+  "source_tree_sha256": "ea80d375ef303024b4bd87a8e6fac88460a73a1545fe484bbb0f47804e909820",
   "source_tree_hash_algorithm": "SHA-256 of UTF-8 canonical JSON files array (sort_keys=true,separators=comma/colon,ensure_ascii=false); array sorted by path",
-  "hashed_file_count": 226,
+  "hashed_file_count": 231,
   "manifest_self_excluded": true,
   "changed_files": [
+    "GLOBAL_GATEWAY_CONTRACT.json",
+    "GLOBAL_GATEWAY_README.txt",
+    "docs/DESKTOP_GLOBAL.zh-CN.md",
+    "docs/GLOBAL_GATEWAY.zh-CN.md",
     "docs/GLOBAL_NATIVE_CONTROLLER.md",
-    "examples/google_clients.py",
+    "docs/ROUTER_JOIN_V1.zh-CN.md",
     "native_connector/global_controller_cell.js",
     "native_connector/global_controller_cell.test.js",
-    "remote_tests/test_client_config_trial.py",
-    "remote_tests/test_desktop_app_trial.py",
-    "remote_tests/test_global_desktop.py",
-    "remote_tests/test_global_native_diagnostics.py",
+    "remote_tests/test_global_child_admission.py",
+    "remote_tests/test_global_claim_begin_cell.py",
+    "remote_tests/test_global_cold_start.py",
+    "remote_tests/test_global_prewarm.py",
     "remote_tests/test_global_read_recovery.py",
-    "remote_tests/test_google_read_recovery.py",
+    "remote_tests/test_global_staged_cli.py",
+    "remote_transport/global_control.py",
     "remote_transport/global_desktop.py",
     "remote_transport/global_gateway.py",
     "remote_transport/global_google.py",
     "remote_transport/global_native.py",
-    "remote_transport/global_pilot.py"
+    "remote_transport/global_pilot.py",
+    "remote_transport/router_join.py"
   ],
   "added_files": [
-    "remote_tests/test_global_native_diagnostics.py",
-    "remote_tests/test_global_read_recovery.py",
-    "remote_tests/test_google_read_recovery.py"
+    "remote_tests/test_global_child_admission.py",
+    "remote_tests/test_global_claim_begin_cell.py",
+    "remote_tests/test_global_cold_start.py",
+    "remote_tests/test_global_prewarm.py",
+    "remote_tests/test_global_staged_cli.py"
   ],
   "all_six_source_bindings_preserved": true,
   "existing_runtime_migration": "fresh_activation_and_v2_join_required",
-  "status": "read-recovery-offline-validated-awaiting-live-acceptance",
+  "status": "preflight-prewarm-offline-validated-awaiting-live-acceptance",
   "launcher_global_menu_supported": true,
   "production_ready": false,
   "ready_for_config": false,
@@ -82,14 +90,14 @@
     },
     {
       "path": "GLOBAL_GATEWAY_CONTRACT.json",
-      "bytes": 2250,
-      "sha256": "3499bb8b0fe08750e0f27a8a7262d7812b16cf778d087427cf3238d443b7cf71",
+      "bytes": 2653,
+      "sha256": "61cd6f92c6e5e1e148cdff157114da9589cd51a0edaac0d5124ec8e321144be4",
       "mode": "0644"
     },
     {
       "path": "GLOBAL_GATEWAY_README.txt",
-      "bytes": 2938,
-      "sha256": "9882f96151e2345da1393246b588c633f0147fee59c2e685c0579888051eefd0",
+      "bytes": 3320,
+      "sha256": "4ab86f69d7f7bece55d8fa617e492691fafc63105c75bffd6ed4e891a0bc151e",
       "mode": "0644"
     },
     {
@@ -268,8 +276,8 @@
     },
     {
       "path": "docs/DESKTOP_GLOBAL.zh-CN.md",
-      "bytes": 7133,
-      "sha256": "7434d54b992b9443278a75fe7b4eacebbfb83a510d92902f5def64de29cb4136",
+      "bytes": 8796,
+      "sha256": "e0683b30d80c5e9db49e8cd9e6794cd6dd131c8dc668caabb039e97d7ae4f442",
       "mode": "0644"
     },
     {
@@ -286,8 +294,8 @@
     },
     {
       "path": "docs/GLOBAL_GATEWAY.zh-CN.md",
-      "bytes": 7243,
-      "sha256": "357d124a5b29c0f45105bcc9837fbc08df3e99fc3acf0c6350dd7306f7c376f0",
+      "bytes": 7346,
+      "sha256": "cdc0a8ebec63d3b734214f37f8fa4e98351f6965910dfa1d77625bbb12d956dd",
       "mode": "0644"
     },
     {
@@ -298,8 +306,8 @@
     },
     {
       "path": "docs/GLOBAL_NATIVE_CONTROLLER.md",
-      "bytes": 19715,
-      "sha256": "9ffe1e1d2ac2cd9e67bdd24926d35238a1916806daae9fb0c828252ce1fe96d0",
+      "bytes": 23529,
+      "sha256": "3f2956e4337d250bb612a721f38a36bf0134d0d91f3bfc2f8005767b1923c2a1",
       "mode": "0644"
     },
     {
@@ -352,8 +360,8 @@
     },
     {
       "path": "docs/ROUTER_JOIN_V1.zh-CN.md",
-      "bytes": 14393,
-      "sha256": "920f69e27c49dff81782c55486a38f486e5e37a115d3d90d9c7c896b8d18ee66",
+      "bytes": 15240,
+      "sha256": "6f14cccf522cf998038a031e0a18786f38ca026ef48c52fc5b9e16fe8410c3b6",
       "mode": "0644"
     },
     {
@@ -610,14 +618,14 @@
     },
     {
       "path": "native_connector/global_controller_cell.js",
-      "bytes": 13359,
-      "sha256": "9a33d9e9a954038e3a2e832f8b5c8226faa0b24e253132ece0f2ecd64c935075",
+      "bytes": 15481,
+      "sha256": "ffc9523c1d9c0cb44a3d3168f2b3ec32c2db70041e62c42aa03e06fc7024a927",
       "mode": "0644"
     },
     {
       "path": "native_connector/global_controller_cell.test.js",
-      "bytes": 10221,
-      "sha256": "ecce583cc52ffe1cf1a80533dd218be48a2df6b3fb778d1a63b6fb0f31e588e3",
+      "bytes": 14524,
+      "sha256": "75b3724ed9c7a8f950312f1e9ca91371e5eae4a2f2c7841b54b2cdca377e7ac9",
       "mode": "0644"
     },
     {
@@ -783,6 +791,24 @@
       "mode": "0644"
     },
     {
+      "path": "remote_tests/test_global_child_admission.py",
+      "bytes": 12215,
+      "sha256": "7c1861405f570f449442ca111135a0719636a8cf819afdf2689c3360917bd2c7",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_tests/test_global_claim_begin_cell.py",
+      "bytes": 2899,
+      "sha256": "8114fbbb2a68b8af309f0f97d6a62d5fcb9f9cb1101df3e889b1b0f82fbe3354",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_tests/test_global_cold_start.py",
+      "bytes": 7480,
+      "sha256": "bf3a8f878d43115900192a4ce8518e31b14f8650cb861f70c76d22f9176d2998",
+      "mode": "0644"
+    },
+    {
       "path": "remote_tests/test_global_config.py",
       "bytes": 12882,
       "sha256": "84e1cdabdd82d9ae0ce0dadf6feb198d62c6f37e4b8e847d05ddcc3a9f5b0b63",
@@ -825,9 +851,21 @@
       "mode": "0644"
     },
     {
+      "path": "remote_tests/test_global_prewarm.py",
+      "bytes": 8275,
+      "sha256": "913da3dc844a8aeda850ef4e3cc4a37694d021ebef8a93393a9fd62e67e09b01",
+      "mode": "0644"
+    },
+    {
       "path": "remote_tests/test_global_read_recovery.py",
-      "bytes": 31487,
-      "sha256": "90cfdcfea305bd4b69366842c6544600f39331f67af1e47e67d336512f37f4bc",
+      "bytes": 31865,
+      "sha256": "4b139e171e1c8920b0ef2998aa788108049abfaa0db5d2099405fe06ebb3bd68",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_tests/test_global_staged_cli.py",
+      "bytes": 23598,
+      "sha256": "12ec687504bb19425922c19b5cb4db899f21fea0ac2870a8984e44d20d82c5a9",
       "mode": "0644"
     },
     {
@@ -1018,14 +1056,14 @@
     },
     {
       "path": "remote_transport/global_control.py",
-      "bytes": 22327,
-      "sha256": "c266f81d3e8ed462bf7a256e1c4578d52ebc1329dd18021c4dc9c76c8ff6b394",
+      "bytes": 22756,
+      "sha256": "3f681f6a34a23818718acfac3e471e20251f224f03ca4639d06e0aa70e6d627c",
       "mode": "0644"
     },
     {
       "path": "remote_transport/global_desktop.py",
-      "bytes": 45954,
-      "sha256": "ea9d025c10ed444698fae7ef7cd4a949bffa9bdae07463cf8d5cbd24c1dbb460",
+      "bytes": 48245,
+      "sha256": "cace827a847ec87aa16d1c86e3ea7474e8b2f002b6434c32443c06079fe6f0c6",
       "mode": "0644"
     },
     {
@@ -1036,26 +1074,26 @@
     },
     {
       "path": "remote_transport/global_gateway.py",
-      "bytes": 49969,
-      "sha256": "a88918999151072d1383abdedbc2596f4e5319d7282eeed03763a5d5582dc832",
+      "bytes": 52554,
+      "sha256": "4f264bb78c6633ad4d53548044a04a5b10dc8794f525ca2527c2ca7c6a8ea6eb",
       "mode": "0644"
     },
     {
       "path": "remote_transport/global_google.py",
-      "bytes": 33134,
-      "sha256": "bf07b75228e715c00fc23e37d605d79e27b7887df594f6535e1bbd925b797a00",
+      "bytes": 33534,
+      "sha256": "43a8c355d404edbcecdc8ff4f1b1a3dfab5dee8be85998cef3b8d6c0cdfae668",
       "mode": "0644"
     },
     {
       "path": "remote_transport/global_native.py",
-      "bytes": 21272,
-      "sha256": "f59b65381a6822f9017714db8a5372fbc3bfa02075025854b5e8f836b4cfdfa1",
+      "bytes": 28105,
+      "sha256": "674f0898eab181a96760fcb43f6ff06f388a331cc4e7af458314fa9e242bb3ba",
       "mode": "0644"
     },
     {
       "path": "remote_transport/global_pilot.py",
-      "bytes": 25262,
-      "sha256": "8b2d37a0e39d09e3a821cd8cc3aee1e22ebd8df46e113816428b6ea928b7c74d",
+      "bytes": 31887,
+      "sha256": "222db131f66fc551d9c0fe7f47ff9d586c6c6349a053f4913ce74fc80b7cd3c3",
       "mode": "0644"
     },
     {
@@ -1120,8 +1158,8 @@
     },
     {
       "path": "remote_transport/router_join.py",
-      "bytes": 25636,
-      "sha256": "36f20059bb7578a524125ead7990c2debe409facdac9a7764d74cdac0c2167b9",
+      "bytes": 27750,
+      "sha256": "fc5ac39bdd0b0c3a4b3218578cce527c739c1910a4bf27530c07bee044ccd0d5",
       "mode": "0644"
     },
     {
@@ -1401,7 +1439,7 @@
       "mode": "0644"
     }
   ],
-  "parent_commit": "e665a9613f24dc42361f4fed0accb1547462795e",
+  "parent_commit": "280d0eb060c9d43aead631313ed7438e7fb63339",
   "global_config_pilot_gate_implemented": true,
   "global_config_pilot_runtime_exercised": false,
   "input_desktop_global_source_tree_sha256": "7999cd2b2a5e028bc706760d7a290f44a3b5365b76c5f38f88a4d9478a89b4f3",
@@ -1454,12 +1492,12 @@
     "real_mac_native_google_acceptance": false
   },
   "test_results": {
-    "source_tree_sha256": "630f7c0eeddb5f0183ed20afc6fae5696d751c4034bedf9a311fbfba2e196558",
+    "source_tree_sha256": "ea80d375ef303024b4bd87a8e6fac88460a73a1545fe484bbb0f47804e909820",
     "final_snapshot_validated": true,
-    "full_remote_discovered": 610,
-    "full_remote_passed": 599,
+    "full_remote_discovered": 648,
+    "full_remote_passed": 637,
     "full_remote_skipped": 11,
-    "full_remote_seconds": 259.288,
+    "full_remote_seconds": 301.517,
     "full_remote_exit_code": 0,
     "real_toml_parser_skipped": 9,
     "optional_sdk_skipped_in_default_remote_environment": 2,
@@ -1468,10 +1506,15 @@
     "drive_audit_passed": 48,
     "setup_passed": 37,
     "sdk_offline_passed": 3,
-    "node_passed": 37,
+    "node_passed": 45,
     "supplemental_sdk_read_tests_passed": 29,
     "supplemental_sdk_read_tests_overlap_remote_suite": true,
-    "python_syntax_files_passed": 119,
+    "independent_frozen_python_passed": 112,
+    "independent_frozen_node_passed": 20,
+    "independent_restart_probes_passed": 2,
+    "independent_audit_tests_overlap_aggregate_suites": true,
+    "python_syntax_files_passed": 124,
+    "relative_markdown_links_checked": 161,
     "final_snapshot_full_remote_rerun": true,
     "live_mac_google_native_verified": false,
     "google_writes": 0,
@@ -1479,8 +1522,7 @@
     "configuration_changes": 0,
     "dependency_install_performed": false,
     "toml_parser_integration_verified": false,
-    "scope": "START.command Global start Docs read recovery and native controller diagnostics",
-    "direct_cli_supervisor_recovery_verified": false
+    "scope": "Global preflight child prewarm, verified native parent admission import, single-CAS claim/begin, and cold-start recovery"
   },
   "prior_heartbeat_v2_validation": {
     "full_remote_discovered": 551,
@@ -1505,7 +1547,7 @@
     "configuration_changes": 0,
     "dependency_install_performed": false
   },
-  "read_recovery_validation": {
+  "prior_read_recovery_validation": {
     "source_tree_sha256": "630f7c0eeddb5f0183ed20afc6fae5696d751c4034bedf9a311fbfba2e196558",
     "final_snapshot_validated": true,
     "full_remote_discovered": 610,
@@ -1533,5 +1575,38 @@
     "toml_parser_integration_verified": false,
     "scope": "START.command Global start Docs read recovery and native controller diagnostics",
     "direct_cli_supervisor_recovery_verified": false
+  },
+  "preflight_prewarm_validation": {
+    "source_tree_sha256": "ea80d375ef303024b4bd87a8e6fac88460a73a1545fe484bbb0f47804e909820",
+    "final_snapshot_validated": true,
+    "full_remote_discovered": 648,
+    "full_remote_passed": 637,
+    "full_remote_skipped": 11,
+    "full_remote_seconds": 301.517,
+    "full_remote_exit_code": 0,
+    "real_toml_parser_skipped": 9,
+    "optional_sdk_skipped_in_default_remote_environment": 2,
+    "base_python_passed": 134,
+    "cas_audit_passed": 47,
+    "drive_audit_passed": 48,
+    "setup_passed": 37,
+    "sdk_offline_passed": 3,
+    "node_passed": 45,
+    "supplemental_sdk_read_tests_passed": 29,
+    "supplemental_sdk_read_tests_overlap_remote_suite": true,
+    "independent_frozen_python_passed": 112,
+    "independent_frozen_node_passed": 20,
+    "independent_restart_probes_passed": 2,
+    "independent_audit_tests_overlap_aggregate_suites": true,
+    "python_syntax_files_passed": 124,
+    "relative_markdown_links_checked": 161,
+    "final_snapshot_full_remote_rerun": true,
+    "live_mac_google_native_verified": false,
+    "google_writes": 0,
+    "native_inference_calls": 0,
+    "configuration_changes": 0,
+    "dependency_install_performed": false,
+    "toml_parser_integration_verified": false,
+    "scope": "Global preflight child prewarm, verified native parent admission import, single-CAS claim/begin, and cold-start recovery"
   }
 }

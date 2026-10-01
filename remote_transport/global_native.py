@@ -48,6 +48,9 @@ class NativeLedger:
             yield saved
         finally:os.close(fd)
     def save(self,saved):private_write(self.path,canonical(saved,max_bytes=MAX))
+    def child_state_dir(self,route_id):
+        queue.token(route_id)
+        return self.root/(self.key+'.children')/route_id
     def observe(self,saved,source):
         state=queue.verify(source.state,self.code,expected_root=self.context,require_fresh=False)
         now=time.time();c=state['logical']['controller'];old=saved['observed_controller']
@@ -181,9 +184,13 @@ class NativeLedger:
             packet0=strict_json(read_private_file(begin['path'],MAX))
             require(d['dispatch_id']==packet0['expected_state']['logical']['demands'][route_id]['dispatch_id'],
                     'global_native_dispatch_mismatch')
-            args=queue.native_arguments(state,self.code,route_id,package_root);destination=self._new_path(destination)
+            child_directory=self.child_state_dir(route_id)
+            require(not child_directory.exists() and not child_directory.is_symlink(),
+                    'fresh_global_child_ledger_directory_required')
+            private_dir(child_directory,create=True)
+            args=queue.native_arguments(state,self.code,route_id,package_root,child_directory);destination=self._new_path(destination)
             packet={'contract':'dots-global-native-plan/2','queue_root_hash':self.key,'route_id':route_id,
-                    'dispatch_id':d['dispatch_id'],'selection':d['selection'],
+                    'dispatch_id':d['dispatch_id'],'selection':d['selection'],'child_state_dir':str(child_directory),
                     'created':time.time(),'execute_before':min(event_deadline(state,'begin',time.time()),
                         time.time()+state['controller_timing']['spawn_check_seconds'],d['child_bootstrap']['expires']),
                     'tool':'collaboration.spawn_agent','arguments':args}
@@ -224,12 +231,93 @@ class NativeLedger:
                           arguments_sha256=hash_bytes(canonical(actual_arguments)),receipt_path=str(receipt_path))
             self.save(saved);private_write(receipt_path,canonical(receipt))
             return {'admission_receipt_file':str(receipt_path),'native_task_id':receipt['native_task_id'],
-                    'underlying_model_verified':False,'next':'Publish the admitted queue event, then send this receipt path to the same child for its existing v3 JOIN. No new spawn.'}
+                    'underlying_model_verified':False,'next':'Publish and verify the admitted queue event, then run import-child-admission with this exact receipt. Only after verified import send the receipt and fixed child state-dir to the same child. No new spawn.'}
+
+    def import_child_admission(self,source,route_id,receipt_path,actual_native_task_id):
+        """One parent-authorized bridge between two distinct local ledgers.
+
+        Reserve before touching child evidence. An interrupted reservation can
+        only reconcile the exact already-written record, never seed another
+        ledger, identity or spawn. No external tool is called by this method.
+        """
+        from .router_join import JoinLedger
+        from . import router_bootstrap as child
+        with self.locked() as saved:
+            state=self.observe(saved,source)
+            require(not any(r['status']!='verified' for r in saved['operations'].values()),
+                    'global_unresolved_cas_readonly_reconciliation_required')
+            d=state['logical']['demands'].get(route_id);c=state['logical']['controller']
+            require(d is not None and d['state']=='admitted' and c is not None and
+                    d['controller_epoch']==c['controller_epoch'] and time.time()<d['expires'],
+                    'global_admitted_owned_child_required')
+            record=saved['spawns'].get(route_id)
+            require(record and record['status']=='recorded','global_recorded_native_result_required')
+            receipt=strict_json(read_private_file(receipt_path,MAX))
+            require(str(Path(receipt_path).absolute())==record['receipt_path'] and
+                    receipt==record['receipt']==d['admission'] and
+                    receipt['native_task_id']==actual_native_task_id,
+                    'global_child_actual_admission_mismatch')
+            packet=strict_json(read_private_file(record['plan_path'],MAX))
+            directory=self.child_state_dir(route_id)
+            require(record['plan_sha256']==hash_bytes(canonical(packet)) and
+                    packet['queue_root_hash']==self.key and packet['route_id']==route_id and
+                    packet['dispatch_id']==d['dispatch_id'] and packet['selection']==d['selection'] and
+                    packet['child_state_dir']==str(directory) and
+                    hash_bytes(canonical(packet['arguments']))==record['arguments_sha256']==d['spawn_arguments_sha256'] and
+                    admission_receipt(d['selection'],packet['arguments'],actual_native_task_id)==receipt,
+                    'global_child_spawn_binding_mismatch')
+            admitted=saved['operations'].get('admitted:'+route_id)
+            require(admitted and admitted['status']=='verified','verified_global_admitted_required')
+            cas=strict_json(read_private_file(admitted['path'],MAX));expected=cas['expected_state']
+            require(admitted['sha256']==hash_bytes(canonical(cas)) and
+                    admitted['operation_id']==cas['operation_id'] and
+                    state['events'][:expected['epoch']]==expected['events'] and
+                    expected['events'][-1]['kind']=='admitted' and
+                    expected['events'][-1]['arguments']['route_id']==route_id and
+                    expected['logical']['demands'][route_id]==d,
+                    'global_child_verified_admitted_binding_mismatch')
+            bootstrap=d['child_bootstrap'];cc=queue.child_code(self.code,state['activation_id'],route_id)
+            child.verify_context(bootstrap,cc,bootstrap['bootstrap_document_id'],bootstrap['bootstrap_tab_id'])
+            require(bootstrap['stage']=='WAITING_FOR_WORKER' and not bootstrap['events'] and
+                    bootstrap['session_id']==route_id and bootstrap['required_selection']==d['selection'],
+                    'global_child_bootstrap_binding_mismatch')
+            # Never accept caller-selected destinations or symlink traversal.
+            private_dir(directory)
+            provenance={'contract':'dots-global-child-admission-import/1','queue_root_hash':self.key,
+                'route_id':route_id,'controller_epoch':d['controller_epoch'],'claim_id':d['claim_id'],
+                'dispatch_id':d['dispatch_id'],'admitted_epoch':expected['epoch'],
+                'admitted_event_sha256':hash_bytes(canonical(expected['events'][-1])),
+                'child_context_hash':child.context_hash(bootstrap),'child_state_dir':str(directory),
+                'receipt_sha256':hash_bytes(canonical(receipt)),
+                'spawn_plan_sha256':record['plan_sha256'],'arguments_sha256':record['arguments_sha256'],
+                'result_sha256':record['result_sha256']}
+            pending=record.get('child_admission_import')
+            if pending is None:
+                # Must be genuinely unused, even if a caller selected this path
+                # early. Do not replace an existing child pairing ledger.
+                require(not any(directory.iterdir()),'fresh_parent_child_ledger_required')
+                pending={'status':'reserved_outcome_unknown','provenance':provenance}
+                record['child_admission_import']=pending;self.save(saved)
+                readback_only=False
+            else:
+                require(pending['provenance']==provenance,'global_child_import_binding_mismatch')
+                readback_only=True
+            child_ledger=JoinLedger(directory,bootstrap)
+            if readback_only:
+                require(child_ledger.path.exists(),'parent_child_import_outcome_unknown_no_replay')
+            child_ledger.import_parent_admission(receipt,provenance,readback_only=readback_only)
+            if pending['status']!='imported':
+                pending['status']='imported';self.save(saved)
+            return {'imported':True,'reconciled_existing':readback_only,'route_id':route_id,
+                    'native_task_id':actual_native_task_id,'child_state_dir':str(directory),
+                    'admission_receipt_file':record['receipt_path'],'underlying_model_verified':False,
+                    'native_retry_allowed':False}
 
 
-def emit_cell(ledger,source,destination,package_root,join_code_file,operation,capacity,seconds):
+def emit_cell(ledger,source,destination,package_root,join_code_file,operation,capacity,seconds,route_id=None):
     """Emit complete reviewed one-shot source; never executes tools or wakes agents."""
-    require(operation in ('join','heartbeat'),'invalid_global_cell_operation')
+    require(operation in ('join','heartbeat','claim-begin'),'invalid_global_cell_operation')
+    if operation=='claim-begin':queue.token(route_id)
     ledger.inspect(source)
     package=Path(package_root).absolute()
     for relative,digest in ledger.context['controller_source_hashes'].items():
@@ -244,7 +332,8 @@ def emit_cell(ledger,source,destination,package_root,join_code_file,operation,ca
             'documentId':source.document_id,'tabId':source.tab_id,'joinCodeFile':str(Path(join_code_file).absolute())}
     capture={'cwd':str(package),'root':str(ledger.root),'nativeTaskId':ledger.identity}
     call=('joinAndFirstHeartbeat('+json.dumps({'capacity':capacity,'seconds':seconds})+')'
-          if operation=='join' else 'heartbeat()')
+          if operation=='join' else 'claimAndBegin('+json.dumps({'routeId':route_id})+')'
+          if operation=='claim-begin' else 'heartbeat()')
     script=('// @exec: {"yield_time_ms": 1000, "max_output_tokens": 300}\n'
             +adapter.read_text()+'\n'+(package/'native_connector/global_controller_cell.js').read_text()
             +'\nconst privateCapture=createNativeToolAdapter(tools,'+json.dumps(capture)+');\n'
@@ -258,25 +347,28 @@ def emit_cell(ledger,source,destination,package_root,join_code_file,operation,ca
 def main():
     p=argparse.ArgumentParser(description=__doc__,allow_abbrev=False)
     p.add_argument('operation',choices=['inspect','plan-join','plan-heartbeat','plan-claim','plan-begin','plan-unknown',
-                                       'plan-admitted','emit-cell','verify','check-cas','plan-native','check-native','record-native'])
+                                       'plan-admitted','emit-cell','verify','check-cas','plan-native','check-native','record-native',
+                                       'import-child-admission'])
     for arg in ('snapshot','document-id','tab-id','join-code-file','state-dir','native-task-id'):
         p.add_argument('--'+arg,required=True)
-    for arg in ('route-id','save','result-file','plan-file','response','readback','package-root','actual-arguments','native-result'):
+    for arg in ('route-id','save','result-file','plan-file','response','readback','package-root','actual-arguments','native-result',
+                'admission-receipt','child-native-task-id'):
         p.add_argument('--'+arg)
-    p.add_argument('--cell-operation',choices=['join','heartbeat'])
+    p.add_argument('--cell-operation',choices=['join','heartbeat','claim-begin'])
     p.add_argument('--capacity',type=int,default=2);p.add_argument('--seconds',type=int,default=3600)
     a=p.parse_args();os.umask(0o077)
     def read(path):return strict_json(read_private_file(path,MAX))
     code=read_private_file(a.join_code_file,256).decode('ascii').strip()
     source=queue.snapshot(read(a.snapshot),a.document_id,a.tab_id)
     ledger=NativeLedger(a.state_dir,source.state,code,a.native_task_id)
-    if a.operation=='emit-cell':value=emit_cell(ledger,source,a.save,a.package_root,a.join_code_file,a.cell_operation,a.capacity,a.seconds)
+    if a.operation=='emit-cell':value=emit_cell(ledger,source,a.save,a.package_root,a.join_code_file,a.cell_operation,a.capacity,a.seconds,a.route_id)
     elif a.operation=='inspect':value=ledger.inspect(source)
     elif a.operation=='check-cas':value=ledger.check_plan(source,a.plan_file)
     elif a.operation=='verify':value=ledger.verify_plan(a.plan_file,read(a.response) if a.response else None,read(a.readback))
     elif a.operation=='plan-native':value=ledger.plan_spawn(source,a.route_id,a.save,a.package_root)
     elif a.operation=='check-native':value=ledger.check_spawn(source,a.plan_file)
     elif a.operation=='record-native':value=ledger.record_spawn(a.plan_file,read(a.actual_arguments),read(a.native_result),a.save)
+    elif a.operation=='import-child-admission':value=ledger.import_child_admission(source,a.route_id,a.admission_receipt,a.child_native_task_id)
     else:value=ledger.plan_event(source,a.operation.removeprefix('plan-'),a.save,route_id=a.route_id,capacity=a.capacity,seconds=a.seconds)
     if a.result_file:
         destination=ledger._new_path(a.result_file);private_write(destination,canonical(value,max_bytes=MAX))

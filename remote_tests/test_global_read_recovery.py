@@ -326,12 +326,16 @@ class GlobalReadRecoveryFaultTests(unittest.TestCase):
                 ('remote_transport.global_google.prepare_session', prepare),
                 ('remote_transport.global_pilot.observe_versions', lambda *_: {})):
                 patches.enter_context(patch(target, new=value))
-            prepare_plan = patches.enter_context(patch.object(pilot, 'prepare_preflight', return_value=plan))
+            reserve_plan = patches.enter_context(patch.object(pilot, 'reserve_preflight_route',
+                return_value={'reservation_id': self.generation, 'route_id': 'b'*32, 'expires': self.now+20}))
+            patches.enter_context(patch.object(pilot, 'preflight_route_status', return_value={'ready': True}))
+            prepare_plan = patches.enter_context(patch.object(pilot, 'finalize_preflight_route', return_value=plan))
             verify_plan = patches.enter_context(patch.object(pilot, 'verify_preflight'))
             desktop.supervise(runtime)
         self.assertEqual(rejected, ['global_docs_read_recovery_pending'])
         self.assertEqual(pool.submit.call_count, 1)
         self.assertEqual(prepare_plan.call_count, 1)
+        self.assertEqual(reserve_plan.call_count, 1)
         verify_plan.assert_not_called()
         self.assertEqual(unresolved_observations, [{'enabled': 1, 'closed': False, 'paused': False}])
         unresolved = next(value for value in statuses if value['stage'] == 'PREFLIGHT_UNRESOLVED')

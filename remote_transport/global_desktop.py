@@ -63,6 +63,7 @@ class RecoveringDocs:
         self.expires = min(int(spec['expires']), int(store.activation(spec['generation'])['expires']))
         self.last_now = self.now(); self.deadline = self.monotonic() + max(0, self.expires - self.last_now)
         self.paused = False; self.stopping = False
+        self.setup_expires = None; self.setup_deadline = None
 
     def _check(self):
         now = self.now()
@@ -73,6 +74,8 @@ class RecoveringDocs:
         current_stop = read(root_stop, 32768)['request_id'] if root_stop.exists() else None
         require(current_stop == self.spec.get('stop_intent_id'), 'global_start_cancelled_by_stop')
         require(now < self.expires and self.monotonic() < self.deadline, 'global_docs_recovery_expired')
+        require(self.setup_expires is None or (now < self.setup_expires and self.monotonic() < self.setup_deadline),
+                'pilot_prewarm_setup_expired')
         require(self.store.activation(self.spec['generation'])['enabled'], 'global_activation_disabled')
         self.store.require_read_recovery_current()
 
@@ -84,7 +87,7 @@ class RecoveringDocs:
         while True:
             self._check()
             try:
-                value = self.docs.get_document(document_id, deadline=self.deadline, check=self._check)
+                value = self.docs.get_document(document_id, deadline=min(self.deadline, self.setup_deadline or self.deadline), check=self._check)
             except DocsReadError as exc:
                 if not exc.retryable: raise
                 self._check()
@@ -327,7 +330,7 @@ class DesktopGlobal:
         if transaction and transaction['phase'] in {'prepared', 'restore_prepared'}:
             result['config_recovery_required'] = True
         for name in ('error', 'read_error', 'retry_round', 'retry_at', 'activation_expires',
-                     'resume_stage', 'preflight_state', 'queue_closed'):
+                     'resume_stage', 'preflight_state', 'setup_expires', 'queue_closed'):
             if name in status: result[name] = status[name]
         try:
             bound = probe(runtime / 'gateway')
@@ -634,7 +637,7 @@ def supervise(runtime):
         save(runtime / 'status.json', {**current_status, 'updated': time.time()})
     try:
         # Fixed-port bind precedes all credential refresh and cloud resource creation.
-        with Gateway(store, admission_wait=180) as gateway:
+        with Gateway(store, admission_wait=pilot.SETUP_SECONDS) as gateway:
             require(not (runtime / 'stop.json').exists(), 'global_stop_requested')
             root_stop = runtime.parent.parent / 'stop-intent.json'
             current_stop = read(root_stop, 32768)['request_id'] if root_stop.exists() else None
@@ -644,10 +647,20 @@ def supervise(runtime):
             read_port = RecoveringDocs(create_docs_client(), store=store, runtime=runtime, spec=spec,
                                        on_pause=paused, on_resume=resumed)
             bridge = prepare_session(store, runtime / 'bridge', read_port, create_drive_client(), cfg['folder_id'],
-                mac_writer=cfg['mac_writer_identity'], worker_writer=cfg['worker_writer_identity'])
+                mac_writer=cfg['mac_writer_identity'], worker_writer=cfg['worker_writer_identity'],
+                bootstrap_seconds=pilot.SETUP_SECONDS)
             read_port.reconcile(bridge)
             status('WAITING_CONTROLLER')
-            plan = None; proof = None; preflight_failure = None
+            plan = None; proof = None; preflight_failure = None; reservation = None
+            def observe_clients():
+                check_clients(spec)
+                cli_path = spec['cli'].get('invocation_path', spec['cli']['path'])
+                if spec.get('client_evidence_profile')==pilot.CONFIG_TRIAL:
+                    return pilot.observe_config_client(store, cli_path, spec['codex_home'])
+                if 'desktop_app' in spec:
+                    return pilot.observe_desktop_app(store, cli_path, spec['desktop_app'])
+                return pilot.observe_versions(store, cli_path,
+                    spec['desktop'].get('invocation_path', spec['desktop']['path']))
             while time.time() < spec['expires'] and not (runtime / 'stop.json').exists():
                 current = bridge.step()
                 if current['state'] == 'closed': break
@@ -660,21 +673,36 @@ def supervise(runtime):
                     require(candidate['run_id'] == spec['run_id'], 'global_refresh_run_mismatch')
                     handled = read(runtime / 'refresh-handled.json') if (runtime / 'refresh-handled.json').exists() else {}
                     if candidate['request_id'] != handled.get('request_id'): refresh = candidate
-                if preflight_failure is None and (future is None or refresh is not None) and current['state'] == 'controller_active':
-                    check_clients(spec)
-                    cli_path = spec['cli'].get('invocation_path', spec['cli']['path'])
-                    if spec.get('client_evidence_profile')==pilot.CONFIG_TRIAL:
-                        versions = pilot.observe_config_client(store, cli_path, spec['codex_home'])
-                    elif 'desktop_app' in spec:
-                        versions = pilot.observe_desktop_app(store, cli_path, spec['desktop_app'])
-                    else:
-                        versions = pilot.observe_versions(store, cli_path,
-                            spec['desktop'].get('invocation_path', spec['desktop']['path']))
-                    prior = plan['plan_id'] if refresh is not None else None
-                    if refresh is not None: save(runtime / 'refresh-handled.json', {**refresh, 'state': 'issued_outcome_unknown'})
-                    plan = pilot.prepare_preflight(store, version_evidence=versions, previous_plan_id=prior)
+                if preflight_failure is None and future is None:
+                    if reservation is None and current['state'] == 'controller_active':
+                        # A private identity creates demand; no HTTP/challenge budget
+                        # starts while the controller spawns and pairs this child.
+                        reservation = pilot.reserve_preflight_route(store, version_evidence=observe_clients())
+                        read_port.setup_expires = reservation['expires']
+                        read_port.setup_deadline = time.monotonic() + max(0, reservation['expires']-time.time())
+                        status('PREPARING_PREFLIGHT_ROUTE', preflight_state='waiting_ready_no_post',
+                               setup_expires=reservation['expires'])
+                    if reservation is not None:
+                        queue_state = bridge.read().state
+                        readiness = pilot.preflight_route_status(store, reservation['reservation_id'],
+                            queue_state=queue_state, join_code=bridge.code)
+                        if readiness['ready']:
+                            plan = pilot.finalize_preflight_route(store, reservation['reservation_id'],
+                                version_evidence=observe_clients(), queue_state=queue_state, join_code=bridge.code)
+                            read_port.setup_expires = None; read_port.setup_deadline = None
+                elif preflight_failure is None and refresh is not None and current['state'] == 'controller_active':
+                    save(runtime / 'refresh-handled.json', {**refresh, 'state': 'issued_outcome_unknown'})
+                    plan = pilot.prepare_preflight(store, version_evidence=observe_clients(), previous_plan_id=plan['plan_id'])
                     proof = None
-                    # Plan is durably one-attempt before HTTP can create a demand.
+                    future = None
+                if preflight_failure is None and plan is not None and future is None:
+                    read_port._check()
+                    require(not (runtime / 'stop.json').exists(), 'global_stop_requested')
+                    attempt = runtime / ('preflight-post-' + plan['plan_id'] + '.json')
+                    require(not attempt.exists(), 'global_preflight_attempt_already_issued_no_replay')
+                    # Persist before submitting. A failed/unknown POST or supervisor
+                    # restart never obtains a second attempt or another warm route.
+                    save(attempt, {'plan_id': plan['plan_id'], 'state': 'issued_outcome_unknown'})
                     status('NATIVE_PREFLIGHT', preflight_state='one_attempt_running')
                     future = pool.submit(post_preflight, store, plan, request_control)
                 if future is not None and future.done() and proof is None and preflight_failure is None:

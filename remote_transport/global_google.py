@@ -184,7 +184,7 @@ class GoogleQueueBridge:
         queue.require_active(source.state['logical']['controller'],source.state['controller_timing'],time.time(),initialized=True)
         require(route['state']=='pending' and route['generation']==source.state['activation_id'],'global_local_demand_not_pending')
         require(route_id not in source.state['logical']['demands'],'global_demand_already_published')
-        require(min(int(route['expires']),source.state['expires'])-int(time.time())>=60,'global_bootstrap_window_too_short')
+        require(min(int(route['expires']),source.state['expires'],source.state['logical']['controller']['lease_expires'])-int(time.time())>=60,'global_bootstrap_window_too_short')
         runtime=self.root/'routes'/route_id
         require(not runtime.exists(),'global_child_runtime_exists_reconcile_no_retry')
         private_dir(runtime,create=True);active_path=runtime/'active.json';now=int(time.time())
@@ -202,7 +202,7 @@ class GoogleQueueBridge:
         forward=mac._create_forward_probe(self.drive,active,self.config)
         expires=min(int(route['expires']),source.state['expires'])
         initial=child.initial_state(bootstrap_id=active['bootstrap_id'],session_id=route_id,created=now,
-                    expires=min(expires,now+self.bootstrap_seconds),join_code=cc,folder_id=self.config['folder_id'],
+                    expires=min(expires,now+self.bootstrap_seconds,source.state['logical']['controller']['lease_expires']),join_code=cc,folder_id=self.config['folder_id'],
                     control_document_id=active['control_document_id'],control_tab_id=active['control_tab_id'],
                     control_id=active['control_id'],mac_writer_identity=self.config['mac_writer_identity'],
                     worker_writer_identity=self.config['worker_writer_identity'],bootstrap_document_id=active['bootstrap_document_id'],
@@ -371,12 +371,14 @@ class GoogleQueueBridge:
         if self.lease is not None:os.close(self.lease);self.lease=None
 
 
-def prepare_session(store,root,docs,drive,folder_id,*,mac_writer='global-mac',worker_writer='global-native'):
+def prepare_session(store,root,docs,drive,folder_id,*,mac_writer='global-mac',worker_writer='global-native',
+                    bootstrap_seconds=600):
     """Explicitly authorized control-resource creation; every effect is one-attempt.
 
     Caller must bind/verify the gateway before invoking this function. An unknown
     document create preserves its journal and cannot be retried by this helper.
     """
+    require(type(bootstrap_seconds) is int and 60<=bootstrap_seconds<=1800,'invalid_global_bridge_limits')
     from .global_gateway import probe
     require(probe(store.root)['bound'] is True,'bound_gateway_required')
     queue.safe_id(folder_id);root=private_dir(root,create=True)
@@ -384,7 +386,8 @@ def prepare_session(store,root,docs,drive,folder_id,*,mac_writer='global-mac',wo
     if initial_path.exists():
         initial=strict_json(read_private_file(initial_path,queue.MAX_BYTES));code=read_private_file(code_path,256).decode()
         require(initial['folder_id']==folder_id,'global_authorized_folder_changed')
-        bridge=GoogleQueueBridge(store,root,docs,drive,initial,code,mac_writer=mac_writer,worker_writer=worker_writer)
+        bridge=GoogleQueueBridge(store,root,docs,drive,initial,code,mac_writer=mac_writer,worker_writer=worker_writer,
+                                 bootstrap_seconds=bootstrap_seconds)
         try:bridge.read()
         except Exception:bridge.close();raise
         return bridge
@@ -404,7 +407,8 @@ def prepare_session(store,root,docs,drive,folder_id,*,mac_writer='global-mac',wo
         max_routes=min(16,store.config()['max_routes']),max_pending=min(8,store.config()['max_pending']),
         max_children=store.config()['max_children'])
     private_write(initial_path,canonical(initial))
-    bridge=GoogleQueueBridge(store,root,docs,drive,initial,code,mac_writer=mac_writer,worker_writer=worker_writer)
+    bridge=GoogleQueueBridge(store,root,docs,drive,initial,code,mac_writer=mac_writer,worker_writer=worker_writer,
+                                 bootstrap_seconds=bootstrap_seconds)
     try:bridge.initialize_blank_queue()
     except Exception:bridge.close();raise
     private_write(root/'global-join.txt',bridge.join_message().encode())

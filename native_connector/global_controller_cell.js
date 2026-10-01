@@ -7,10 +7,10 @@ function createGlobalControllerCell(io) {
   for (const name of ['read','plan','check','write','verify','recordFailure'])
     if(typeof io[name]!=='function')throw Error('global_cell_ports_required');
   let busy=false;
-  async function execute(kind, extra={}) {
+  async function execute(kind, extra={}, freshSource=null) {
     let stage='read',plan=null,writeAttempted=false,writeFailure=null;
     try {
-      const source=await io.read();
+      const source=freshSource===null?await io.read():freshSource;
       stage='plan';plan=await io.plan(kind,source,extra); // durable one-attempt reservation
       stage='check';await io.check(plan,source); // helper clock, signed predecessor deadline
       let response=null;
@@ -42,6 +42,29 @@ function createGlobalControllerCell(io) {
   }
   return {
     heartbeat:()=>exclusive(()=>execute('heartbeat')),
+    claimAndBegin:({routeId})=>exclusive(async()=>{
+      if(typeof routeId!=='string'||!routeId||typeof io.heartbeatDue!=='function')
+        throw Error('global_route_cell_ports_required');
+      const source=await io.read();
+      const due=await io.heartbeatDue(source);
+      async function heartbeat(){
+        const result=await execute('heartbeat');
+        if(!result.verified||result.first_heartbeat_required)throw Error('global_heartbeat_unverified');
+        return result;
+      }
+      if(due)await heartbeat();
+      // Each operation retains its own durable reservation, fresh revision,
+      // dispatch check and exact-event readback acceptance. Never pipeline CAS.
+      const claim=await execute('claim',{routeId},due?null:source);
+      if(!claim.verified)throw Error('global_claim_unverified');
+      if(await io.heartbeatDue(null,claim.heartbeat_due_at))await heartbeat();
+      const begin=await execute('begin',{routeId});
+      if(!begin.verified)throw Error('global_begin_unverified');
+      const latest=await io.heartbeatDue(null,begin.heartbeat_due_at)?await heartbeat():begin;
+      // Native planning and the real native tool remain outside this bounded
+      // cell. In particular, no burned spawn is left waiting behind a CAS.
+      return {...latest,claim_verified:true,begin_verified:true,native_spawn_prepared:false};
+    }),
     joinAndFirstHeartbeat:(limits)=>exclusive(async()=>{
       const joined=await execute('join',limits);
       if(!joined.verified)throw Error('global_join_unverified');
@@ -175,7 +198,20 @@ function createGlobalControllerToolAdapter(tools, config, captureValue) {
     },
     async plan(kind,source,extra){
       return helper('plan-'+kind,source,['--save',path('plan'),
+        ...(['claim','begin'].includes(kind)?['--route-id',extra.routeId]:[]),
         ...(kind==='join'?['--capacity',String(extra.capacity),'--seconds',String(extra.seconds)]:[])]);
+    },
+    async heartbeatDue(source,dueAt){
+      if(source!==null){
+        const status=await helper('inspect',source);
+        if(!status.controller||status.first_heartbeat_required)
+          throw Error('global_controller_join_required');
+        dueAt=status.controller.heartbeat_at+status.controller_timing.heartbeat_interval_seconds;
+      }
+      if(!Number.isFinite(dueAt))throw Error('global_heartbeat_deadline_required');
+      // Scheduling only. The signed host-clock check in each normal CAS helper
+      // remains authoritative for freshness, lease and acceptance deadlines.
+      return Date.now()/1000>=dueAt;
     },
     async check(plan,source){
       const started=Date.now();

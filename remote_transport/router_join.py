@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import copy
 import fcntl
 import json
 import os
@@ -99,6 +100,38 @@ class JoinLedger:
 
     def save(self, value):
         _save(self.path, value)
+
+    def import_parent_admission(self, receipt, provenance, *, readback_only=False):
+        """Trusted parent-only adapter, called after global ledger verification.
+
+        This is deliberately not a child CLI accepting a receipt or self-signed
+        envelope. The global parent owns verification and the fixed destination;
+        no parent ledger or global JOIN secret is given to the child. Like the
+        original recorder this is local parent-recorded evidence, not platform
+        attestation or a defense against a process rewriting same-owner files.
+        """
+        validate_admission(receipt, self.context['required_selection'], receipt['native_task_id'])
+        require(provenance.get('contract') == 'dots-global-child-admission-import/1' and
+                provenance.get('child_context_hash') == self.key and
+                provenance.get('child_state_dir') == str(self.root) and
+                provenance.get('route_id') == self.context['session_id'] and
+                provenance.get('receipt_sha256') == hash_bytes(canonical(receipt)),
+                'parent_child_admission_binding_mismatch')
+        record = {'status': 'recorded', 'receipt': copy.deepcopy(receipt),
+                  'source': 'verified_global_parent', 'parent_provenance': copy.deepcopy(provenance)}
+        with self.locked() as saved:
+            if readback_only:
+                require(saved.get('native_admission') == record and
+                        saved['native_task_id'] == receipt['native_task_id'],
+                        'parent_child_import_outcome_unknown_no_replay')
+                return
+            require(saved.get('native_admission') is None and saved['native_task_id'] is None and
+                    saved['last_epoch'] == -1 and not saved['operations'] and
+                    saved['probe'] is None and saved['forward_probe'] is None and
+                    saved['materialization'] is None, 'fresh_parent_child_ledger_required')
+            saved['native_admission'] = record
+            saved['native_task_id'] = receipt['native_task_id']
+            self.save(saved)
 
     def observe(self, value, snap, native_task_id=None):
         state = snap.state; digest = hash_bytes(canonical(state))

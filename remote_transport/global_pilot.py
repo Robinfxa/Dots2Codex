@@ -26,10 +26,12 @@ from .codex_catalog import CODEX_VERSION, CODEX_SOURCE_COMMIT
 from .global_gateway import (Store, PROTOCOL, endpoint, global_catalog, private_dir,
                              private_write, probe, route_key, strict_json)
 from .model import Object, ProtocolError, canonical, hash_bytes, require
+from .mac_environment import private_lock
 from .selection import pin_selection, validate_admission
 
 CONTRACT='dots-global-pilot/1'
 CONFIG_TRIAL='client-config-trial/1'
+SETUP_SECONDS=1800
 PLAN_SECONDS=600
 PROOF_SECONDS=300
 VERSION_SECONDS=1800
@@ -234,7 +236,98 @@ def _live(store):
     return info,binding,controller
 
 
+def reserve_preflight_route(store, *, version_evidence):
+    """Reserve one private route without a challenge, POST, or inference request.
+
+    The fixed activation-keyed reservation is written before local admission.
+    Lost output/crashes cannot mint another route or renew its setup deadline.
+    """
+    store=_store(store);_versions(store,version_evidence);info,binding,controller=_live(store)
+    identifier=info['generation'];root=private_dir(store.root/'pilot',create=True)
+    with private_lock(root/'prewarm.lock'):
+        require(not _path(store,'prewarm',identifier).exists(),'pilot_prewarm_already_reserved_no_replay')
+        now=time.time();identity={'session-id':'dots-pilot-'+secrets.token_hex(16),'thread-id':str(uuid.uuid4())}
+        reservation={'id':identifier,'created':now,
+            'expires':min(now+SETUP_SECONDS,binding['activation']['expires'],controller['expires']),
+            'binding':binding,'identity':identity,'route_id':route_key(identifier,identity),
+            'version_evidence':copy.deepcopy(version_evidence),'phase':'admission_reserved_outcome_unknown'}
+        _save(store,'prewarm',reservation)
+        with store.transaction() as db:
+            require(db.execute('SELECT 1 FROM routes WHERE id=?',(reservation['route_id'],)).fetchone() is None,
+                    'pilot_route_already_exists')
+        route=store.admission(identifier,identity,info['selection'])
+        require(route['created']>=now,'pilot_prewarm_old_route_rejected')
+        reservation.update(phase='waiting_route',route_created=route['created'])
+        _save(store,'prewarm',reservation)
+    return {'reservation_id':identifier,'route_id':route['id'],'expires':reservation['expires']}
+
+
+def preflight_route_status(store, reservation_id, *, queue_state, join_code):
+    """Read-only readiness check; every original signed deadline still applies."""
+    store=_store(store);reservation=_load(store,'prewarm',reservation_id);now=time.time()
+    require(reservation['phase']=='waiting_route','pilot_prewarm_attempt_already_consumed')
+    require(reservation['created']<=now<reservation['expires'],'pilot_prewarm_setup_expired')
+    info,binding,controller=_live(store)
+    require(binding==reservation['binding'],'pilot_activation_or_controller_changed')
+    state=queue.verify(queue_state,join_code)
+    require(queue.root_hash(state)==binding['queue_root_sha256'] and not state['logical']['closed'],
+            'pilot_prewarm_queue_binding_mismatch')
+    native=state['logical']['controller']
+    require(native is not None and native['controller_epoch']==controller['epoch']
+            and hash_bytes(native['native_task_id'].encode())[:32]==controller['controller_id']
+            and native['lease_expires']==controller['expires']
+            and queue.require_active(native,state['controller_timing'],now,initialized=True),
+            'pilot_signed_controller_mismatch')
+    route=store.route(reservation['route_id'])
+    require(route['generation']==info['generation'] and strict_json(route['identity'])==reservation['identity']
+            and strict_json(route['selection'])==info['selection'] and route['created']==reservation['route_created'],
+            'pilot_prewarm_route_binding_mismatch')
+    require(route['state'] in ('pending','claimed','spawn_intent','admitted','ready'),
+            'pilot_prewarm_route_unusable')
+    with store.transaction() as db:
+        require(route['used']==0 and db.execute('SELECT 1 FROM requests WHERE route=?',(route['id'],)).fetchone() is None,
+                'pilot_prewarm_route_already_used')
+    deadline=min(reservation['expires'],route['expires'])
+    demand=state['logical']['demands'].get(route['id'])
+    if demand is not None:
+        require(demand['identity_sha256']==hash_bytes(canonical(reservation['identity']))
+                and demand['selection']==info['selection'],'pilot_prewarm_demand_binding_mismatch')
+        require(demand['state'] in ('pending','claimed','spawn_intent','admitted','ready'),
+                'pilot_prewarm_route_unusable')
+        if demand['state']!='ready':deadline=min(deadline,demand['child_bootstrap']['expires'])
+    require(now<deadline,'pilot_prewarm_setup_expired')
+    if route['state']=='ready':
+        route,pin=_ready_route(store,reservation,controller)
+        require(demand is not None and demand['state']=='ready'
+                and demand['controller_epoch']==controller['epoch'] and demand['claim_id']==route['claim']
+                and demand['admission']==pin.body['payload']['inference']['admission']
+                and demand['ready']['deployment']==pin.oid,'pilot_signed_ready_route_mismatch')
+    return {'ready':route['state']=='ready','state':route['state'],'expires':deadline,'route_id':route['id']}
+
+
+def finalize_preflight_route(store, reservation_id, *, version_evidence, queue_state, join_code):
+    """Issue the sole nonce plan only after the reserved unused child is ready."""
+    store=_store(store)
+    with private_lock(private_dir(store.root/'pilot')/'prewarm.lock'):
+        reservation=_load(store,'prewarm',reservation_id)
+        current=_versions(store,version_evidence);prior=_unseal(store,'versions',reservation['version_evidence'])
+        stable=lambda value:{k:v for k,v in value.items() if k not in ('id','observed_at')}
+        require(stable(current)==stable(prior),'pilot_prewarm_client_evidence_changed')
+        readiness=preflight_route_status(store,reservation_id,queue_state=queue_state,join_code=join_code)
+        require(readiness['ready'],'pilot_prewarm_route_not_ready')
+        # Burn plan issuance before exposing a challenge, even if saving it fails.
+        reservation.update(phase='plan_reserved_outcome_unknown',plan_id=secrets.token_hex(16))
+        _save(store,'prewarm',reservation)
+        plan=_prepare_preflight(store,version_evidence=version_evidence,prewarm=reservation)
+        reservation['phase']='plan_issued';_save(store,'prewarm',reservation)
+        return plan
+
+
 def prepare_preflight(store,*,version_evidence,previous_plan_id=None):
+    return _prepare_preflight(store,version_evidence=version_evidence,previous_plan_id=previous_plan_id)
+
+
+def _prepare_preflight(store,*,version_evidence,previous_plan_id=None,prewarm=None):
     """Create a challenge; explicit refresh reuses only a known completed route.
 
     A refresh never submits, retries, reserves, or spawns. Its cumulative input
@@ -244,6 +337,9 @@ def prepare_preflight(store,*,version_evidence,previous_plan_id=None):
     now=time.time();identifier=secrets.token_hex(16);request_nonce=secrets.token_hex(24);expected_nonce=secrets.token_hex(24)
     require(request_nonce!=expected_nonce,'pilot_nonce_collision')
     identity={'session-id':'dots-pilot-'+identifier,'thread-id':str(uuid.uuid4())};history=[];route_created=None
+    if prewarm is not None:
+        require(previous_plan_id is None and prewarm['binding']==binding,'pilot_prewarm_plan_binding_mismatch')
+        identifier=prewarm['plan_id'];identity=prewarm['identity'];route_created=prewarm['route_created']
     if previous_plan_id is not None:
         previous=_load(store,'plan',previous_plan_id)
         require(previous['binding']==binding,'pilot_activation_or_controller_changed')
@@ -269,7 +365,7 @@ def prepare_preflight(store,*,version_evidence,previous_plan_id=None):
           'binding':binding,'identity':identity,'body':body,'request_nonce':request_nonce,'expected_nonce':expected_nonce,
           'route_id':route_key(info['generation'],identity),'request_digest':hash_bytes(canonical(body)),
           'version_evidence':copy.deepcopy(version_evidence),'previous_plan_id':previous_plan_id,'route_created':route_created}
-    if previous_plan_id is None:
+    if previous_plan_id is None and prewarm is None:
         with store.transaction() as db:
             require(db.execute('SELECT 1 FROM routes WHERE id=?',(plan['route_id'],)).fetchone() is None,'pilot_route_already_exists')
     _save(store,'plan',plan)
@@ -287,7 +383,7 @@ def _fresh_plan(store,identifier):
     return plan,info,controller
 
 
-def _request(store,plan,controller):
+def _ready_route(store,plan,controller):
     now=time.time();route=store.route(plan['route_id']);cfg=store.config()
     require(route['state']=='ready' and route['generation']==plan['binding']['activation']['id']
             and route['controller_epoch']==controller['epoch'] and strict_json(route['identity'])==plan['identity']
@@ -305,6 +401,11 @@ def _request(store,plan,controller):
             and payload['scope']=='responses_tools' and payload['created']<=now<payload['expires']
             and payload['expires']==route['expires'],'pilot_pin_binding_or_lifetime_mismatch')
     validate_admission(payload['inference']['admission'],strict_json(route['selection']),task)
+    return route,pin
+
+
+def _request(store,plan,controller):
+    now=time.time();route,pin=_ready_route(store,plan,controller)
     with store.transaction() as db:
         row=db.execute('SELECT * FROM requests WHERE route=? AND digest=?',(route['id'],plan['request_digest'])).fetchone()
     require(row is not None and row['state']=='text_complete' and row['response'] is not None,

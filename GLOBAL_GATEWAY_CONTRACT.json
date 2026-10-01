@@ -17,7 +17,7 @@
   "google_queue_protocol": "dots-global-admissions/2",
   "new_controller_adapter_implemented": true,
   "new_controller_adapter_live_verified": false,
-  "first_request_admission_wait_seconds": 180,
+  "first_request_admission_wait_seconds": 1800,
   "existing_base_files_changed_scope": "Original isolated gateway candidate only; the combined package retains launcher base changes listed in ROUTER_PACKAGE_MANIFEST.json",
   "combined_source_package": true,
   "launcher_global_menu_supported": true,
@@ -39,5 +39,11 @@
   "controller_heartbeat_target_seconds": 25,
   "prepared_cas_budget_seconds": 120,
   "existing_activation_migration": "fresh_activation_and_v2_join_required",
-  "controller_timing_live_verified": false
+  "controller_timing_live_verified": false,
+  "first_request_admission_wait_scope": "desktop_global_supervisor_new_routes",
+  "standalone_google_admission_wait_seconds": 180,
+  "generic_gateway_default_admission_wait_seconds": 0,
+  "maximum_admission_wait_seconds": 1800,
+  "admission_wait_deadline": "original_route_created_plus_budget_clamped_to_activation_route_and_controller_lease",
+  "admission_wait_refreshes_controller_freshness": false
 }

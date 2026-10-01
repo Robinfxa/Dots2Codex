@@ -447,9 +447,33 @@ class Store:
             row=db.execute('SELECT * FROM routes WHERE id=?',(rid,)).fetchone()
             require(row is not None,'unknown_route'); return dict(row)
 
-    def request_start(self, rid, digest):
+    def admission_wait_state(self, rid, seconds):
+        """Check live authority without refreshing it or extending route setup."""
+        now=time.time()
+        with self.transaction() as db:
+            route=db.execute('SELECT * FROM routes WHERE id=?',(rid,)).fetchone()
+            require(route is not None,'unknown_route')
+            activation=db.execute('SELECT * FROM activations WHERE id=?',(route['generation'],)).fetchone()
+            require(activation is not None and activation['enabled'] and activation['expires']>now,
+                    'activation_closed')
+            require(not self._docs_reads_paused(db),'global_docs_read_recovery_pending')
+            controller=self._live_controller(db)
+            if controller['mode']=='native_google_v2':
+                bound=db.execute("SELECT value FROM meta WHERE key='native_activation'").fetchone()
+                require(bound is not None and json.loads(bound['value'])==route['generation'],'activation_requires_new_native_join')
+            require(route['controller_epoch'] in (None,controller['epoch']),'route_controller_epoch_retired')
+            # A reconnect gets only this route's original remaining setup budget.
+            deadline=min(route['created']+seconds,activation['expires'],route['expires'],controller['expires'])
+            require(now<deadline,'admission_expired_no_inference_dispatched')
+            return dict(route),deadline
+
+    def request_start(self, rid, digest, *, admission_deadline=None):
         cfg=self.config()
         with self.transaction() as db:
+            if admission_deadline is not None:
+                require(time.time()<admission_deadline,'admission_expired_no_inference_dispatched')
+                activation=db.execute('SELECT a.* FROM activations a JOIN routes r ON r.generation=a.id WHERE r.id=?',(rid,)).fetchone()
+                require(activation is not None and activation['enabled'] and activation['expires']>time.time(),'activation_closed')
             prior=db.execute('SELECT * FROM requests WHERE route=? AND digest=?',(rid,digest)).fetchone()
             if prior:
                 if prior['state']=='text_complete':return {'replay':bytes(prior['response'])}
@@ -518,7 +542,7 @@ class Gateway:
         self.store=store; self.closed=False
         require(type(max_connections) is int and 1<=max_connections<=32,'invalid_connection_limit')
         require(type(request_deadline) in (int,float) and .1<=request_deadline<=300,'invalid_request_deadline')
-        require(type(admission_wait) in (int,float) and 0<=admission_wait<=300,'invalid_admission_wait')
+        require(type(admission_wait) in (int,float) and 0<=admission_wait<=1800,'invalid_admission_wait')
         self.admission_wait=admission_wait
         self.request_deadline=request_deadline; self.route_locks={};self.route_completions={}; self.route_lock_guard=threading.Lock()
         self.lease=os.open(store.root/'gateway.lock',os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)
@@ -619,7 +643,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         finally:self.close_connection=True
     def do_OPTIONS(self):self.error('browser_access_not_supported',405)
     def do_POST(self):
-        started=False;acquired=False;conn=None;lock=None;admission_waiting=False;response_id=None
+        started=False;acquired=False;conn=None;lock=None;admission_waiting=False;response_id=None;admission_deadline=None
         try:
             owner=self.server.owner;store=owner.store
             control=re.fullmatch(r'/control/v1/(join|heartbeat|claim|begin|admit|attach|unknown|status|route|disable)',self.path)
@@ -657,7 +681,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.send_header('Connection','close');self.end_headers();started=True;admission_waiting=True
                 created={'type':'response.created','response':{'id':response_id,'status':'in_progress'}}
                 self.wfile.write(b'event: response.created\ndata: '+canonical(created)+b'\n\n');self.wfile.flush()
-                until=time.monotonic()+owner.admission_wait;heartbeat=0
+                route,admission_deadline=store.admission_wait_state(rid,owner.admission_wait)
+                until=time.monotonic()+max(0,admission_deadline-time.time());heartbeat=0
                 while route['state']!='ready':
                     require(not owner.closed,'gateway_stopping')
                     require(time.monotonic()<until,'admission_wait_expired_no_inference_dispatched')
@@ -666,17 +691,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     if socket_select.select([self.connection],[],[],0)[0] and not self.connection.recv(1,socket.MSG_PEEK):
                         raise ProtocolError('client_disconnected_before_dispatch')
                     if time.monotonic()>=heartbeat:
+                        route,current_deadline=store.admission_wait_state(rid,owner.admission_wait)
+                        admission_deadline=min(admission_deadline,current_deadline)
+                        until=min(until,time.monotonic()+max(0,admission_deadline-time.time()))
                         # Codex times parsed events, so comments are insufficient.
                         # A stable outer response ID spans admission + downstream;
                         # no tool item/call identifier is rewritten.
                         progress={'type':'response.in_progress','response':{'id':response_id,'status':'in_progress'}}
                         self.wfile.write(b'event: response.in_progress\ndata: '+canonical(progress)+b'\n\n');self.wfile.flush();heartbeat=time.monotonic()+.5
                     time.sleep(.05);route=store.route(rid)
+                route,current_deadline=store.admission_wait_state(rid,owner.admission_wait)
+                admission_deadline=min(admission_deadline,current_deadline)
+                require(not owner.closed and time.monotonic()<until,'gateway_stopping')
                 admission_waiting=False
             require(route['state']=='ready','admission_pending' if route['state'] in ('pending','claimed','spawn_intent','admitted') else 'route_'+route['state'])
             if socket_select.select([self.connection],[],[],0)[0] and not self.connection.recv(1,socket.MSG_PEEK):
                 raise ProtocolError('client_disconnected_before_dispatch')
-            dispatch=store.request_start(rid,digest)
+            dispatch=store.request_start(rid,digest,admission_deadline=admission_deadline)
             if 'replay' in dispatch:
                 already_created=started
                 if not started:
