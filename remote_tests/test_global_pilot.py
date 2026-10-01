@@ -66,6 +66,21 @@ class GlobalPilotTests(unittest.TestCase):
     def require(self,proof):
         return pilot.require_pilot(self.store.root,proof['proof_id'],config.CODEX_VERSION,config.CODEX_VERSION)
 
+    def test_alternate_signed_queue_root_cannot_seal_preflight(self):
+        plan,_=self.complete();state=self.bridge.read().state
+        q=control_fixture.q
+        clone=q.initial(activation_id=state['activation_id'],queue_id='f'*32,
+            folder_id=state['folder_id'],document_id=state['document_id'],tab_id=state['tab_id'],
+            join_code=self.code,created=state['created'],expires=state['expires'],
+            runtime_source_hashes=state['runtime_source_hashes'],**state['limits'])
+        for event in state['events']:
+            args=copy.deepcopy(event['arguments'])
+            if event['kind']=='begin':args['dispatch_id']=q.dispatch_id(clone,args['route_id'])
+            clone=q.transition(clone,self.code,event['kind'],event['actor'],args,
+                operation_id=event['operation_id'],now=event['at'])
+        self.error('signed_queue_root_mismatch',pilot.verify_preflight,self.store,plan['plan_id'],
+            queue_state=clone,join_code=self.code)
+
     def test_signed_completed_request_is_bound_and_never_production_ready(self):
         plan,pin=self.complete();proof=self.verify(plan);info=self.require(proof)
         self.assertNotEqual(plan['expected_nonce'],plan['request_nonce'])
@@ -152,7 +167,7 @@ class GlobalPilotTests(unittest.TestCase):
     def test_retired_epoch_or_different_generation_invalidates_proof(self):
         plan,_=self.complete();proof=self.verify(plan)
         with self.store.transaction() as db:db.execute("UPDATE controller SET epoch=?",('c'*32,))
-        self.error('activation_or_controller_changed',self.require,proof)
+        self.error('activation_or_controller_changed|live_native_controller_required',self.require,proof)
 
     def test_new_activation_invalidates_proof(self):
         plan,_=self.complete();proof=self.verify(plan)
@@ -243,7 +258,7 @@ class GlobalPilotTests(unittest.TestCase):
             self.error('preview_outdated',config.apply,self.store.root,home,expected_after_hash='0'*64,**args)
             def retire():
                 with self.store.transaction() as db:db.execute('UPDATE controller SET epoch=?',('d'*32,))
-            self.error('activation_or_controller_changed',config.apply,self.store.root,home,
+            self.error('activation_or_controller_changed|live_native_controller_required',config.apply,self.store.root,home,
                 expected_after_hash=hash_bytes(b'# proposed fixture only\n'),before_commit=retire,**args)
         self.assertEqual(path.read_bytes(),b'# before\n')
 

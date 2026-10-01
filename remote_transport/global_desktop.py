@@ -262,6 +262,9 @@ class DesktopGlobal:
         return found[0] if found else None
 
     def _copy_join(self, active):
+        status=self.status()
+        require(status.get('queue_closed') is not True and status.get('stage') not in {'FAILED','STOPPED','STOPPING'}
+                and self.ports.now()<active['spec']['expires'],'global_new_activation_and_join_required')
         path = Path(active['runtime']) / 'bridge' / 'global-join.txt'
         require(path.exists(), 'global_join_not_yet_prepared')
         if not self.ui.confirm('Copy the private GLOBAL controller JOIN? Send it once in your private Dots conversation. '
@@ -284,12 +287,26 @@ class DesktopGlobal:
             self.ports.wait(.5)
         return read(runtime / 'status.json') if (runtime / 'status.json').exists() else {'stage': 'STARTING'}
 
+    def _recovery(self, active, status):
+        current=self.status();runtime=Path(active['runtime'])
+        ended=(status.get('queue_closed') is True or current.get('queue_closed') is True
+               or self.ports.now()>=active['spec']['expires'] or (runtime/'stop.json').exists()
+               or status.get('stage') in {'FAILED','STOPPED','STOPPING'}
+               or current.get('stage') in {'FAILED','STOPPED','STOPPING'}
+               or current.get('activation_enabled') is False
+               or not current.get('supervisor_alive',False))
+        if ended:
+            return {**current,'resume_possible':False,'new_activation_required':True,
+                    'next':'This activation cannot resume. Preserve its evidence, use Stop if needed, then explicitly start a new activation and send its new JOIN. No Google resources are created by this status check.'}
+        return {**current,'resume_possible':True,'new_activation_required':False,
+                'next':'This activation is still open and supervised. Continue after its controller and preflight finish, before the signed expiry. A closed, expired, or failed activation requires a new JOIN.'}
+
     def _continue(self, active):
         runtime = Path(active['runtime']); spec = active['spec']
         if self._transaction(active) is not None or (runtime / 'config-applied.json').exists(): return self.status()
         status = self._wait_stage(active, 180, {'PREFLIGHT_VERIFIED'})
         if status['stage'] != 'PREFLIGHT_VERIFIED':
-            return {**self.status(), 'next': 'Global start can resume this same activation after the controller and preflight finish.'}
+            return self._recovery(active,status)
         from . import global_pilot as pilot
         try:
             pilot.require_pilot(runtime / 'gateway', status['pilot_proof_id'],
@@ -507,6 +524,7 @@ def supervise(runtime):
             while time.time() < spec['expires'] and not (runtime / 'stop.json').exists():
                 current = bridge.step()
                 if current['state'] == 'closed': break
+                require(current.get('restart_required') is not True,'global_controller_restart_requires_new_activation')
                 refresh = None
                 refresh_path = runtime / 'refresh-request.json'
                 if proof is not None and refresh_path.exists():

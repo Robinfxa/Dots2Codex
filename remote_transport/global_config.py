@@ -146,7 +146,7 @@ def readiness(state_dir,live=False):
     if live:
         require(info.get('bound') is True and info.get('production_ready') is True
                 and info.get('ready_for_config') is True and info.get('controller_active') is True
-                and info.get('controller_mode')=='native_google_v1' and info.get('activation_enabled') is True,
+                and info.get('controller_mode')=='native_google_v2' and info.get('activation_enabled') is True,
                 'production_gateway_not_ready')
     return info
 

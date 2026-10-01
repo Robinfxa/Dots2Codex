@@ -45,7 +45,7 @@ class GlobalGatewayTests(unittest.TestCase):
         value=probe(self.store.root);self.assertTrue(value['bound']);self.assertTrue(value['controller_active'])
         self.assertFalse(value['ready_for_config']);self.assertFalse(value['production_ready'])
         self.error('native_controller_adapter_not_implemented',control_call,self.store.root,'join',
-                   {'controller_id':secrets.token_hex(16),'mode':'native_google_v1','seconds':600,'capacity':2})
+                   {'controller_id':secrets.token_hex(16),'mode':'native_google_v2','seconds':600,'capacity':2})
         conn=http.client.HTTPConnection('127.0.0.1',self.store.config()['port'])
         conn.request('POST','/control/v1/status',body=canonical({'challenge':secrets.token_hex(16)}),headers={'Content-Type':'application/json'})
         response=conn.getresponse();self.assertEqual(response.status,409);self.assertIn(b'authentication',response.read());conn.close()

@@ -1,39 +1,46 @@
 {
   "contract": "dots2codex-desktop-global-pilot/1",
-  "base_commit": "0741482aed6035f84bc68c1a09f63296d858755d",
-  "base_source_tree_sha256": "a11ddadca475236870d206d3638873542e9dfac3892eccdd43452a6a66cc99e7",
+  "base_commit": "90c9c071b9fb02c1fa9b13688386b9631e53e2da",
+  "base_source_tree_sha256": "71b0c597c50278995f7f958dafacd3b54dd81309375a25a21d344f5cc8df1d6e",
   "input_launcher_source_tree_sha256": "7774123803de7f12e89b8cb8be7a510f5cfc2e829572921c0fde33632d4e096e",
   "input_gateway_source_tree_sha256": "ab3026308c240f613b8be00b623cfa3eb67cd73fcac4e87556da7d1619215891",
-  "source_tree_sha256": "71b0c597c50278995f7f958dafacd3b54dd81309375a25a21d344f5cc8df1d6e",
+  "source_tree_sha256": "e1b2bcaec8c04487d0fe7e1d251834d88f4ea543a7b0e5783460b90052a605c5",
   "source_tree_hash_algorithm": "SHA-256 of UTF-8 canonical JSON files array (sort_keys=true,separators=comma/colon,ensure_ascii=false); array sorted by path",
-  "hashed_file_count": 218,
+  "hashed_file_count": 223,
   "manifest_self_excluded": true,
   "changed_files": [
     "GLOBAL_GATEWAY_CONTRACT.json",
     "GLOBAL_GATEWAY_README.txt",
     "README.md",
-    "README_ROUTER.txt",
-    "docs/DESKTOP_APP_DISCOVERY.md",
     "docs/DESKTOP_GLOBAL.zh-CN.md",
-    "docs/DESKTOP_GLOBAL_VALIDATION.md",
-    "docs/GLOBAL_GATEWAY.zh-CN.md",
-    "docs/GLOBAL_GATEWAY_VALIDATION.md",
     "docs/GLOBAL_NATIVE_CONTROLLER.md",
-    "docs/UNIFIED_MAC_LAUNCHER.zh-CN.md",
-    "remote_tests/test_client_config_trial.py",
-    "remote_tests/test_codex_home_resolution.py",
-    "remote_tests/test_desktop_app_trial.py",
+    "docs/HEARTBEAT_V2_VALIDATION.md",
+    "native_connector/global_controller_cell.js",
+    "native_connector/global_controller_cell.test.js",
+    "remote_tests/test_global_control.py",
+    "remote_tests/test_global_desktop.py",
+    "remote_tests/test_global_gateway.py",
+    "remote_tests/test_global_heartbeat.py",
+    "remote_tests/test_global_pilot.py",
     "remote_transport/global_config.py",
+    "remote_transport/global_control.py",
     "remote_transport/global_desktop.py",
+    "remote_transport/global_gateway.py",
+    "remote_transport/global_google.py",
+    "remote_transport/global_native.py",
     "remote_transport/global_pilot.py",
-    "remote_transport/mac_launcher.py"
+    "remote_transport/global_timing.py"
   ],
   "added_files": [
-    "remote_tests/test_client_config_trial.py"
+    "remote_transport/global_timing.py",
+    "remote_tests/test_global_heartbeat.py",
+    "native_connector/global_controller_cell.js",
+    "native_connector/global_controller_cell.test.js",
+    "docs/HEARTBEAT_V2_VALIDATION.md"
   ],
   "all_six_source_bindings_preserved": true,
-  "existing_runtime_migration": "fresh_paired_session_required",
-  "status": "config-first-local-client-trial-awaiting-live-acceptance",
+  "existing_runtime_migration": "fresh_activation_and_v2_join_required",
+  "status": "heartbeat-v2-offline-reviewed-awaiting-live-acceptance",
   "launcher_global_menu_supported": true,
   "production_ready": false,
   "ready_for_config": false,
@@ -44,28 +51,6 @@
   "dependency_install_performed": false,
   "native_inference_calls": 0,
   "google_writes": 0,
-  "test_results": {
-    "historical_full_python_discovered": 796,
-    "historical_full_python_passed": 787,
-    "historical_full_python_skipped": 9,
-    "full_remote_discovered": 527,
-    "full_remote_passed": 518,
-    "full_remote_skipped": 9,
-    "full_remote_suite_precedes_final_canonicalization_fix": true,
-    "post_final_fix_focused_discovered": 129,
-    "post_final_fix_focused_passed": 120,
-    "post_final_fix_focused_skipped": 9,
-    "new_config_trial_tests": 33,
-    "node_passed": 25,
-    "sdk_offline_passed": 3,
-    "sdk_environment": "existing_authorized_sdk_environment",
-    "initial_default_interpreter_sdk_dependency_errors_resolved_by_existing_environment": 3,
-    "full_historical_suites_rerun": true,
-    "final_snapshot_full_historical_suites_rerun": false,
-    "all_affected_final_config_pilot_home_and_desktop_suites_rerun": true,
-    "real_tomlkit_parser_integration_verified": false,
-    "real_mac_native_google_acceptance": false
-  },
   "files": [
     {
       "path": ".gitignore",
@@ -105,14 +90,14 @@
     },
     {
       "path": "GLOBAL_GATEWAY_CONTRACT.json",
-      "bytes": 2008,
-      "sha256": "b8b4451bbd109a8d873f35ec13998bce4e2fab2599891d9e5595f55df3058a41",
+      "bytes": 2250,
+      "sha256": "3499bb8b0fe08750e0f27a8a7262d7812b16cf778d087427cf3238d443b7cf71",
       "mode": "0644"
     },
     {
       "path": "GLOBAL_GATEWAY_README.txt",
-      "bytes": 2569,
-      "sha256": "8d6b6e4137302171074e0b228551a3d8a4c64545ad214b9f4781aa40e903e35f",
+      "bytes": 2938,
+      "sha256": "9882f96151e2345da1393246b588c633f0147fee59c2e685c0579888051eefd0",
       "mode": "0644"
     },
     {
@@ -154,7 +139,7 @@
     {
       "path": "README.md",
       "bytes": 20086,
-      "sha256": "430924ef5621c93b16208862244ec678be6fe4eb600ac1cc8311dbe3f7b1aa74",
+      "sha256": "deb1358322133c6b8ab05e704a77baab176f295efbff258f1c572a2f41d005be",
       "mode": "0644"
     },
     {
@@ -292,7 +277,7 @@
     {
       "path": "docs/DESKTOP_GLOBAL.zh-CN.md",
       "bytes": 7133,
-      "sha256": "28c85d3df413c1fcfd460cc9d1a88cfa8e1818ccfc239f311eced17597608d75",
+      "sha256": "7434d54b992b9443278a75fe7b4eacebbfb83a510d92902f5def64de29cb4136",
       "mode": "0644"
     },
     {
@@ -321,14 +306,20 @@
     },
     {
       "path": "docs/GLOBAL_NATIVE_CONTROLLER.md",
-      "bytes": 12971,
-      "sha256": "354c8942e5c33c72e818dfa64de0a515c1de39d25c73c15a12338f558ef27bb1",
+      "bytes": 17526,
+      "sha256": "6964d0261240d8e56035cc2acbe7cc0ca9989b62b1584af9def61fd0adfce7a6",
       "mode": "0644"
     },
     {
       "path": "docs/GUIDES_MIGRATION_VALIDATION.md",
       "bytes": 4955,
       "sha256": "f73f0495e7536ac808b4ca35244e184565eff9ac8217b09ba3b44c9fc454b4af",
+      "mode": "0644"
+    },
+    {
+      "path": "docs/HEARTBEAT_V2_VALIDATION.md",
+      "bytes": 4244,
+      "sha256": "69d08ff6cdd30c820f52b7334f7f21335135bd3d2950230a71df418ee166af42",
       "mode": "0644"
     },
     {
@@ -626,6 +617,18 @@
       "mode": "0644"
     },
     {
+      "path": "native_connector/global_controller_cell.js",
+      "bytes": 5797,
+      "sha256": "4757001ed4442f43603317dfd8c238ef05de52c370c54015a4a75af70173c362",
+      "mode": "0644"
+    },
+    {
+      "path": "native_connector/global_controller_cell.test.js",
+      "bytes": 2124,
+      "sha256": "71dfa77729b01c0bade759c09a5f54f6b5f51b82b8d4adb2a6372450bc28e49c",
+      "mode": "0644"
+    },
+    {
       "path": "native_connector/runner.js",
       "bytes": 14886,
       "sha256": "b1744e0792f52d045fe59d1101a10e42da64fa108617022e3fd87b2d42a707f9",
@@ -795,26 +798,32 @@
     },
     {
       "path": "remote_tests/test_global_control.py",
-      "bytes": 17453,
-      "sha256": "889d16dea65204fb3d0d7900d276cd5c8fe2b3a094c142e92c8644694d642980",
+      "bytes": 17534,
+      "sha256": "7dc61db03678a93e014e2d751d898424130eae3b3282244d5a9a942a0df6ccf1",
       "mode": "0644"
     },
     {
       "path": "remote_tests/test_global_desktop.py",
-      "bytes": 9909,
-      "sha256": "0ddd14c456570afc8a18c76fc2253b58e0a30903f417dbf45d507dab36c61338",
+      "bytes": 11244,
+      "sha256": "fdbba782e1c21486e59aecb52fdd54916ed705073ea5e8a6ed17278370c21a4a",
       "mode": "0644"
     },
     {
       "path": "remote_tests/test_global_gateway.py",
       "bytes": 20037,
-      "sha256": "bda93d8feb9183fae456a3e566bcf51419b29b0328249794cbf748df310df556",
+      "sha256": "0d6eb1ecdac3f55e464e48769663625c8146e80a1f2423354fd8d8a9140430a3",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_tests/test_global_heartbeat.py",
+      "bytes": 14883,
+      "sha256": "2a97681a84fecb8a7fdd01c5d6073b75794723798d080fcab1731fe9e1f52d97",
       "mode": "0644"
     },
     {
       "path": "remote_tests/test_global_pilot.py",
-      "bytes": 16007,
-      "sha256": "6f9cd99c2c4e54981a938d7e6dcf177ce9a1c092037e1dd075a505cb8a9f71c6",
+      "bytes": 17060,
+      "sha256": "2b3704ac05f1cbda0bfc0991e22a686d1decd899a62a77943987c80c1c5484e5",
       "mode": "0644"
     },
     {
@@ -994,19 +1003,19 @@
     {
       "path": "remote_transport/global_config.py",
       "bytes": 26547,
-      "sha256": "e2ac5246afede66cb7eea348b5c423c9516d9956aa1526b1e7750ebcb116060b",
+      "sha256": "9bb84b2c69acf68a03f3effb7bb147506147055ac9233079866cdd90cb803ccd",
       "mode": "0644"
     },
     {
       "path": "remote_transport/global_control.py",
-      "bytes": 21393,
-      "sha256": "ad353b08d6adfc2e92e66a50965c4cd03aad893fa2c4f40c17dbc7b31761ebe7",
+      "bytes": 22327,
+      "sha256": "c266f81d3e8ed462bf7a256e1c4578d52ebc1329dd18021c4dc9c76c8ff6b394",
       "mode": "0644"
     },
     {
       "path": "remote_transport/global_desktop.py",
-      "bytes": 35382,
-      "sha256": "9a55ecbc7ead608d4f285e783d4dc0de5e92b045bd5d26d7f100e326607b1694",
+      "bytes": 36844,
+      "sha256": "0d05cd3c65295ffda9c65708bc8cd1098bc659e5c989f2a1db50fb79d735e500",
       "mode": "0644"
     },
     {
@@ -1017,26 +1026,32 @@
     },
     {
       "path": "remote_transport/global_gateway.py",
-      "bytes": 44632,
-      "sha256": "1a5471a7742911ecfc1ca74e0ff7a8d502cd54e1fc1cf640a24282faa0b3e5a4",
+      "bytes": 47417,
+      "sha256": "75da815adfdffbdfd9cd4841674106889da74da7e7ec747f3858cf3b6deb4757",
       "mode": "0644"
     },
     {
       "path": "remote_transport/global_google.py",
-      "bytes": 29508,
-      "sha256": "cac92ea4edf27477c4af619c00b7a5503fa96e00c8c00a4a58525b73a8db8251",
+      "bytes": 33134,
+      "sha256": "ea46de362ace11af89e34867a846fc119cb32f314553de15bc260112ec7b106e",
       "mode": "0644"
     },
     {
       "path": "remote_transport/global_native.py",
-      "bytes": 12549,
-      "sha256": "9ec53053406bc9fec1787f3e8b115fc72f215cd5c8e6b8c3c7822d85cd6839ca",
+      "bytes": 19818,
+      "sha256": "b6d3bf9a66b8d915ccd870ce47ad3dc57ede5f46459061208780c15da9c7263c",
       "mode": "0644"
     },
     {
       "path": "remote_transport/global_pilot.py",
-      "bytes": 24525,
-      "sha256": "8c93e58c2f7bd72b863f4ed1a3ac4091a56b8b783b8d01c2ee7da23a47367e32",
+      "bytes": 25175,
+      "sha256": "5ce34bd5291ec1449b1a43fb80852273dc7320ef003a0deee310954655cc938c",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/global_timing.py",
+      "bytes": 2200,
+      "sha256": "6a4e91879878ac48bce69354daf3ed2f9c99c6c4cb95a99ad6cc7f1a2dc28707",
       "mode": "0644"
     },
     {
@@ -1402,5 +1417,76 @@
   "app_identity_required_for_normal_flow": false,
   "config_target_bound_to_proof": true,
   "client_compatibility_verified": false,
-  "all_chatgpt_work_cloud_compatibility_verified": false
+  "all_chatgpt_work_cloud_compatibility_verified": false,
+  "controller_freshness_seconds": 180,
+  "controller_heartbeat_target_seconds": 25,
+  "first_request_admission_wait_seconds": 180,
+  "heartbeat_validation": {
+    "full_remote_discovered": 551,
+    "full_remote_passed": 542,
+    "full_remote_skipped": 9,
+    "skip_reason": "existing optional real tomlkit dependency tests",
+    "base_python_passed": 134,
+    "sdk_offline_passed": 3,
+    "node_passed": 29,
+    "focused_passed": 71,
+    "new_heartbeat_fakeclock_passed": 20,
+    "independent_global_discovered": 122,
+    "independent_global_passed": 113,
+    "independent_global_skipped": 9,
+    "complete_emitted_cell_synthetic_cases": 6,
+    "final_snapshot_full_remote_rerun": true,
+    "sdk_environment": "existing dots2codex-remote-runtime/.venv; no install",
+    "all_six_worker_source_bindings_preserved": true,
+    "live_mac_google_native_verified": false,
+    "google_writes": 0,
+    "native_inference_calls": 0,
+    "configuration_changes": 0,
+    "dependency_install_performed": false
+  },
+  "prior_config_first_validation": {
+    "historical_full_python_discovered": 796,
+    "historical_full_python_passed": 787,
+    "historical_full_python_skipped": 9,
+    "full_remote_discovered": 527,
+    "full_remote_passed": 518,
+    "full_remote_skipped": 9,
+    "full_remote_suite_precedes_final_canonicalization_fix": true,
+    "post_final_fix_focused_discovered": 129,
+    "post_final_fix_focused_passed": 120,
+    "post_final_fix_focused_skipped": 9,
+    "new_config_trial_tests": 33,
+    "node_passed": 25,
+    "sdk_offline_passed": 3,
+    "sdk_environment": "existing_authorized_sdk_environment",
+    "initial_default_interpreter_sdk_dependency_errors_resolved_by_existing_environment": 3,
+    "full_historical_suites_rerun": true,
+    "final_snapshot_full_historical_suites_rerun": false,
+    "all_affected_final_config_pilot_home_and_desktop_suites_rerun": true,
+    "real_tomlkit_parser_integration_verified": false,
+    "real_mac_native_google_acceptance": false
+  },
+  "test_results": {
+    "full_remote_discovered": 551,
+    "full_remote_passed": 542,
+    "full_remote_skipped": 9,
+    "skip_reason": "existing optional real tomlkit dependency tests",
+    "base_python_passed": 134,
+    "sdk_offline_passed": 3,
+    "node_passed": 29,
+    "focused_passed": 71,
+    "new_heartbeat_fakeclock_passed": 20,
+    "independent_global_discovered": 122,
+    "independent_global_passed": 113,
+    "independent_global_skipped": 9,
+    "complete_emitted_cell_synthetic_cases": 6,
+    "final_snapshot_full_remote_rerun": true,
+    "sdk_environment": "existing dots2codex-remote-runtime/.venv; no install",
+    "all_six_worker_source_bindings_preserved": true,
+    "live_mac_google_native_verified": false,
+    "google_writes": 0,
+    "native_inference_calls": 0,
+    "configuration_changes": 0,
+    "dependency_install_performed": false
+  }
 }

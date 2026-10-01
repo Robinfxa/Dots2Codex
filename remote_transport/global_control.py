@@ -1,4 +1,4 @@
-"""Authenticated, bounded Google Docs admission queue (new protocol, v1).
+"""Authenticated, bounded Google Docs admission queue (new protocol, v2).
 
 Pure state machine and exact Docs CAS packets; no API call, wake or native spawn.
 Every event is HMAC-bound to the immutable activation root and previous event.
@@ -15,14 +15,15 @@ from .control import _document_text
 from .model import Object, ProtocolError, canonical, hash_bytes, require, valid_hash
 from .selection import validate_selection, validate_admission, spawn_arguments
 from . import router_bootstrap as child
+from .global_timing import TIMING, validate_timing, require_active, event_deadline
 
-CONTRACT='dots-global-admissions/1'
-BEGIN='DOTS2CODEX_GLOBAL_ADMISSIONS_BEGIN_V1\n'
-END='\nDOTS2CODEX_GLOBAL_ADMISSIONS_END_V1\n'
+CONTRACT='dots-global-admissions/2'
+BEGIN='DOTS2CODEX_GLOBAL_ADMISSIONS_BEGIN_V2\n'
+END='\nDOTS2CODEX_GLOBAL_ADMISSIONS_END_V2\n'
 MAX_BYTES=2*1024*1024
 MAX_EVENTS=2048
 ROOT_KEYS={'contract','activation_id','queue_id','created','expires','folder_id','document_id','tab_id',
-           'join_code_sha256','limits','runtime_source_hashes','controller_source_hashes'}
+           'join_code_sha256','limits','runtime_source_hashes','controller_source_hashes','controller_timing'}
 LIVE_STATES={'claimed','spawn_intent','admitted','ready','unknown'}
 
 
@@ -49,7 +50,8 @@ def controller_source_hashes():
     from pathlib import Path
     root=Path(__file__).resolve().parents[1]
     names=('remote_transport/global_control.py','remote_transport/global_native.py','remote_transport/global_google.py',
-           'docs/GLOBAL_NATIVE_CONTROLLER.md')
+           'remote_transport/global_timing.py','remote_transport/global_gateway.py','remote_transport/global_pilot.py',
+           'native_connector/global_controller_cell.js','docs/GLOBAL_NATIVE_CONTROLLER.md')
     result={}
     for name in names:
         path=root/name;require(path.is_file() and not path.is_symlink(),'global_controller_source_missing')
@@ -62,14 +64,16 @@ def initial(*,activation_id,queue_id,folder_id,document_id,tab_id,join_code,crea
     root={'contract':CONTRACT,'activation_id':activation_id,'queue_id':queue_id,'created':created,'expires':expires,
           'folder_id':folder_id,'document_id':document_id,'tab_id':tab_id,'join_code_sha256':child.join_code_hash(join_code),
           'limits':{'max_routes':max_routes,'max_pending':max_pending,'max_children':max_children},
+          'controller_timing':copy.deepcopy(TIMING),
           'runtime_source_hashes':copy.deepcopy(runtime_source_hashes),'controller_source_hashes':controller_source_hashes()}
-    state={**root,'root_mac':child.proof(join_code,'global-root/1',root),'epoch':0,'events':[],
+    state={**root,'root_mac':child.proof(join_code,'global-root/2',root),'epoch':0,'events':[],
            'logical':{'controller':None,'demands':{},'closed':False}}
     verify(state,join_code,now=created);return state
 
 
 def validate_root(root):
     require(set(root)==ROOT_KEYS and root['contract']==CONTRACT,'invalid_global_root')
+    validate_timing(root['controller_timing'])
     token(root['activation_id']);token(root['queue_id'])
     for k in ('folder_id','document_id','tab_id'):safe_id(root[k])
     require(type(root['created']) is int and type(root['expires']) is int
@@ -86,16 +90,16 @@ def validate_root(root):
 def _keys(args,keys):require(isinstance(args,dict) and set(args)==set(keys),'invalid_global_event_arguments')
 
 
-def _controller(logical,args,at):
+def _controller(logical,root,args,at,*,initialized=True):
     c=logical['controller']
     require(c is not None and c['native_task_id']==args.get('native_task_id') and c['controller_epoch']==args.get('controller_epoch'),
             'global_controller_identity_mismatch')
-    require(at<c['lease_expires'] and at-c['heartbeat_at']<=30,'global_controller_not_active')
+    require_active(c,root['controller_timing'],at,initialized=initialized)
     return c
 
 
-def _owned(logical,args,at,states):
-    c=_controller(logical,args,at);d=logical['demands'].get(args.get('route_id'))
+def _owned(logical,root,args,at,states):
+    c=_controller(logical,root,args,at);d=logical['demands'].get(args.get('route_id'))
     require(d is not None and d['state'] in states and d['controller_epoch']==c['controller_epoch']
             and d['claim_id']==args.get('claim_id'),'global_claim_mismatch')
     require(at<d['expires'],'global_demand_expired');return d
@@ -114,8 +118,9 @@ def _transition(logical,root,kind,actor,args,at,code):
         s['controller']={**args,'heartbeat_at':at,'joined_at':at}
     elif kind=='heartbeat':
         _keys(args,('native_task_id','controller_epoch'));require(actor=='native','invalid_global_actor')
-        c=_controller(s,args,at);require(at>c['heartbeat_at'],'global_heartbeat_too_frequent');c['heartbeat_at']=at
+        c=_controller(s,root,args,at,initialized=False);require(at>c['heartbeat_at'],'global_heartbeat_too_frequent');c['heartbeat_at']=at
     elif kind=='demand':
+        require_active(s['controller'],root['controller_timing'],at,initialized=True)
         _keys(args,('route_id','generation','identity_sha256','selection','expires','child_bootstrap'))
         require(actor=='mac','invalid_global_actor');token(args['route_id']);token(args['generation'])
         require(args['generation']==root['activation_id'] and valid_hash(args['identity_sha256']),'global_route_binding_mismatch')
@@ -137,19 +142,19 @@ def _transition(logical,root,kind,actor,args,at,code):
                                   'dispatch_id':None,'admission':None,'spawn_arguments_sha256':None,'ready':None}
     elif kind=='claim':
         _keys(args,('native_task_id','controller_epoch','route_id','claim_id'));require(actor=='native','invalid_global_actor')
-        c=_controller(s,args,at);token(args['claim_id']);d=demands.get(args['route_id'])
+        c=_controller(s,root,args,at);token(args['claim_id']);d=demands.get(args['route_id'])
         require(d is not None and d['state']=='pending' and at<d['expires'],'global_demand_not_claimable')
         require(sum(x['state'] in LIVE_STATES for x in demands.values())<c['capacity'],'global_child_slots_exhausted')
         d.update(state='claimed',controller_epoch=c['controller_epoch'],claim_id=args['claim_id'])
     elif kind=='begin':
         _keys(args,('native_task_id','controller_epoch','route_id','claim_id','dispatch_id'));require(actor=='native','invalid_global_actor')
-        d=_owned(s,args,at,{'claimed'});require(valid_hash(args['dispatch_id']),'invalid_global_dispatch')
+        d=_owned(s,root,args,at,{'claimed'});require(valid_hash(args['dispatch_id']),'invalid_global_dispatch')
         expected=hash_bytes(canonical({'root':hash_bytes(canonical(root)),'route_id':args['route_id'],
                                       'controller_epoch':args['controller_epoch'],'claim_id':args['claim_id']}))
         require(args['dispatch_id']==expected,'global_dispatch_binding_mismatch');d.update(state='spawn_intent',dispatch_id=expected)
     elif kind=='admitted':
         _keys(args,('native_task_id','controller_epoch','route_id','claim_id','admission','spawn_arguments_sha256'))
-        require(actor=='native','invalid_global_actor');d=_owned(s,args,at,{'spawn_intent'})
+        require(actor=='native','invalid_global_actor');d=_owned(s,root,args,at,{'spawn_intent'})
         receipt=args['admission'];task=receipt.get('native_task_id') if isinstance(receipt,dict) else None
         validate_admission(receipt,d['selection'],task)
         require(task.rsplit('/',1)[-1]=='global_'+d['route_id'],'global_native_task_name_mismatch')
@@ -158,8 +163,9 @@ def _transition(logical,root,kind,actor,args,at,code):
         d.update(state='admitted',admission=copy.deepcopy(receipt),spawn_arguments_sha256=args['spawn_arguments_sha256'])
     elif kind=='unknown':
         _keys(args,('native_task_id','controller_epoch','route_id','claim_id'));require(actor=='native','invalid_global_actor')
-        d=_owned(s,args,at,{'spawn_intent'});d['state']='unknown'
+        d=_owned(s,root,args,at,{'spawn_intent'});d['state']='unknown'
     elif kind=='ready':
+        require_active(s['controller'],root['controller_timing'],at,initialized=True)
         _keys(args,('route_id','pin','child_bootstrap'));require(actor=='mac','invalid_global_actor')
         d=demands.get(args['route_id']);require(d is not None and d['state']=='admitted','global_demand_not_admitted')
         pin=Object.parse(canonical(args['pin']));bootstrap=args['child_bootstrap'];cc=child_code(code,root['activation_id'],d['route_id'])
@@ -183,7 +189,7 @@ def verify(state,code,*,now=None,require_fresh=True,expected_root=None):
     require(isinstance(state,dict) and set(state)==ROOT_KEYS|{'root_mac','epoch','events','logical'},'invalid_global_state')
     root=root_of(state);validate_root(root)
     require(root['join_code_sha256']==child.join_code_hash(code),'global_join_code_mismatch')
-    child.verify_proof(code,'global-root/1',root,state['root_mac'])
+    child.verify_proof(code,'global-root/2',root,state['root_mac'])
     if expected_root is not None:require(root==expected_root,'global_queue_root_mismatch')
     require(type(state['epoch']) is int and isinstance(state['events'],list)
             and state['epoch']==len(state['events'])<=MAX_EVENTS,'global_event_budget_or_epoch_invalid')
@@ -193,7 +199,7 @@ def verify(state,code,*,now=None,require_fresh=True,expected_root=None):
         token(event['operation_id']);require(event['operation_id'] not in ops,'global_operation_id_reuse');ops.add(event['operation_id'])
         require(event['n']==n and event['previous']==prev and type(event['at']) is int and event['at']>=last,'global_event_chain_mismatch')
         value={k:v for k,v in event.items() if k!='mac'}
-        child.verify_proof(code,'global-event/1',{'root':root_hash(state),'event':value},event['mac'])
+        child.verify_proof(code,'global-event/2',{'root':root_hash(state),'event':value},event['mac'])
         logical=_transition(logical,root,event['kind'],event['actor'],event['arguments'],event['at'],code)
         last=event['at'];prev=hash_bytes(canonical(event))
     require(logical==state['logical'],'global_projection_mismatch')
@@ -212,7 +218,7 @@ def transition(state,code,kind,actor,args,*,operation_id=None,now=None):
     nxt=copy.deepcopy(state);logical=_transition(nxt['logical'],root_of(nxt),kind,actor,args,now,code)
     event={'n':nxt['epoch']+1,'operation_id':operation_id,'kind':kind,'actor':actor,'at':now,'arguments':copy.deepcopy(args),
            'previous':hash_bytes(canonical(nxt['events'][-1])) if nxt['events'] else root_hash(nxt)}
-    event['mac']=child.proof(code,'global-event/1',{'root':root_hash(nxt),'event':event})
+    event['mac']=child.proof(code,'global-event/2',{'root':root_hash(nxt),'event':event})
     nxt['events'].append(event);nxt['epoch']+=1;nxt['logical']=logical
     verify(nxt,code,now=now);return nxt
 
@@ -247,15 +253,16 @@ def plan(source,new,code):
             and new['events'][:-1]==old['events'],'global_plan_not_one_transition')
     request={'replaceAllText':{'containsText':{'text':source.text[:-1],'matchCase':True,'searchByRegex':False},
              'replaceText':block(new)[:-1],'tabsCriteria':{'tabIds':[source.tab_id]}}}
-    return {'contract':'dots-global-cas-plan/1','source_block':source.text,'tab_id':source.tab_id,
+    return {'contract':'dots-global-cas-plan/2','source_block':source.text,'tab_id':source.tab_id,
             'expected_state':new,'operation_id':new['events'][-1]['operation_id'],
+            'execute_before':event_deadline(old,new['events'][-1]['kind'],new['events'][-1]['at']),
             'tool_arguments':{'document_id':source.document_id,'requests':[request],
                               'write_control':{'requiredRevisionId':source.revision_id}}}
 
 
-def verify_update(packet,response,readback,code):
-    require(isinstance(packet,dict) and set(packet)=={'contract','source_block','tab_id','expected_state','operation_id','tool_arguments'}
-            and packet['contract']=='dots-global-cas-plan/1','invalid_global_cas_plan')
+def verify_update(packet,response,readback,code,*,now=None):
+    require(isinstance(packet,dict) and set(packet)=={'contract','source_block','tab_id','expected_state','operation_id','tool_arguments','execute_before'}
+            and packet['contract']=='dots-global-cas-plan/2','invalid_global_cas_plan')
     args=packet['tool_arguments'];source=Snapshot(args['document_id'],packet['tab_id'],args['write_control']['requiredRevisionId'],packet['source_block'])
     require(packet==plan(source,packet['expected_state'],code),'global_cas_plan_changed')
     if response is not None:
@@ -270,6 +277,9 @@ def verify_update(packet,response,readback,code):
     expected=packet['expected_state'];verify(fresh.state,code,expected_root=root_of(expected),require_fresh=False)
     require(fresh.revision_id!=source.revision_id and fresh.state['epoch']>=expected['epoch']
             and fresh.state['events'][:expected['epoch']]==expected['events'],'global_operation_not_observed_no_replay')
+    now=time.time() if now is None else now
+    require(packet['expected_state']['events'][-1]['at']<=now<packet['execute_before'],
+            'global_cas_acceptance_window_expired_no_replay')
     return fresh
 
 
@@ -284,7 +294,7 @@ def native_arguments(state,code,route_id,package_root):
     verify(state,code);require(not state['logical']['closed'],'global_queue_closed');d=state['logical']['demands'].get(route_id)
     require(d is not None and d['state']=='spawn_intent','global_spawn_intent_required')
     c=state['logical']['controller']
-    _owned(state['logical'],{'native_task_id':c['native_task_id'],'controller_epoch':c['controller_epoch'],
+    _owned(state['logical'],root_of(state),{'native_task_id':c['native_task_id'],'controller_epoch':c['controller_epoch'],
            'route_id':route_id,'claim_id':d['claim_id']},int(time.time()),{'spawn_intent'})
     child.verify_context(d['child_bootstrap'],child_code(code,state['activation_id'],route_id),
                          d['child_bootstrap']['bootstrap_document_id'],d['child_bootstrap']['bootstrap_tab_id'])

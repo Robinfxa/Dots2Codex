@@ -58,6 +58,24 @@ class DesktopGlobalTests(unittest.TestCase):
             'before_hash':hash_bytes(before),'after_hash':hash_bytes(after),'before_exists':True}
         desktop.save(d/(tid+'.json'),value);return before,value
 
+    def test_recovery_only_open_supervised_activation_can_continue(self):
+        runtime,store,_=self.active('WAITING_CONTROLLER');active=self.app.active()
+        active['spec']['expires']=self.app.ports.now()+1800
+        base={'stage':'WAITING_CONTROLLER','supervisor_alive':True,'queue_closed':False,'config_changed':False}
+        with patch.object(self.app,'status',return_value=base):
+            value=self.app._recovery(active,base)
+            self.assertTrue(value['resume_possible']);self.assertFalse(value['new_activation_required'])
+            for patch_status in ({'queue_closed':True},{'stage':'FAILED'},{'stage':'STOPPED'},
+                                 {'supervisor_alive':False}):
+                current={**base,**patch_status}
+                with patch.object(self.app,'status',return_value=current):
+                    value=self.app._recovery(active,current)
+                    self.assertFalse(value['resume_possible']);self.assertTrue(value['new_activation_required'])
+                    self.assertIn('new activation',value['next']);self.assertNotIn('same activation',value['next'])
+            active['spec']['expires']=self.app.ports.now()
+            self.assertTrue(self.app._recovery(active,base)['new_activation_required'])
+        self.assertEqual(len(list((self.state/'runs').iterdir())),1)
+
     def test_missing_parser_blocks_before_google_or_local_runtime(self):
         with patch.object(config,'parser',side_effect=ProtocolError('global_config_requires_optional_tomlkit_dependency')):
             with self.assertRaisesRegex(ProtocolError,'tomlkit'):self.app.start(SimpleNamespace())

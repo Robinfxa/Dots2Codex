@@ -26,6 +26,7 @@ from .global_gateway import private_dir, private_write, strict_json
 from .model import Object, ProtocolError, canonical, deployment, hash_bytes, require
 from .selection import pin_selection
 from .session import Journal
+from .global_timing import controller_active, TIMING, observation_window_current
 
 
 def mirror_verified_queue(store,state,code,pins=None):
@@ -35,7 +36,7 @@ def mirror_verified_queue(store,state,code,pins=None):
     preserves the gateway's independent one-dispatch journal and endpoint binding.
     Stale heartbeats cannot be refreshed by repeatedly reading the same snapshot.
     """
-    queue.verify(state,code);cfg=store.config();activation=store.activation(state['activation_id'])
+    queue.verify(state,code,require_fresh=False);cfg=store.config();activation=store.activation(state['activation_id'])
     require(state['limits']['max_routes']<=cfg['max_routes'] and state['limits']['max_pending']<=cfg['max_pending']
             and state['limits']['max_children']<=cfg['max_children'] and state['expires']<=activation['expires'],
             'global_queue_exceeds_local_limits')
@@ -44,16 +45,47 @@ def mirror_verified_queue(store,state,code,pins=None):
     credentials={'controller_id':controller_id,'epoch':c['controller_epoch'] if 'controller_epoch' in c else c['epoch']}
     # Queue stores controller_epoch in root admission arguments; normalize only the
     # local column name, never mutate or reinterpret the signed queue bytes.
-    epoch=credentials['epoch'];pins=pins or {}
+    epoch=credentials['epoch'];pins=pins or {};now=time.time();failure=None
+    with store.transaction() as db:
+        checkpoint_row=db.execute("SELECT value FROM meta WHERE key='native_controller_checkpoint'").fetchone()
+        checkpoint=json.loads(checkpoint_row['value']) if checkpoint_row else None
+        hashes=[hash_bytes(canonical(e)) for e in state['events']]
+        fence=store.controller_fence(queue.root_hash(state),epoch)
+        if fence:failure=fence['reason']
+        highwater=store.controller_observed_at(queue.root_hash(state),epoch)
+        if highwater is not None and now<highwater:failure=failure or 'global_controller_clock_rollback'
+        if now<state['created'] or (state['events'] and now<state['events'][-1]['at']):
+            failure=failure or 'global_controller_clock_rollback'
+        if checkpoint is not None:
+            require(checkpoint['root_hash']==queue.root_hash(state),'global_local_root_binding_mismatch')
+            require(hashes[:len(checkpoint['event_hashes'])]==checkpoint['event_hashes'],
+                    'global_mac_observation_rollback_or_fork')
+            if checkpoint.get('terminal_reason'):failure=checkpoint['terminal_reason']
+            elif now<checkpoint['observed_at']:failure='global_controller_clock_rollback'
+            elif not controller_active(checkpoint['heartbeat'],checkpoint['expires'],state['controller_timing'],now):
+                failure='global_controller_not_active_restart_required'
+        if not observation_window_current(state,len(checkpoint['event_hashes']) if checkpoint else 0,now):
+            failure=failure or 'global_controller_not_active_prepared_event_expired'
+        if state['logical']['closed']:failure=failure or 'global_queue_closed'
+        elif not controller_active(c['heartbeat_at'],c['lease_expires'],state['controller_timing'],now):
+            failure=failure or 'global_controller_not_active_restart_required'
+        checkpoint={'root_hash':queue.root_hash(state),'activation_id':state['activation_id'],
+                    'controller_id':controller_id,'epoch':epoch,'timing':state['controller_timing'],
+                    'heartbeat':c['heartbeat_at'],'expires':c['lease_expires'],'joined_at':c['joined_at'],
+                    'event_hashes':hashes,'observed_at':now,'terminal_reason':failure}
+        db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)',('native_controller_checkpoint',json.dumps(checkpoint)))
+        if failure:db.execute('UPDATE controller SET expires=0,heartbeat=0 WHERE id=1')
+    # Raise only after committing the durable fence, never inside the transaction.
+    require(failure is None,failure or 'global_controller_not_active')
     with store.transaction() as db:
         old=db.execute('SELECT * FROM controller WHERE id=1').fetchone()
-        require(old is None or (old['epoch']==epoch and old['mode']=='native_google_v1')
+        require(old is None or (old['epoch']==epoch and old['mode']=='native_google_v2')
                 or old['expires']<=time.time(),'local_controller_session_conflict')
         expires=0 if state['logical']['closed'] else c['lease_expires']
         heartbeat=0 if state['logical']['closed'] else c['heartbeat_at']
         db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)',('native_activation',json.dumps(state['activation_id'])))
         db.execute('INSERT OR REPLACE INTO controller VALUES(1,?,?,?,?,?,?)',
-                   (controller_id,epoch,'native_google_v1',expires,heartbeat,c['capacity']))
+                   (controller_id,epoch,'native_google_v2',expires,heartbeat,c['capacity']))
         for rid,pin in pins.items():
             demand=state['logical']['demands'].get(rid);row=db.execute('SELECT * FROM routes WHERE id=?',(rid,)).fetchone()
             require(demand is not None and demand['state'] in ('admitted','ready') and row is not None,
@@ -99,7 +131,7 @@ class GoogleQueueBridge:
         require(not (self.root/'stop-requested.json').exists(),'global_session_stopped_new_activation_required')
     def read(self):
         value=queue.snapshot(self.docs.get_document(self.document_id),self.document_id,self.tab_id)
-        queue.verify(value.state,self.code,expected_root=self.source_root)
+        queue.verify(value.state,self.code,expected_root=self.source_root,require_fresh=False)
         # Durable anti-rollback observation, including across process restarts.
         path=self.root/'queue-observation.json'
         hashes=[hash_bytes(canonical(e)) for e in value.state['events']]
@@ -141,7 +173,7 @@ class GoogleQueueBridge:
             mac._finish_operation(path,record,status='unknown');raise ProtocolError('global_mac_cas_unknown_no_retry') from None
         mac._finish_operation(path,record,status='verified',revision=fresh.revision_id);return fresh
     def join_message(self):
-        return ('DOTS2CODEX_GLOBAL_JOIN_V1\nactivation_id='+self.initial['activation_id']+
+        return ('DOTS2CODEX_GLOBAL_JOIN_V2\nactivation_id='+self.initial['activation_id']+
                 '\nqueue_document_id='+self.document_id+'\nqueue_tab_id='+self.tab_id+'\njoin_code='+self.code+
                 '\nRun one bounded active native Router controller using docs/GLOBAL_NATIVE_CONTROLLER.md. '
                 'Only this signed queue, folder, deadline and reviewed per-thread model pairs are authorized. '
@@ -149,6 +181,7 @@ class GoogleQueueBridge:
     def prepare_child(self,route_id):
         self._check_running()
         source=self.read();route=self.store.route(route_id)
+        queue.require_active(source.state['logical']['controller'],source.state['controller_timing'],time.time(),initialized=True)
         require(route['state']=='pending' and route['generation']==source.state['activation_id'],'global_local_demand_not_pending')
         require(route_id not in source.state['logical']['demands'],'global_demand_already_published')
         require(min(int(route['expires']),source.state['expires'])-int(time.time())>=60,'global_bootstrap_window_too_short')
@@ -191,6 +224,7 @@ class GoogleQueueBridge:
     def advance_child(self,route_id):
         self._check_running()
         source=self.read();d=source.state['logical']['demands'].get(route_id)
+        queue.require_active(source.state['logical']['controller'],source.state['controller_timing'],time.time(),initialized=True)
         require(d is not None and d['state'] in ('admitted','ready'),'global_child_native_admission_required')
         runtime,active_path,active,cc,snap=self._child(route_id,require_fresh=d['state']!='ready')
         if d['state']=='ready':
@@ -285,10 +319,20 @@ class GoogleQueueBridge:
         if (self.root/'stop-requested.json').exists():return {'state':'closed','native_children_stopped':False}
         source=self.read();state=source.state;c=state['logical']['controller']
         if c is None:return {'state':'await_native_join','automatic_wake':False}
-        self.sync_heartbeat()
-        if state['logical']['closed']:return {'state':'closed','native_children_stopped':False}
-        if c['lease_expires']<=time.time() or c['heartbeat_at']+30<=time.time():
+        if state['logical']['closed']:
+            try:self.sync_heartbeat()
+            except ProtocolError:pass
+            return {'state':'closed','native_children_stopped':False}
+        try:self.sync_heartbeat()
+        except ProtocolError as exc:
+            if str(exc) in ('global_controller_not_active_restart_required','global_controller_clock_rollback',
+                            'global_controller_not_active_prepared_event_expired'):
+                return {'state':'native_controller_not_ready','automatic_wake':False,'restart_required':True}
+            raise
+        if not controller_active(c['heartbeat_at'],c['lease_expires'],state['controller_timing'],time.time()):
             return {'state':'native_controller_not_ready','automatic_wake':False}
+        if c['heartbeat_at']==c['joined_at']:
+            return {'state':'await_first_heartbeat','automatic_wake':False}
         with self.store.transaction() as db:
             pending=[r['id'] for r in db.execute("SELECT id FROM routes WHERE state='pending' AND generation=? ORDER BY created",(state['activation_id'],))]
         for rid in pending:

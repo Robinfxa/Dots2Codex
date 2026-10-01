@@ -10,7 +10,7 @@ strict two-binary validation. These profiles cannot substitute for one another.
 
 Global mode starts its dedicated stable-port supervisor, creates one bounded
 signed Google control queue after consent, and supplies the private
-DOTS2CODEX_GLOBAL_JOIN_V1 message. This activates a native controller, which must
+DOTS2CODEX_GLOBAL_JOIN_V2 message. This activates a native controller, which must
 remain active and create a distinct selected child for each new desktop thread.
 It is different from the ordinary single-worker JOIN.
 
@@ -39,3 +39,5 @@ gateways/facades. No real user config/auth, Google resources, dependency install
 native inference or push occurred during this integration. Real Mac/Google/
 native acceptance remains pending. tomlkit is absent; nine real-parser tests
 remain explicit skips until its installation is authorized.
+
+Heartbeat protocol v2: exact signed 180-second freshness, target cadence 25 seconds, immediate verified JOIN-to-first-heartbeat single cell. Both endpoints need this package and a fresh activation/V2 JOIN; never revive old signed state. The separate 180-second first-request wait is unchanged. See docs/GLOBAL_NATIVE_CONTROLLER.md. Live acceptance remains unverified.

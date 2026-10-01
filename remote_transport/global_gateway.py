@@ -28,12 +28,13 @@ from urllib.parse import urlsplit
 
 from .backend import fsync_dir, read_private_file
 from .codex_catalog import catalog_for_selection
+from .global_timing import controller_active, TIMING
 from .model import Object, ProtocolError, canonical, hash_bytes, require, MAX_WIRE_BYTES
 from .selection import (load_catalog, select, validate_selection, validate_request_selection,
                         validate_admission, spawn_arguments, pin_selection)
 
 PROTOCOL = 'dots-global-gateway/1'
-CONTROL_PROTOCOL = 'dots-global-controller/1'
+CONTROL_PROTOCOL = 'dots-global-controller/2'
 DEFAULT_PORT = 43187
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 UUID = r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}'
@@ -209,10 +210,54 @@ class Store:
                     'unknown_activation')
         return {'disabled':True,'existing_routes_retained':True,'clients_restarted':False}
 
+    def controller_fence(self,root_hash,epoch):
+        path=self.root/'native-controller-fence.json'
+        if not path.exists():return None
+        value=strict_json(read_private_file(path,8192))
+        require(value.get('root_hash')==root_hash and value.get('epoch')==epoch,
+                'global_controller_fence_binding_mismatch')
+        return value
+
+    def controller_observed_at(self,root_hash,epoch):
+        path=self.root/'native-controller-clock.json'
+        if not path.exists():return None
+        value=strict_json(read_private_file(path,8192))
+        require(value.get('root_hash')==root_hash and value.get('epoch')==epoch,
+                'global_controller_clock_binding_mismatch')
+        return value['at']
+
+    def _controller_alive(self, db, row, now):
+        if row is None:return False
+        if row['mode']=='offline_fixture':
+            return row['expires']>now and 0<=now-row['heartbeat']<30
+        if row['mode']!='native_google_v2':return False
+        item=db.execute("SELECT value FROM meta WHERE key='native_controller_checkpoint'").fetchone()
+        if item is None:return False
+        checkpoint=json.loads(item['value'])
+        if self.controller_fence(checkpoint['root_hash'],checkpoint['epoch']):return False
+        reason=None
+        highwater=self.controller_observed_at(checkpoint['root_hash'],checkpoint['epoch'])
+        if highwater is not None and now<highwater:reason='global_controller_clock_rollback'
+        if now<checkpoint.get('observed_at',now+1):reason='global_controller_clock_rollback'
+        elif not controller_active(checkpoint['heartbeat'],checkpoint['expires'],checkpoint['timing'],now):
+            reason='global_controller_not_active_restart_required'
+        if reason:
+            # Separate durable fence survives a caller's rejected SQLite transaction.
+            private_write(self.root/'native-controller-fence.json',canonical({
+                'root_hash':checkpoint['root_hash'],'epoch':checkpoint['epoch'],'reason':reason,'at':now}))
+            return False
+        private_write(self.root/'native-controller-clock.json',canonical({
+            'root_hash':checkpoint['root_hash'],'epoch':checkpoint['epoch'],'at':now}))
+        if (checkpoint.get('terminal_reason')
+                or checkpoint.get('controller_id')!=row['controller_id']
+                or checkpoint.get('epoch')!=row['epoch'] or checkpoint.get('heartbeat')!=row['heartbeat']
+                or checkpoint.get('expires')!=row['expires'] or checkpoint.get('timing')!=TIMING
+                or row['heartbeat']<=checkpoint.get('joined_at',row['heartbeat'])):return False
+        return controller_active(row['heartbeat'],row['expires'],checkpoint['timing'],now)
+
     def _live_controller(self, db):
         row = db.execute('SELECT * FROM controller WHERE id=1').fetchone()
-        require(row is not None and row['expires'] > time.time() and row['heartbeat']+30 > time.time(),
-                'router_controller_not_ready')
+        require(self._controller_alive(db,row,time.time()),'router_controller_not_ready')
         return row
 
     def join(self, payload):
@@ -243,6 +288,7 @@ class Store:
         require(set(payload)=={'controller_id','epoch'}, 'invalid_control_payload')
         with self.transaction() as db:
             row=self._controller(db,payload)
+            require(row['mode']=='offline_fixture','signed_google_heartbeat_required')
             db.execute('UPDATE controller SET heartbeat=? WHERE id=1',(time.time(),))
         return {'active':True,'expires':row['expires'],'automatic_wake':False}
 
@@ -257,7 +303,7 @@ class Store:
                 return dict(old)
             require(activation['enabled'] and activation['expires']>time.time(), 'activation_closed')
             controller=self._live_controller(db)
-            if controller['mode']=='native_google_v1':
+            if controller['mode']=='native_google_v2':
                 bound=db.execute("SELECT value FROM meta WHERE key='native_activation'").fetchone()
                 require(bound is not None and json.loads(bound['value'])==generation,'activation_requires_new_native_join')
             require(db.execute('SELECT COUNT(*) FROM routes').fetchone()[0]<cfg['max_routes'], 'route_budget_exhausted')
@@ -415,7 +461,7 @@ class Store:
         with self.transaction() as db:
             counts={row[0]:row[1] for row in db.execute('SELECT state,COUNT(*) FROM routes GROUP BY state')}
             c=db.execute('SELECT * FROM controller WHERE id=1').fetchone()
-        alive=bool(c and c['expires']>now and c['heartbeat']+30>now)
+            alive=self._controller_alive(db,c,now)
         value={'protocol':PROTOCOL,'control_protocol':CONTROL_PROTOCOL,'bound':bound,'bound_pid':os.getpid() if bound else None,
                'generation':activation['id'],'base_url':f"http://127.0.0.1:{cfg['port']}/activations/{activation['id']}/v1",
                'catalog_path':activation['catalog'],'selection':json.loads(activation['selection']),

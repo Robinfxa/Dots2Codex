@@ -72,13 +72,14 @@ class GlobalControlTests(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.package=Path(__file__).resolve().parents[1]
         self.store,self.gen=Store.initialize(self.root/'gateway',select(load_catalog(),'gpt-6.1-sol','high'),port=unused_fixture_port())
         self.gateway=Gateway(self.store).start();self.google=FakeGoogle();self.code=secrets.token_hex(32)
-        did=self.google.create_document_once('folder','authorized control');now=int(time.time())
+        did=self.google.create_document_once('folder','authorized control');now=int(time.time())-2
         self.initial=q.initial(activation_id=self.gen,queue_id=secrets.token_hex(16),folder_id='folder',document_id=did,
             tab_id='t.0',join_code=self.code,created=now,expires=now+1800,runtime_source_hashes=_source_hashes())
         self.bridge=GoogleQueueBridge(self.store,self.root/'bridge',self.google,self.google,self.initial,self.code)
         self.bridge.initialize_blank_queue()
         self.ledger=NativeLedger(self.root/'native',self.initial,self.code,'/root/fixture_global_router');self.serial=0
-        self.execute('join',capacity=2,seconds=1200);self.bridge.sync_heartbeat()
+        self.execute('join',capacity=2,seconds=1200,now=now+1)
+        self.execute('heartbeat',now=now+2);self.bridge.sync_heartbeat()
     def tearDown(self):self.bridge.close();self.gateway.close();self.tmp.cleanup()
     def error(self,pattern,fn,*args,**kwargs):
         with self.assertRaisesRegex(ProtocolError,pattern):fn(*args,**kwargs)
@@ -130,7 +131,7 @@ class GlobalControlTests(unittest.TestCase):
         self.assertEqual(status,200,raw);self.assertEqual(events(raw)[-1]['type'],'response.completed');return permit
 
     def test_join_heartbeat_claim_and_signed_projection(self):
-        c=self.bridge.read().state['logical']['controller'];now=c['heartbeat_at']+1
+        c=self.bridge.read().state['logical']['controller'];now=max(c['heartbeat_at']+1,int(time.time())+1)
         with patch('time.time',return_value=now):
             self.execute('heartbeat',now=now);self.bridge.sync_heartbeat()
             rid,_,_=self.demand();self.execute('claim',rid)
@@ -151,7 +152,7 @@ class GlobalControlTests(unittest.TestCase):
         self.assertNotEqual(permits[0]['native_task_id'],permits[1]['native_task_id'])
         self.assertEqual(permits[0]['request']['responses_request']['input'][-1]['content'][0]['text'],'A')
         self.assertEqual(permits[1]['request']['responses_request']['input'][-1]['content'][0]['text'],'B')
-        self.assertEqual(self.store.status()['controller_mode'],'native_google_v1');self.assertFalse(self.store.status()['production_ready'])
+        self.assertEqual(self.store.status()['controller_mode'],'native_google_v2');self.assertFalse(self.store.status()['production_ready'])
 
     def test_ready_route_transport_restart_keeps_native_pin_and_delivery_history(self):
         rid,body,client=self.demand();worker,pin=self.child_admit(rid,self.native(rid))
@@ -183,7 +184,7 @@ class GlobalControlTests(unittest.TestCase):
         self.assertEqual(self.bridge.step()['state'],'controller_active')
 
     def test_controller_mode_status_and_bridge_lease(self):
-        self.assertEqual(self.store.status()['controller_mode'],'native_google_v1')
+        self.assertEqual(self.store.status()['controller_mode'],'native_google_v2')
         self.error('already_running',GoogleQueueBridge,self.store,self.root/'bridge',self.google,self.google,self.initial,self.code)
 
     def test_native_plan_is_one_attempt_across_helper_restart(self):
@@ -196,7 +197,7 @@ class GlobalControlTests(unittest.TestCase):
     def test_stale_controller_and_closed_queue_reject_spawn_exposure(self):
         rid,_,_=self.demand();self.execute('claim',rid);self.execute('begin',rid);source=self.bridge.read()
         c=source.state['logical']['controller']
-        with patch('time.time',return_value=c['heartbeat_at']+31):
+        with patch('time.time',return_value=c['heartbeat_at']+181):
             self.error('not_active',self.ledger.plan_spawn,source,rid,self.path('stale.json'),self.package)
         self.bridge.event('close',{'confirm':True})
         self.error('queue_closed',self.ledger.plan_spawn,self.bridge.read(),rid,self.path('closed.json'),self.package)

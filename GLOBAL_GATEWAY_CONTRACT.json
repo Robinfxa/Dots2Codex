@@ -1,7 +1,7 @@
 {
   "contract": "dots-desktop-global-pilot/1",
   "gateway_protocol": "dots-global-gateway/1",
-  "controller_protocol": "dots-global-controller/1",
+  "controller_protocol": "dots-global-controller/2",
   "base_published_commit": "00156e4",
   "base_source_tree_sha256": "b5854e06d221c1152bafc9f93508fc5a0b356d39e3c53bdd6b2313463cc312c4",
   "status": "desktop-global-flow-integrated-awaiting-live-acceptance",
@@ -14,7 +14,7 @@
   "toml_parser_integration_verified": false,
   "same_unix_user_attack_protection": false,
   "existing_base_files_changed": [],
-  "google_queue_protocol": "dots-global-admissions/1",
+  "google_queue_protocol": "dots-global-admissions/2",
   "new_controller_adapter_implemented": true,
   "new_controller_adapter_live_verified": false,
   "first_request_admission_wait_seconds": 180,
@@ -34,5 +34,10 @@
   "config_target_bound_to_proof": true,
   "client_compatibility_verified": false,
   "all_chatgpt_work_cloud_compatibility_verified": false,
-  "config_first_reference_commit": "1bc68e293f635a065fa984d4c2ca7604fbd77854"
+  "config_first_reference_commit": "1bc68e293f635a065fa984d4c2ca7604fbd77854",
+  "controller_freshness_seconds": 180,
+  "controller_heartbeat_target_seconds": 25,
+  "prepared_cas_budget_seconds": 120,
+  "existing_activation_migration": "fresh_activation_and_v2_join_required",
+  "controller_timing_live_verified": false
 }

@@ -61,7 +61,7 @@ Drive folder、Codex、工作目录、model/effort 设置；以后复用健康�
 使用 Global 时选择菜单中的 **Global start**：
 
 1. 程序核验终端 CLI `codex-cli 0.159.2` 的目录适配器证据，自动从明确指定、已保存、环境变量或标准位置中解析一个安全的 `CODEX_HOME`；通常使用 `~/.codex`，已知目录冲突时才询问。正常配置试用不检查桌面 App 名称、位置、bundle ID、签名或内部引擎
-2. 确认本轮 Google 控制流程，发送一次私有 `DOTS2CODEX_GLOBAL_JOIN_V1` 给 Dots，建立持续活跃的原生控制器
+2. 确认本轮 Google 控制流程，发送一次私有 `DOTS2CODEX_GLOBAL_JOIN_V2` 给 Dots，建立持续活跃的原生控制器
 3. 一次激活最长 **4 小时、最多 3 个原生子任务**；其中 1 个用于预检，另外 2 个供新工作线程使用，仍受平台剩余槽位限制
 4. 必须完成签名队列、独立子任务和真实原生预检，再逐项确认精确目标 `CODEX_HOME/config.toml` 的脱敏差异；提交前复核新鲜密封证据、控制器、激活、配置前后 hash 与有效期，仅有监听器或布尔开关不能启用配置
 5. 完全退出并重开实际读取该配置的客户端，包括适用的 app-server 或受管理 daemon，再创建新线程并检查提交配置后新产生的已完成路由；终端也须新启动并使用同一 `CODEX_HOME`。旧线程、恢复线程、profile、项目、CLI 或管理策略覆盖可能继续使用其他 provider

@@ -213,7 +213,7 @@ def _versions(store,evidence):
 def _live(store):
     info=probe(store.root);cfg=store.config();activation=store.activation();now=time.time()
     require(info.get('protocol')==PROTOCOL and info.get('bound') is True and info.get('controller_active') is True
-            and info.get('controller_mode')=='native_google_v1' and info.get('activation_enabled') is True,
+            and info.get('controller_mode')=='native_google_v2' and info.get('activation_enabled') is True,
             'pilot_live_native_controller_required')
     require(info.get('generation')==activation['id'] and activation['enabled']==1 and activation['created']<=now<activation['expires']
             and info.get('catalog_path')==activation['catalog'] and info.get('selection')==strict_json(activation['selection'])
@@ -224,9 +224,11 @@ def _live(store):
     with store.transaction() as db:
         controller=dict(store._live_controller(db))
         bound=db.execute("SELECT value FROM meta WHERE key='native_activation'").fetchone()
-    require(controller['mode']=='native_google_v1' and bound is not None and strict_json(bound['value'])==activation['id'],
+        checkpoint=strict_json(db.execute("SELECT value FROM meta WHERE key='native_controller_checkpoint'").fetchone()['value'])
+    require(controller['mode']=='native_google_v2' and bound is not None and strict_json(bound['value'])==activation['id'],
             'pilot_native_activation_mismatch')
-    binding={'activation':activation,'controller':{k:controller[k] for k in ('controller_id','epoch','mode','expires')},
+    binding={'activation':activation,'queue_root_sha256':checkpoint['root_hash'],
+             'controller_timing':checkpoint['timing'],'controller':{k:controller[k] for k in ('controller_id','epoch','mode','expires')},
              'catalog_sha256':hash_bytes(canonical(global_catalog(info['selection']))),'base_url':info['base_url']}
     return info,binding,controller
 
@@ -339,8 +341,11 @@ def verify_preflight(store,plan_id,*,queue_state,join_code):
     require(not state['logical']['closed'] and native is not None and state['activation_id']==info['generation']
             and native['controller_epoch']==controller['epoch']
             and hash_bytes(native['native_task_id'].encode())[:32]==controller['controller_id']
-            and 0<=now-native['heartbeat_at']<=30 and native['lease_expires']==controller['expires'],
+            and queue.require_active(native,state['controller_timing'],now,initialized=True)
+            and native['lease_expires']==controller['expires'],
             'pilot_signed_controller_mismatch')
+    require(queue.root_hash(state)==plan['binding']['queue_root_sha256']
+            and state['controller_timing']==plan['binding']['controller_timing'],'pilot_signed_queue_root_mismatch')
     route,pin,request=_request(store,plan,controller);demand=state['logical']['demands'].get(route['id'])
     require(demand is not None and demand['state']=='ready' and demand['controller_epoch']==controller['epoch']
             and demand['identity_sha256']==hash_bytes(canonical(plan['identity']))
@@ -383,6 +388,8 @@ def require_pilot(state_dir,proof_id,cli_version,desktop_version,*,desktop_app=N
     require(proof['binding']==plan['binding'],'pilot_proof_binding_mismatch')
     queue.validate_root(proof['queue_root'])
     require(proof['queue_root_sha256']==hash_bytes(canonical(proof['queue_root']))
+            and proof['queue_root_sha256']==plan['binding']['queue_root_sha256']
+            and proof['queue_root']['controller_timing']==plan['binding']['controller_timing']
             and now<proof['queue_root']['expires'] and proof['ready_sha256']==hash_bytes(canonical(proof['ready'])),
             'pilot_queue_evidence_changed')
     route,pin,request=_request(store,plan,controller)
