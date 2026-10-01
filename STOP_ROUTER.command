@@ -1,4 +1,4 @@
 #!/bin/bash
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")" && pwd)"
-exec "$ROOT/mac_router/stop-router.command" "$@"
+ROOT="$(cd "$(dirname "$0")" && pwd -P)"
+exec "$ROOT/mac_router/launch.command" stop "$@"

@@ -88,4 +88,4 @@ class DriveHTTPClient:
 
     def get_metadata(self,file_id):
         return json.loads(self._call('drive/v3/files/'+urllib.parse.quote(file_id,safe=''),
-            query={'fields':'id,name,parents,trashed','supportsAllDrives':'true'}))
+            query={'fields':'id,name,mimeType,parents,trashed','supportsAllDrives':'true'}))

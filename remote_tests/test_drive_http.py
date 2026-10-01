@@ -75,6 +75,12 @@ class HTTPContractTests(unittest.TestCase):
         self.assertIn('incompleteSearch',q['fields'][0])
         self.assertIn('parents',q['fields'][0])
 
+    def test_metadata_requests_folder_mime_for_launcher_preflight(self):
+        self.client.get_metadata('folder')
+        req,_=self.opener.calls[0]
+        q=urllib.parse.parse_qs(urllib.parse.urlparse(req.full_url).query)
+        self.assertIn('mimeType',q['fields'][0])
+
     def test_409_is_not_success(self):
         self.opener.error=urllib.error.HTTPError('https://www.googleapis.com',409,'conflict',{},None)
         with self.assertRaises(AlreadyExists):self.client.create_bytes('folder','name',b'raw','id')

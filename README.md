@@ -15,6 +15,13 @@
 
 ## 快速开始
 
+> **本次新增功能是实验预览：统一 Mac 启动器 + 全局 gateway 离线原型。**
+> 两部分已合并进同一源码包，但没有完成一键全局接管。`START.command` 仍只启动单会话 Router；
+> 全局菜单保持不支持，gateway 的 `production_ready` / `ready_for_config` 恒为 `false`，
+> 不会应用全局 Codex 配置。真实 Mac / Google / native 现场验收仍未完成；
+> 9 个真实 TOML parser 测试因可选依赖未安装而跳过。
+> 详见[合并预览验证](docs/EXPERIMENTAL_PREVIEW_VALIDATION.md)与[全局原型说明](docs/GLOBAL_GATEWAY.zh-CN.md)。
+
 ### 1. 选择入口
 
 | 你的场景 | 从这里开始 |
@@ -43,28 +50,29 @@ git rev-parse HEAD
 版本不匹配会停止，其他版本需独立验收。[官方 Codex CLI](https://github.com/openai/codex)
 须自行安装，本仓库不打包 CLI、模型或凭据。
 
-### 3. Mac Router：安装一次，每次会话发送一条私有 join 消息
+### 3. 实验性 Mac Router：首次与日常共用一个入口
 
-先审阅[安装与边界](docs/ROUTER_ONE_CLICK.zh-CN.md)，并确保本人已批准需要的安装与云资源操作。
+双击 `START.command`。第一次确认私有 Python 环境安装，选择本人批准的已有 OAuth 文件、
+Drive folder、已有 Codex 与工作目录、model/effort；只读验证后确认保存。以后复用健康环境与设置，
+不每次重装、不重复 OAuth。可选 `Router.app` 外壳需在 Mac 构建，实际 Mac 运行尚未验收。
 
-1. 运行 `INSTALL_ROUTER.command`：在项目内创建独立 `.venv-router`，询问已批准的 folder ID、
-   Mac 自己的 authorized-user 文件路径及 Codex 工作目录。安装器不登录、不扩权、不复制 token
-2. 运行 `START_ROUTER.command`：Mac 新建彼此独立的 bootstrap Doc 和正式 Control Doc，
-   准备 forward probe，并显示一条私有 join 消息
-3. 将整条消息发给获授权的 Dots，随后清空剪贴板。Dots 必须先获得平台真实 native admission，
-   按[同版本配对规程](docs/ROUTER_JOIN_V1.zh-CN.md)通过私有文件读取 join-code，
-   核验签名、双向 raw-file probe 和正式 Control CAS
-4. Mac 校验签名 polling ack 后启动 loopback facade。看到 `ROUTER_READY` 后进入 Codex；
-   查询状态用 `ROUTER_STATUS.command`，结束会话用 `STOP_ROUTER.command`
+1. 新会话沿原协议创建独立 bootstrap Doc 和正式 Control Doc，完成 forward probe
+2. 确认复制本轮私有 join 消息，发送给获授权 Dots，随后清空剪贴板
+3. Dots 必须真实 native admission，再验证签名、双向 probe 和正式 Control CAS
+4. 只有收到签名 polling ack 并通过 facade readiness 后，才显示 `ROUTER_READY` 并进入 Codex
 
-**“一键”只涵盖安装后的 Mac 启动流程；原生 worker 仍需手动接纳并保持活跃。**
-写入 Drive 文件不会自动唤醒它。保留 Codex 的 `on-request` 审批和 `workspace-write` 沙箱。
+状态用 `ROUTER_STATUS.command`，结束用 `STOP_ROUTER.command`；
+`./START.command menu` 提供设置、状态与停止。已有活动或未完成会话时不另建 Docs。
+旧 `INSTALL_ROUTER.command` / `START_ROUTER.command` 保留为统一后端入口。
 
-- 默认 **4 小时 / 128 次模型请求**；硬上限 **8 小时 / 128 次**，工具结果续轮也计入预算
-- Router 要求保留的 parallel connector-cell runner；不能静默回退到旧串行提交路径
-- 未选模型的内部 bootstrap 协议为 V2；显式选择模型/effort 使用 V3。入口消息保留
-  `DOTS2CODEX_ROUTER_JOIN_V1` 标记，不表示兼容旧 V1 helper
-- 可选[设置辅助工具](docs/gemini_setup/tools/README.zh-CN.md)只由操作者主动运行，不随安装或启动执行
+**当前是单会话启动器；不修改全局 Codex 配置，也不接管桌面或其他 CLI 会话。**
+完整设置、权限、恢复与 `.app` 构建见[统一 Mac 启动器](docs/UNIFIED_MAC_LAUNCHER.zh-CN.md)。
+原生 worker 仍需手动真实接纳并保持活跃，写入 Drive 不会自动唤醒它。
+
+- 默认 **4 小时 / 128 次模型请求**；硬上限 **8 小时 / 128 次**，工具续轮计入预算
+- 保留 Codex `on-request` 审批、`workspace-write` 沙箱与原 parallel connector-cell runner
+- 内部 bootstrap 未选模型时为 V2、显式选择为 V3；入口消息保留 `DOTS2CODEX_ROUTER_JOIN_V1`
+- 可选 Google/OAuth helper 仍独立运行，不随启动器自动执行
 
 ### 4. 为新会话固定真实 native admission 的模型与 effort
 
@@ -119,6 +127,9 @@ Mac / controller                        已活跃的原生 worker
 
 **离线测试通过不等于真实账号、Mac 或多小时运行已验收。**
 
+本次合并预览的完整回归与跳过项见[合并预览验证](docs/EXPERIMENTAL_PREVIEW_VALIDATION.md)。
+全局原型的两线程隔离、工具续轮与恢复使用 fake Google/native ports；不是实际全局路由验收。
+
 | 范围 | 已有证据 | 尚未证明 |
 | --- | --- | --- |
 | 原长会话基线 | 2026-09-30 约 28 分钟、4 次真实模型请求全部 `DELIVERED`；含 Mac 工具执行与匹配的 `function_call_output` 续轮；已 CAS 关闭并停止 worker | 多小时存活、完整 128 请求现场容量 |
@@ -128,6 +139,7 @@ Mac / controller                        已活跃的原生 worker
 | Google Cloud / Gemini 指南与可选 helper | 统一 Markdown/HTML/PDF/Word，离线测试与文档版面核查 | 本次未执行真实授权、Google 创建/写入或现场安装 |
 
 此前合并基线的完整离线套件：**478 个 Python 测试 + 25 个 Node 测试**。
+统一启动器验证与真实 Mac 未验收项见[启动器验证](docs/UNIFIED_MAC_LAUNCHER_VALIDATION.md)。
 新增模型选择路径的验证范围见[模型选择说明](docs/MODEL_SELECTION.zh-CN.md)。
 独立离线审查另覆盖 **26 个 Router 案例 + 17 个 helper 案例**；手册完成 27 页版面核查。
 详见 [Router 验证](docs/ROUTER_VALIDATION.md)、[指南迁移验证](docs/GUIDES_MIGRATION_VALIDATION.md)
@@ -140,8 +152,9 @@ Mac / controller                        已活跃的原生 worker
 
 ### 使用与设置
 
-- Router：[安装 / 启动 / 停止](docs/ROUTER_ONE_CLICK.zh-CN.md) · [Dots 配对规程](docs/ROUTER_JOIN_V1.zh-CN.md) · [升级与验收](docs/ROUTER_UPGRADE.zh-CN.md)
+- Router：[统一 Mac 入口](docs/UNIFIED_MAC_LAUNCHER.zh-CN.md) · [安装 / 启动 / 停止](docs/ROUTER_ONE_CLICK.zh-CN.md) · [Dots 配对规程](docs/ROUTER_JOIN_V1.zh-CN.md) · [升级与验收](docs/ROUTER_UPGRADE.zh-CN.md)
 - 模型选择：[新会话的 model + effort、真实接纳、官方 CLI 与旧配置兼容](docs/MODEL_SELECTION.zh-CN.md)
+- 全局实验原型：[离线使用与边界](docs/GLOBAL_GATEWAY.zh-CN.md) · [原生控制线程规程](docs/GLOBAL_NATIVE_CONTROLLER.md) · [原型验证](docs/GLOBAL_GATEWAY_VALIDATION.md) · [本次合并验证](docs/EXPERIMENTAL_PREVIEW_VALIDATION.md)
 - Google Cloud / Gemini：[总入口](START_HERE_GEMINI_GUIDES.md) · [章节索引](docs/gemini_setup/00_README.zh-CN.md) · [离线 HTML](docs/gemini_setup/ALL_GUIDES.html) · [PDF](docs/gemini_setup/HANDBOOK.pdf) · [Word](docs/gemini_setup/HANDBOOK.docx)
 - Gemini 辅助：[启动提示词](docs/gemini_setup/PROMPT_GEMINI_START.txt) · [13 段提示词](docs/gemini_setup/02_GEMINI_PROMPTS.zh-CN.md) · [可选设置 helper](docs/gemini_setup/tools/README.zh-CN.md)
 - 手动远程：[安装配置](docs/REMOTE_SETUP.zh-CN.md) · [长会话与恢复](docs/REMOTE_LONG_SESSIONS.zh-CN.md) · [活跃 worker 契约](docs/ACTIVE_CONNECTOR_WORKER.md)
@@ -210,6 +223,12 @@ Dots2Codex is an independent experimental bridge between the unmodified official
 Codex CLI and an already active, authorized native inference worker. It preserves
 the local POSIX bridge and adds a Drive/Docs revision-CAS transport, bounded long
 sessions, Mac tool continuations, and a one-message Router pairing flow.
+
+This release also includes an experimental unified Mac starter and an offline global
+gateway prototype. The starter still launches a single Router session; its global
+menu remains unsupported. Production readiness and global configuration gates stay
+false. This is not a completed one-click desktop/CLI takeover. Real Mac/Google/native
+acceptance and nine skipped real-TOML-parser tests remain outstanding.
 
 The historical baseline completed four live requests including one Mac tool cycle.
 The repaired Router, parallel executor, and optional setup helper are offline

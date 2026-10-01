@@ -1,31 +1,110 @@
 {
-  "contract": "dots2codex-router-source-contract-fix/1",
-  "base_commit": "020cd1a58459c25fffc8077b5944995d0b484b4f",
-  "base_source_tree_sha256": "91924c8eabb84afa22fcb381850f2788c6eb2b6f486d0bf71c46923ab1a18621",
-  "source_tree_sha256": "b5854e06d221c1152bafc9f93508fc5a0b356d39e3c53bdd6b2313463cc312c4",
+  "contract": "dots2codex-experimental-launcher-global-preview/1",
+  "base_commit": "00156e4621444eefa90752545dc1a40521639fb1",
+  "base_source_tree_sha256": "b5854e06d221c1152bafc9f93508fc5a0b356d39e3c53bdd6b2313463cc312c4",
+  "input_launcher_source_tree_sha256": "7774123803de7f12e89b8cb8be7a510f5cfc2e829572921c0fde33632d4e096e",
+  "input_gateway_source_tree_sha256": "ab3026308c240f613b8be00b623cfa3eb67cd73fcac4e87556da7d1619215891",
+  "source_tree_sha256": "f1dd2ade5de38bfc1f87525348ca5dc8a069b21755840b0c44615e89c5346966",
   "source_tree_hash_algorithm": "SHA-256 of UTF-8 canonical JSON files array (sort_keys=true,separators=comma/colon,ensure_ascii=false); array sorted by path",
-  "hashed_file_count": 178,
+  "hashed_file_count": 205,
   "manifest_self_excluded": true,
-  "production_files_changed": [
-    "remote_transport/connector_cell.py"
+  "changed_files": [
+    ".gitignore",
+    "GLOBAL_GATEWAY_CONTRACT.json",
+    "GLOBAL_GATEWAY_README.txt",
+    "INSTALL_ROUTER.command",
+    "README.md",
+    "README_ROUTER.txt",
+    "ROUTER_STATUS.command",
+    "START.command",
+    "START_ROUTER.command",
+    "STOP_ROUTER.command",
+    "docs/EXPERIMENTAL_PREVIEW_VALIDATION.md",
+    "docs/GLOBAL_GATEWAY.zh-CN.md",
+    "docs/GLOBAL_GATEWAY_VALIDATION.md",
+    "docs/GLOBAL_NATIVE_CONTROLLER.md",
+    "docs/ROUTER_ONE_CLICK.zh-CN.md",
+    "docs/UNIFIED_MAC_LAUNCHER.zh-CN.md",
+    "docs/UNIFIED_MAC_LAUNCHER_VALIDATION.md",
+    "mac_router/Router.applescript",
+    "mac_router/build-app.command",
+    "mac_router/install.command",
+    "mac_router/launch.command",
+    "mac_router/start-router.command",
+    "mac_router/status.command",
+    "mac_router/stop-router.command",
+    "remote_tests/test_drive_http.py",
+    "remote_tests/test_global_config.py",
+    "remote_tests/test_global_control.py",
+    "remote_tests/test_global_gateway.py",
+    "remote_tests/test_mac_launcher.py",
+    "remote_transport/drive_http.py",
+    "remote_transport/global_config.py",
+    "remote_transport/global_control.py",
+    "remote_transport/global_fixture.py",
+    "remote_transport/global_gateway.py",
+    "remote_transport/global_google.py",
+    "remote_transport/global_native.py",
+    "remote_transport/mac_environment.py",
+    "remote_transport/mac_launcher.py",
+    "remote_transport/mac_setup.py",
+    "remote_transport/mac_ui.py",
+    "remote_transport/router_mac.py",
+    "requirements-global.txt"
+  ],
+  "added_files": [
+    "GLOBAL_GATEWAY_CONTRACT.json",
+    "GLOBAL_GATEWAY_README.txt",
+    "START.command",
+    "docs/EXPERIMENTAL_PREVIEW_VALIDATION.md",
+    "docs/GLOBAL_GATEWAY.zh-CN.md",
+    "docs/GLOBAL_GATEWAY_VALIDATION.md",
+    "docs/GLOBAL_NATIVE_CONTROLLER.md",
+    "docs/UNIFIED_MAC_LAUNCHER.zh-CN.md",
+    "docs/UNIFIED_MAC_LAUNCHER_VALIDATION.md",
+    "mac_router/Router.applescript",
+    "mac_router/build-app.command",
+    "mac_router/launch.command",
+    "remote_tests/test_global_config.py",
+    "remote_tests/test_global_control.py",
+    "remote_tests/test_global_gateway.py",
+    "remote_tests/test_mac_launcher.py",
+    "remote_transport/global_config.py",
+    "remote_transport/global_control.py",
+    "remote_transport/global_fixture.py",
+    "remote_transport/global_gateway.py",
+    "remote_transport/global_google.py",
+    "remote_transport/global_native.py",
+    "remote_transport/mac_environment.py",
+    "remote_transport/mac_launcher.py",
+    "remote_transport/mac_setup.py",
+    "remote_transport/mac_ui.py",
+    "requirements-global.txt"
   ],
   "all_six_source_bindings_preserved": true,
   "existing_runtime_migration": "fresh_paired_session_required",
-  "test_results": {
-    "python_passed": 525,
-    "node_passed": 25,
-    "new_materialize_cell_tests": 6,
-    "independent_generated_cell_workflows": 2,
-    "independent_fault_checks": 64
-  },
-  "live_fix_rollout_performed": false,
+  "status": "experimental-source-package-coexistence-only",
+  "launcher_global_menu_supported": false,
+  "production_ready": false,
+  "ready_for_config": false,
+  "global_config_enabled": false,
+  "mac_app_build_verified": false,
+  "real_mac_google_native_acceptance": false,
+  "toml_parser_integration_verified": false,
+  "dependency_install_performed": false,
   "native_inference_calls": 0,
   "google_writes": 0,
+  "test_results": {
+    "python_discovered": 649,
+    "python_passed": 640,
+    "python_skipped": 9,
+    "node_passed": 25
+  },
   "files": [
     {
       "path": ".gitignore",
-      "bytes": 1271,
-      "sha256": "5f3ae2209d4b1837aa779f049961734aee28f9763c5d68c19ac77cb521006dbe",
+      "bytes": 1427,
+      "sha256": "3d8fb649027c787a0a0c19a7523d2abdf6733a5094c2b5d6a3f5575dc2fbdcbe",
       "mode": "0644"
     },
     {
@@ -59,6 +138,18 @@
       "mode": "0644"
     },
     {
+      "path": "GLOBAL_GATEWAY_CONTRACT.json",
+      "bytes": 1355,
+      "sha256": "d9dbf1a135a8aeb440b3ef4b69d67b253020579597df7157eea95ef637bb4044",
+      "mode": "0644"
+    },
+    {
+      "path": "GLOBAL_GATEWAY_README.txt",
+      "bytes": 2200,
+      "sha256": "7fd4c416241e01e96fff9f553f08d77a47e89a50f330e44fa03d1e9d7eb0645b",
+      "mode": "0644"
+    },
+    {
       "path": "HANDOFF_TEST.zh-CN.md",
       "bytes": 2741,
       "sha256": "5f60b8968486c73c6181605d3040aec47257e3adc87644d041290057e033cffd",
@@ -66,8 +157,8 @@
     },
     {
       "path": "INSTALL_ROUTER.command",
-      "bytes": 113,
-      "sha256": "67c50125dc59816d20801debe57a81f76554ac431605b6b577bb320691007389",
+      "bytes": 124,
+      "sha256": "6eb415fb030931b4fafc1a3baf9121028002bfd8b477d6475737d8460a68b879",
       "mode": "0755"
     },
     {
@@ -96,15 +187,15 @@
     },
     {
       "path": "README.md",
-      "bytes": 15011,
-      "sha256": "7c41c5671a52d2734639387258f9229a42ffa1c9758624de5d94d6fb1483670c",
+      "bytes": 16682,
+      "sha256": "434d5d31bcd06feb9d7e993a0f23dac656094bbbdd2b376a6f2643af88b7b2b7",
       "mode": "0644"
     },
     {
       "path": "README_ROUTER.txt",
-      "bytes": 1471,
-      "sha256": "0054787952554cd4a6faf4474dc558eaf69a4763811a767754615048250bfd8a",
-      "mode": "0600"
+      "bytes": 1446,
+      "sha256": "7fc44b0d7a3ed6d2da4f9217aef5ff7c7fe775df0e7d3a5542ecc174d8770ecb",
+      "mode": "0644"
     },
     {
       "path": "RECOVERY.zh-CN.md",
@@ -126,8 +217,8 @@
     },
     {
       "path": "ROUTER_STATUS.command",
-      "bytes": 112,
-      "sha256": "abf40222e3f7731484c44aec79b0d53368aa4cb12d96eea0166eab0390008683",
+      "bytes": 122,
+      "sha256": "8b5992307c4718d2ed59789f85df5b4f600a9eac61f94c00db04cf1e144c903c",
       "mode": "0755"
     },
     {
@@ -155,6 +246,12 @@
       "mode": "0644"
     },
     {
+      "path": "START.command",
+      "bytes": 115,
+      "sha256": "5901b8e09fc022146fe29e3f497214cfd29620670c232d7dfb9821a0d0ddab55",
+      "mode": "0755"
+    },
+    {
       "path": "START_HERE.zh-CN.md",
       "bytes": 4670,
       "sha256": "2b2dc4c4986a7f139d27e835b48c0c3d215d1583b633904b4283b6baab863afb",
@@ -164,18 +261,18 @@
       "path": "START_HERE_GEMINI_GUIDES.md",
       "bytes": 1776,
       "sha256": "7621768afe03b1a67fd51d8ee8402e0fcf64a7f22f8c2bb5d3cb6d2f32603f87",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "START_ROUTER.command",
-      "bytes": 118,
-      "sha256": "3b0c4ddf56f069bedbfb122f493d9a1dd75e3d617840bddb3d079f166d09b592",
+      "bytes": 121,
+      "sha256": "bad456ce59358a661ba4c90b5467c67e092a56e7b5b680bfc724e09aeeec4ed2",
       "mode": "0755"
     },
     {
       "path": "STOP_ROUTER.command",
-      "bytes": 117,
-      "sha256": "09dd5fba66223a33bc97b6cc10a91e4d3661737d4545a1a03e68f80ba0caf175",
+      "bytes": 120,
+      "sha256": "a773b7b3d5b8376dd8ba03344fc06ef71ba5e43f9b6f816472e9d6989534dbc3",
       "mode": "0755"
     },
     {
@@ -218,6 +315,30 @@
       "path": "docs/CONNECTOR_LATENCY.md",
       "bytes": 10245,
       "sha256": "a86613673a4d44a07ed2a0f5b610db7958246754ac8ceb1f0bf76c8786120ce4",
+      "mode": "0644"
+    },
+    {
+      "path": "docs/EXPERIMENTAL_PREVIEW_VALIDATION.md",
+      "bytes": 4137,
+      "sha256": "5f924d2bd803f68f2170ac7087038b50cefaf644b4f76f08665dbd59eebf24ca",
+      "mode": "0644"
+    },
+    {
+      "path": "docs/GLOBAL_GATEWAY.zh-CN.md",
+      "bytes": 6181,
+      "sha256": "f60791c32681d9987f3a3de7a8fcba5f80f606cffc2809e1a494d8642a12361a",
+      "mode": "0644"
+    },
+    {
+      "path": "docs/GLOBAL_GATEWAY_VALIDATION.md",
+      "bytes": 6712,
+      "sha256": "263635f139a51836eacdf45e4322387518eeac3c23240f309d4bfa4bdfa92b5e",
+      "mode": "0644"
+    },
+    {
+      "path": "docs/GLOBAL_NATIVE_CONTROLLER.md",
+      "bytes": 11898,
+      "sha256": "91cdda841c3f3dfff063e9581fc33b86892094c32f15c3e47028b9b436efe4ad",
       "mode": "0644"
     },
     {
@@ -266,13 +387,13 @@
       "path": "docs/ROUTER_JOIN_V1.zh-CN.md",
       "bytes": 14393,
       "sha256": "920f69e27c49dff81782c55486a38f486e5e37a115d3d90d9c7c896b8d18ee66",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/ROUTER_ONE_CLICK.zh-CN.md",
-      "bytes": 5186,
-      "sha256": "b27ddd1c4d77b6d93b35711db56c4d24ee42036bd8701baa3b216343b6752c8b",
-      "mode": "0600"
+      "bytes": 5360,
+      "sha256": "cc108539d284219af689eca4f6f5ca21aca253d376eeea6235de49076809d2e3",
+      "mode": "0644"
     },
     {
       "path": "docs/ROUTER_SOURCE_HASH_FIX.zh-CN.md",
@@ -290,7 +411,19 @@
       "path": "docs/ROUTER_VALIDATION.md",
       "bytes": 6817,
       "sha256": "6bf4bcebb031b2ad20d33803339130ffe35d66951dacdec02a1b73adf3f5f118",
-      "mode": "0600"
+      "mode": "0644"
+    },
+    {
+      "path": "docs/UNIFIED_MAC_LAUNCHER.zh-CN.md",
+      "bytes": 7505,
+      "sha256": "e9784707cb1da44f04866f75449529207a055ae75b1cd91c25b0f353a4833dea",
+      "mode": "0644"
+    },
+    {
+      "path": "docs/UNIFIED_MAC_LAUNCHER_VALIDATION.md",
+      "bytes": 1899,
+      "sha256": "254b0210b1263db7a8a8f4d33109b51aae97b0b82396a986f6eb3771c4b024a3",
+      "mode": "0644"
     },
     {
       "path": "docs/VALIDATION.md",
@@ -302,73 +435,73 @@
       "path": "docs/gemini_setup/00_README.zh-CN.md",
       "bytes": 2972,
       "sha256": "dc3e2ba926d97a1c7c71ab5293ed812ef972f0e17b40b1c2b0fed88ff5b79e97",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/01_GOOGLE_CLOUD_GEMINI_SETUP.zh-CN.md",
       "bytes": 21262,
       "sha256": "19e7cc59df0765703433deda444f9fbd3bdc466c34e63b55ff391f76f000d1e3",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/02_GEMINI_PROMPTS.zh-CN.md",
       "bytes": 7950,
       "sha256": "1018f6314b4c441a864c63b88dd3d15882b41e7442f18c45baef1e771d72cca9",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/03_MAC_ROUTER_RUNBOOK.zh-CN.md",
       "bytes": 6458,
       "sha256": "bafc42e75cf06ad1ebb6660141cd5f3177f45880729decdaf2b2216cd70959b1",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/04_DOTS_HANDOFF.zh-CN.md",
       "bytes": 9466,
       "sha256": "757e92d9acc3a510484728966598313e25a2181e344ce183d9929258ba23c6e4",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/05_TROUBLESHOOTING.zh-CN.md",
       "bytes": 6248,
       "sha256": "f58d13a393d3b3384e20fb892aa08d02f3d8fd48c9ef27c57b007d444eefd556",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/06_SECURITY_AND_VALIDATION.zh-CN.md",
       "bytes": 7416,
       "sha256": "75388cafd67c03e07c3ab0074f9af474d095d574241bce18f06a95b1fc84ae2f",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/07_CHECKLIST.zh-CN.md",
       "bytes": 4187,
       "sha256": "49c244796c733f92c70d338e3f2d20783330343a81bb7898ae5d7becd2abd325",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/08_SOURCES.md",
       "bytes": 5767,
       "sha256": "0c83dd510a85f293a681dbf328ee28fc57822d47b38a7d0e3405db97e6410388",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/ALL_GUIDES.html",
       "bytes": 83326,
       "sha256": "72cd9ec531902a168cc7966c0a5dc6a7b51c6c359fdbe4305ecb316634536831",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/GUIDE_BUILD_VERIFICATION.json",
       "bytes": 10483,
       "sha256": "a96a26887c590da9e947efbb734b07cd1452fc036a6d8b141550dae3f994b652",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/HANDBOOK.docx",
       "bytes": 77284,
       "sha256": "57f9be37d2ab8a605dcc721d341c4cc670b9233994e0ed1d77de927f0bf9885b",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/HANDBOOK.pdf",
@@ -380,37 +513,37 @@
       "path": "docs/gemini_setup/PROMPT_GEMINI_START.txt",
       "bytes": 1113,
       "sha256": "61a773ea6515e8b0e53965473bcd170802a7a58ee69bfd45ad098a0bee1fa0b4",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/tools/README.zh-CN.md",
       "bytes": 2422,
       "sha256": "cf85c4846ce0b8543cc9db96d5ef2571acf614265712bb0e7161677522afd2dc",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/tools/mac_google_setup.py",
       "bytes": 12495,
       "sha256": "321638c681ba86dcbe46b36e018efddc28a08e6441bad01bb13e5c69056ceeed",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/tools/test_mac_google_setup.py",
       "bytes": 19391,
       "sha256": "f80a8eeb08373005e85aa39029869b7ae49fe56df2d44185535b821f3d9f49fb",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/verification/router-tests.txt",
       "bytes": 63341,
       "sha256": "68cc414370a909df33cffc91135ee8bcce7f1ce175fb50cc9a17b20295f2aff6",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "docs/gemini_setup/verification/setup-helper-tests.txt",
       "bytes": 5150,
       "sha256": "feff50892560d055622aff59a6e7ac6605a6e5785e836d8e1ab07b0decf4c760",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "examples/__init__.py",
@@ -455,27 +588,45 @@
       "mode": "0644"
     },
     {
+      "path": "mac_router/Router.applescript",
+      "bytes": 363,
+      "sha256": "426703d80f1f58edf9295ce4347aa65c3273ff9a78061b68a27fce62e83764a7",
+      "mode": "0644"
+    },
+    {
+      "path": "mac_router/build-app.command",
+      "bytes": 1644,
+      "sha256": "8325e455af4e41af9ff83473a5040cb58e2bc6f4c1766caaa738596554422b4c",
+      "mode": "0755"
+    },
+    {
       "path": "mac_router/install.command",
-      "bytes": 624,
-      "sha256": "9705758989a0151c97773d1d6e021b53098289e3721d2b9eac9e40cc54595c1f",
+      "bytes": 113,
+      "sha256": "e991cfd35c12daae78c47592fd2ac0f9e400c617f45ff48b717da99943511731",
+      "mode": "0755"
+    },
+    {
+      "path": "mac_router/launch.command",
+      "bytes": 1413,
+      "sha256": "ab1237a2bc29fdd10d90d063aa7ae63bc3f827d193aed5c0c5947c12f04c1b79",
       "mode": "0755"
     },
     {
       "path": "mac_router/start-router.command",
-      "bytes": 365,
-      "sha256": "d690bb644af07df834da2c9a32d8e977d3ceed537db5a4c289d174a6281b0234",
+      "bytes": 110,
+      "sha256": "303b48488f9e54dde59b2ba21ad689a49987ffbc468e3aec9135b8d371ce1497",
       "mode": "0755"
     },
     {
       "path": "mac_router/status.command",
-      "bytes": 205,
-      "sha256": "7a9960329d9e6e40e0093614ecfb3599a09a6f265b08d1d35eda8b4b7cd614b4",
+      "bytes": 111,
+      "sha256": "3fc1afe3a71b532322c7e62e121370db97484ceb9af4855bd017a0aee14cd9de",
       "mode": "0755"
     },
     {
       "path": "mac_router/stop-router.command",
-      "bytes": 294,
-      "sha256": "f5aacb895dce47bd5954bfc10d38af4a672dc97793b7c9ec32fbe39b26b998df",
+      "bytes": 109,
+      "sha256": "42e50bc691b7ce4ba1386708f98b42ed147cda00db07d09f2b8d22913d025375",
       "mode": "0755"
     },
     {
@@ -624,8 +775,26 @@
     },
     {
       "path": "remote_tests/test_drive_http.py",
-      "bytes": 4329,
-      "sha256": "1d49d1ef05c964140839b96dcf2aec10207d62fcd66a5c54a6cd155a26bc4163",
+      "bytes": 4605,
+      "sha256": "1ce57a18f196e0deee123796bddd18f9d7df063f2f6fd2c521cd3edbc520f529",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_tests/test_global_config.py",
+      "bytes": 12882,
+      "sha256": "84e1cdabdd82d9ae0ce0dadf6feb198d62c6f37e4b8e847d05ddcc3a9f5b0b63",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_tests/test_global_control.py",
+      "bytes": 17453,
+      "sha256": "889d16dea65204fb3d0d7900d276cd5c8fe2b3a094c142e92c8644694d642980",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_tests/test_global_gateway.py",
+      "bytes": 20037,
+      "sha256": "bda93d8feb9183fae456a3e566bcf51419b29b0328249794cbf748df310df556",
       "mode": "0644"
     },
     {
@@ -638,6 +807,12 @@
       "path": "remote_tests/test_long_sessions.py",
       "bytes": 21132,
       "sha256": "1d0544e661952bc3ee4ae78b3117a8134cbd82a014273fb3b14091c5bea8e462",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_tests/test_mac_launcher.py",
+      "bytes": 27137,
+      "sha256": "8c3fe9951bf6c667fc8e86b55f9cf6c31c4476955898efe8583769929cd873ce",
       "mode": "0644"
     },
     {
@@ -662,7 +837,7 @@
       "path": "remote_tests/test_router_bootstrap.py",
       "bytes": 24394,
       "sha256": "6a97dd21ef4a340eb3db72f5889420a8ddb6dfc53a80265d395ae5e85f44230b",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "remote_tests/test_router_cell_materialization.py",
@@ -680,7 +855,7 @@
       "path": "remote_tests/test_router_mac.py",
       "bytes": 2697,
       "sha256": "4ede7e38fbaaa0cea2d0441796284d408054d7e4219f32ce4259117fbada55f6",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "remote_tests/test_router_startup.py",
@@ -774,14 +949,74 @@
     },
     {
       "path": "remote_transport/drive_http.py",
-      "bytes": 5067,
-      "sha256": "189b3d09ed1332b5e70cc3061eba0ffdcff9b8e647008b5470775a734b58e007",
+      "bytes": 5076,
+      "sha256": "cc1112e74386329c7bdb2e9630934f43fbb5f5d60ece8c7c6e731660cefa743d",
       "mode": "0644"
     },
     {
       "path": "remote_transport/facade.py",
       "bytes": 25845,
       "sha256": "89f39e5aef0bee9e23186f97a65af76ca19e36c3540f4298906b071d57519fdb",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/global_config.py",
+      "bytes": 19971,
+      "sha256": "9d030a44530072cd16dbfa4d5bed4185a94a69a29ec998fca706e8f3ef23c77a",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/global_control.py",
+      "bytes": 21393,
+      "sha256": "ad353b08d6adfc2e92e66a50965c4cd03aad893fa2c4f40c17dbc7b31761ebe7",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/global_fixture.py",
+      "bytes": 7105,
+      "sha256": "cd2c9404144e0923f2c205be058609ee0bd2a929b78a609a8d4baaa65149615a",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/global_gateway.py",
+      "bytes": 44632,
+      "sha256": "1a5471a7742911ecfc1ca74e0ff7a8d502cd54e1fc1cf640a24282faa0b3e5a4",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/global_google.py",
+      "bytes": 29508,
+      "sha256": "cac92ea4edf27477c4af619c00b7a5503fa96e00c8c00a4a58525b73a8db8251",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/global_native.py",
+      "bytes": 12549,
+      "sha256": "9ec53053406bc9fec1787f3e8b115fc72f215cd5c8e6b8c3c7822d85cd6839ca",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/mac_environment.py",
+      "bytes": 8983,
+      "sha256": "e7fe1024d3449c5f05fd05b5320c434fa3f8b44ac56abc0cadd7f42e3e7defe9",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/mac_launcher.py",
+      "bytes": 19814,
+      "sha256": "57f6f62cc7ee08106792dc62e7a38118e5f275b1d9f9d18f743e80288a2252fd",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/mac_setup.py",
+      "bytes": 5286,
+      "sha256": "015d0a2567788e1aa0ad4ea150c2167916f5220814cbcf5d1d1ff727169b2419",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/mac_ui.py",
+      "bytes": 4327,
+      "sha256": "9a9adad632b40eb5f836a984bd7db0dd43a8251ed99a3a6b275c7f77359b7297",
       "mode": "0644"
     },
     {
@@ -806,7 +1041,7 @@
       "path": "remote_transport/router_bootstrap.py",
       "bytes": 29242,
       "sha256": "05cd8237453c72eb269c1b6adac29c037e581bb769f36ddc71b6a3d50e9243a2",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "remote_transport/router_child.py",
@@ -818,13 +1053,13 @@
       "path": "remote_transport/router_join.py",
       "bytes": 25636,
       "sha256": "36f20059bb7578a524125ead7990c2debe409facdac9a7764d74cdac0c2167b9",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "remote_transport/router_mac.py",
-      "bytes": 46060,
-      "sha256": "4b406743ed8ab2392644c35dbb11baf57442015883f47dd32549de92c51b9164",
-      "mode": "0600"
+      "bytes": 45091,
+      "sha256": "50b68b1811a91578d5d021693ece7610d83a8dc6e48d46c3477c525503acaad6",
+      "mode": "0644"
     },
     {
       "path": "remote_transport/selection.py",
@@ -863,6 +1098,12 @@
       "mode": "0644"
     },
     {
+      "path": "requirements-global.txt",
+      "bytes": 101,
+      "sha256": "b1bd52072e01461f718b1a4d5f2b66832de5f0e51ba7c5b709d988d76842d9de",
+      "mode": "0644"
+    },
+    {
       "path": "requirements-google-example.txt",
       "bytes": 288,
       "sha256": "e37ad0fefbd29350513abe1723819093038e2aba8768ca3b387a79a6160c4f98",
@@ -878,7 +1119,7 @@
       "path": "requirements-router-mac.txt",
       "bytes": 90,
       "sha256": "efba5814c56839b04e749153251672d379e713da18fca1ce47be294d6b1719b7",
-      "mode": "0600"
+      "mode": "0644"
     },
     {
       "path": "requirements-test.txt",

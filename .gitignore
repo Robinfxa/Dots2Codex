@@ -77,3 +77,11 @@ ACTUAL_NATIVE_ARGUMENTS.json
 ACTUAL_NATIVE_RESULT.json
 WORKER_MESSAGE.txt
 codex-model-catalog.json
+
+# Unified launcher private environments and app build output
+environments/
+environment.json
+approved-config.json
+install-state.json
+*.settings.lock
+*.app/

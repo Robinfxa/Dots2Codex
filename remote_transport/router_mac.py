@@ -415,49 +415,10 @@ def _bridge_call(ready, journal, operation, **kwargs):
 
 
 def configure(args):
-    selection = _resolve_selection(args, {})
-    target = _config_path(args.config)
-    target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    default_cred = str((Path.home() / ".config" / "dots2codex" / "authorized-user-bidir.json").resolve())
-    folder = args.folder_id or input("Google Drive transport folder ID: ").strip()
-    cred = args.credentials or input(f"Authorized-user file [{default_cred}]: ").strip() or default_cred
-    default_work = str((Path.home() / "Dots2Codex-workspace").resolve())
-    workdir = args.workdir or input(f"Codex workspace [{default_work}]: ").strip() or default_work
-    config = {
-        "folder_id": folder,
-        "authorized_user_file": str(Path(cred).expanduser().resolve()),
-        "workdir": str(Path(workdir).expanduser().resolve()),
-        "mac_writer_identity": "mac-controller-router",
-        "worker_writer_identity": "remote-worker-router",
-        "seconds": 14400,
-        "max_requests": 128,
-        "scope": "responses_tools",
-        "port": 0,
-        "deadline": 1800,
-        "poll_interval": 5,
-        "heartbeat_interval": 15,
-        "bootstrap_ttl": 1800,
-        "bootstrap_poll_interval": 5,
-        "codex": args.codex or "codex",
-        "expected_codex_version": EXPECTED_CODEX,
-    }
-    if selection is not None: config["model_selection"] = selection
-    if getattr(args, "catalog", None): config["catalog"] = str(_config_path(args.catalog))
-    config = _validate_config(config)
-    Path(config["workdir"]).mkdir(parents=True, exist_ok=True)
-    _set_google_env(config)
-    from examples.google_clients import create_drive_client, authorized_scopes
-    scopes = authorized_scopes()
-    required_scopes = {"https://www.googleapis.com/auth/drive.file",
-                       "https://www.googleapis.com/auth/drive.readonly"}
-    require(required_scopes <= set(scopes), "router_requires_drive_file_and_drive_readonly_scopes")
-    metadata = create_drive_client().get_metadata(config["folder_id"])
-    require(metadata.get("id") == config["folder_id"] and metadata.get("trashed") is False,
-            "router_folder_access_not_verified")
-    _private_json(target, config)
-    return {"configured": True, "config": str(target), "folder_verified": True,
-            **selection_status(selection),
-            "credentials_copied": False, "oauth_token_in_config": False}
+    # Shared read-only preflight, explicit credential reuse and atomic settings.
+    # No workspace creation or config writes before Google folder MIME validation.
+    from .mac_launcher import Launcher
+    return Launcher(config=args.config, active=getattr(args, "active", DEFAULT_ACTIVE)).configure(args)
 
 
 def _create_doc_once(drive, docs, active_path, active, config, label):
@@ -647,7 +608,15 @@ def _launch_facade(active_path, active, config):
 
 
 def _start_locked(args, active_path, intent_id):
-    config = _load_config(args.config)
+    expected_config = getattr(args, "expected_config_sha256", None)
+    if expected_config is not None:
+        # Bind the exact bytes whose credential/folder/workspace the launcher
+        # validated and the operator approved, under the lifecycle lease.
+        raw = read_private_file(_config_path(args.config), 131072)
+        require(hash_bytes(raw) == expected_config, "router_config_changed_after_launcher_approval")
+        config = _validate_config(json.loads(raw))
+    else:
+        config = _load_config(args.config)
     # Unsupported choices fail before Google clients, resource creation or pairing.
     selection = _resolve_selection(args, config)
     _set_google_env(config)
@@ -697,8 +666,15 @@ def _start_locked(args, active_path, intent_id):
         message = _join_message(active, join_code)
         write_new(runtime / "join-message.txt", message.encode())
         _check_cancelled(active)
-        print("\n=== COPY THIS PRIVATE JOIN MESSAGE TO DOTS ONCE ===\n" + message + "\n=== END ===", flush=True)
-        if _copy_clipboard(message): print("[router] private join message copied; clear clipboard after sending", flush=True)
+        callback = getattr(args, "join_callback", None)
+        if callback is not None:
+            callback(active, message)
+        else:
+            # Join secrets never enter default logs. Copy is an explicit action.
+            print("[router] private join message saved at " + active["join_message_file"], flush=True)
+            if getattr(args, "copy_join", False):
+                copied = _copy_clipboard(message)
+                print("[router] join clipboard " + ("copied; clear after sending" if copied else "failed; use private file"), flush=True)
         snap = _wait_for(docs, active, join_code, "WORKER_ADMITTED", timeout_at=initial["expires"],
                          poll=config["bootstrap_poll_interval"])
         native_task_id = verify_worker_admission(snap.state, join_code)
@@ -803,10 +779,14 @@ def stop(args):
         require(active_path.exists(), "no_router_active_state")
         current = _load_private_json(active_path)
         _request_stop(current)
-        config = _load_config(args.config); _set_google_env(config)
-        from examples.google_clients import create_docs_client
-        try: docs = create_docs_client()
-        except Exception: docs = None  # Still stop our local process; closure remains unverified.
+        try:
+            config = _load_config(args.config); _set_google_env(config)
+            from examples.google_clients import create_docs_client
+            docs = create_docs_client()
+        except Exception:
+            # Broken settings, missing SDKs or offline auth never prevent exact
+            # local shutdown. Missing authoritative closure remains explicit.
+            config = {}; docs = None
         return _cleanup(docs, active_path, current, config)
 
 
@@ -816,6 +796,7 @@ def main():
     p.add_argument("--config", default=str(DEFAULT_CONFIG)); p.add_argument("--active", default=str(DEFAULT_ACTIVE))
     p.add_argument("--folder-id"); p.add_argument("--credentials"); p.add_argument("--workdir"); p.add_argument("--codex")
     p.add_argument("--launch-codex", action="store_true")
+    p.add_argument("--copy-join", action="store_true", help="Explicitly copy this session join message; no secret stdout")
     p.add_argument("--model", "-m", help="Native model for a new session; requires --effort")
     p.add_argument("--effort", help="Explicit reasoning effort for a new session; requires --model")
     p.add_argument("--catalog", help="Supported capability snapshot JSON; never a live entitlement probe")
