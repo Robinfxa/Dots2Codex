@@ -146,9 +146,14 @@ class GlobalStagedCLIIntegrationTests(unittest.TestCase):
         self.assertFalse(out['native_invoked_by_python'])
         self.parent('check-native', plan_file=self.spawn_path)
         self.actual_arguments = out['arguments']
-        self.child_descriptor = json.loads(self.actual_arguments['message'].rsplit('\n', 1)[1])
-        self.assertEqual(self.child_descriptor['selection'], self.selection)
-        self.assertEqual(self.child_descriptor['route_id'], self.rid)
+        # The real submitted message now carries only the exact private artifact
+        # reference. Do not parse/reconstruct an expanded inline descriptor.
+        self.spawn_packet = json.loads(self.spawn_path.read_bytes())
+        self.handoff_reference = self.spawn_packet['handoff']
+        self.assertEqual(self.actual_arguments, self.spawn_packet['arguments'])
+        self.assertIn(self.handoff_reference['path'], self.actual_arguments['message'])
+        self.assertIn(self.handoff_reference['sha256'], self.actual_arguments['message'])
+        self.assertNotIn(self.code, self.actual_arguments['message'])
         self.actual_native_result = {'task_name': '/root/synthetic_parent/'+out['arguments']['task_name']}
         self.child_id = self.actual_native_result['task_name']
         self.receipt_path = self.path('admission-receipt')
@@ -193,7 +198,20 @@ class GlobalStagedCLIIntegrationTests(unittest.TestCase):
         out = self.parent('import-child-admission', route_id=self.rid,
             admission_receipt=self.receipt_path, child_native_task_id=self.child_id, **arguments)
         self.assertTrue(out['imported'])
+        # Exercise actual child consumption only after successful parent import.
+        # It must verify the artifact and imported receipt before releasing JOIN.
+        consumed = self.run_cli('remote_transport.global_handoff', 'consume',
+            handoff_file=self.handoff_reference['path'], sha256=self.handoff_reference['sha256'],
+            native_task_id=self.child_id, admission_receipt=self.receipt_path)
+        self.assertTrue(consumed['verified']); self.assertTrue(consumed['read_only'])
+        self.child_descriptor = consumed['descriptor']
+        self.assertEqual(self.child_descriptor['selection'], self.selection)
+        self.assertEqual(self.child_descriptor['route_id'], self.rid)
+        self.assertEqual(self.child_descriptor['state_dir'], self.spawn_packet['child_state_dir'])
+        self.assertEqual(self.child_descriptor['expected_bootstrap_root'], bootstrap.root_context(self.child_state))
+        self.assertEqual(self.child_descriptor['join_code'], queue.child_code(self.code, self.generation, self.rid))
         self.assertEqual(out['child_state_dir'], self.child_descriptor['state_dir'])
+        self.child_code_file = self.file(self.child_descriptor['join_code'].encode(), 'consumed-child-code')
         self.child_dir = Path(out['child_state_dir'])
         self.assertNotEqual(self.parent_dir, self.child_dir)
         return out

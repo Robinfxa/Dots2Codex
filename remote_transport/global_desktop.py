@@ -7,6 +7,7 @@ effects and config writes occur only after their separate displayed consents.
 from __future__ import annotations
 import argparse
 import concurrent.futures
+from contextlib import contextmanager
 import hashlib
 import http.client
 import json
@@ -47,6 +48,61 @@ def safe_error(exc):
     return value if isinstance(exc, (ProtocolError, ValueError, RuntimeError)) and re.fullmatch(r'[a-z][a-z0-9_]{1,160}', value) else type(exc).__name__
 
 
+class _PreparationReads:
+    """One Drive caller, with owner-only Docs recovery and a drained pause fence."""
+    def __init__(self, docs, bridge):
+        self.docs, self.bridge = docs, bridge
+        self.cancelled = threading.Event()
+        self.pause_requested = threading.Event()
+        self.condition = threading.Condition()
+        self.state = None; self.snapshot = None
+        self.expires = None; self.deadline = None
+        if docs.paused: self.pause_requested.set()
+
+    def limit(self, expires):
+        require(self.expires is None, 'global_resource_preparation_deadline_already_set')
+        self.expires = expires
+        self.deadline = self.docs.monotonic() + max(0, expires-self.docs.now())
+
+    def check(self):
+        require(not self.cancelled.is_set(), 'global_resource_preparation_cancelled')
+        require(self.expires is None or (self.docs.now() < self.expires and self.docs.monotonic() < self.deadline),
+                'global_resource_preparation_expired')
+
+    def drive(self, check, function, *args):
+        # Worker lifecycle checks never touch the Docs client or its credentials.
+        # Holding the gate through each Drive RPC and its receipt makes pause
+        # acknowledgment a drain barrier.
+        with self.condition:
+            while True:
+                self.check(); self.docs._check()
+                if not self.pause_requested.is_set():
+                    check()
+                    return function(*args)
+                self.condition.wait(.1)
+
+    def pause(self, function):
+        # Publish intent before waiting for an in-flight effect. A queued task
+        # cannot acquire the gate repeatedly and starve the owner's pause.
+        self.pause_requested.set()
+        with self.condition: function()
+
+    def resume(self, snapshot):
+        with self.condition:
+            self.snapshot = snapshot; self.state = snapshot.state
+            self.pause_requested.clear()
+            self.condition.notify_all()
+
+    def reconcile(self):
+        require(threading.get_ident() == self.docs.owner, 'global_docs_recovery_owner_required')
+        self.check()
+        return self.docs.reconcile(self.bridge)
+
+    def cancel(self):
+        self.cancelled.set()
+        with self.condition: self.condition.notify_all()
+
+
 class RecoveringDocs:
     """Retry an exhausted transient GET in place, never its enclosing operation.
 
@@ -63,9 +119,29 @@ class RecoveringDocs:
         self.expires = min(int(spec['expires']), int(store.activation(spec['generation'])['expires']))
         self.last_now = self.now(); self.deadline = self.monotonic() + max(0, self.expires - self.last_now)
         self.paused = False; self.stopping = False
+        self.preparation = None; self.check_lock = threading.RLock()
         self.setup_expires = None; self.setup_deadline = None
 
+    @contextmanager
+    def preparation_scope(self, bridge):
+        require(threading.get_ident() == self.owner and self.preparation is None,
+                'global_docs_preparation_owner_required')
+        scope = _PreparationReads(self, bridge)
+        self.preparation = scope
+        try:
+            scope.reconcile()
+            yield scope
+        finally:
+            scope.cancel()
+            self.preparation = None
+
     def _check(self):
+        # Lifecycle checks also run at worker dispatch. They never touch the
+        # Docs client; serialize the clock high-water mark across both callers.
+        with self.check_lock: self._check_locked()
+
+    def _check_locked(self):
+        if self.preparation is not None: self.preparation.check()
         now = self.now()
         require(now >= self.last_now, 'global_docs_recovery_clock_rollback')
         self.last_now = now
@@ -92,8 +168,12 @@ class RecoveringDocs:
                 if not exc.retryable: raise
                 self._check()
                 if not self.paused:
-                    self.store.pause_docs_reads(self.spec['generation'], self.token)
-                    self.paused = True
+                    def pause():
+                        self.store.pause_docs_reads(self.spec['generation'], self.token)
+                        self.paused = True
+                    if self.preparation is None: pause()
+                    else: self.preparation.pause(pause)
+                    self._check()
                 delay = min(READ_RECOVERY_DELAYS[min(failures, len(READ_RECOVERY_DELAYS)-1)],
                             self.expires-self.now(), self.deadline-self.monotonic())
                 failures += 1
@@ -111,10 +191,11 @@ class RecoveringDocs:
     def reconcile(self, bridge):
         """Clear only after fresh authenticated queue and heartbeat observation."""
         if not self.paused: return
+        require(threading.get_ident() == self.owner, 'global_docs_recovery_owner_required')
         from . import global_control as queue
         from .global_google import mirror_verified_queue
         self._check()
-        state = bridge.read().state
+        snapshot = bridge.read(); state = snapshot.state
         queue.verify(state, bridge.code, expected_root=bridge.source_root)
         require(not state['logical']['closed'], 'global_queue_closed')
         if state['logical']['controller'] is not None:
@@ -123,13 +204,16 @@ class RecoveringDocs:
         self.store.resume_docs_reads(self.spec['generation'], self.token)
         self.paused = False
         self.on_resume()
+        if self.preparation is not None: self.preparation.resume(snapshot)
         return state
 
     def stop_recovery(self):
         self.stopping = True
 
     def batch_update_document(self, *args, **kwargs):
-        if not self.stopping and threading.get_ident() == self.owner: self._check()
+        if not self.stopping and threading.get_ident() == self.owner:
+            if self.preparation is not None: self.preparation.reconcile()
+            self._check()
         return self.docs.batch_update_document(*args, **kwargs)
 
 
@@ -648,7 +732,7 @@ def supervise(runtime):
                                        on_pause=paused, on_resume=resumed)
             bridge = prepare_session(store, runtime / 'bridge', read_port, create_drive_client(), cfg['folder_id'],
                 mac_writer=cfg['mac_writer_identity'], worker_writer=cfg['worker_writer_identity'],
-                bootstrap_seconds=pilot.SETUP_SECONDS)
+                bootstrap_seconds=pilot.SETUP_SECONDS, parallel_preparation=True)
             read_port.reconcile(bridge)
             status('WAITING_CONTROLLER')
             plan = None; proof = None; preflight_failure = None; reservation = None

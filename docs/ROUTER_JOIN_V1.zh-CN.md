@@ -38,6 +38,18 @@ Global controller 已经接纳的 child 例外：先等待父上下文完成
 后续 `plan-admit` 仍须提交完全相同的 `--admission-receipt`，不能仅凭 receipt 绕过本地证据。
 详见 [Global parent import procedure](GLOBAL_NATIVE_CONTROLLER.md#active-native-controller-procedure)。
 
+### Global 已接纳 child 的优先入口
+
+新的固定 handoff 消息会直接给出 `router_pairing emit-cell --phase pair` 命令。收到父上下文的真实 import 确认后，替换消息里的实际平台身份和 receipt 占位符，并选择消息指定的新私有 cell 文件。该命令内部执行完整 handoff/已导入证据校验；不必先单独运行 `global_handoff consume`。保存返回的 SHA-256，仅在当前活跃原生上下文执行这份精确生成的 `functions.exec` JavaScript；Node 仅作离线测试，Python 不调用 connector 或执行推理。
+
+- `phase pair`：完整校验 import，fresh-read bootstrap，持久化反向 probe reservation，重叠两个独立 raw-file 分支，逐项核验后进行一次 admit CAS 和确切读回
+- 如果 admit 的确切读回已包含合法 `BUNDLE_READY`，直接复用该同次读回，加上 fresh control，执行原有 materialize/ready 校验与一次 ready CAS；否则返回 `action=wait_for_bundle`
+- 收到上述明确等待状态后，可以在仍活跃、有界的流程里只读观察 bundle；随后以同一 handoff/receipt 生成新的 `--phase ready` cell，它 fresh-read bootstrap/control，不重新上传 probe 或重发 admit
+- `action=stop_no_replay`、未知写入或部分证据失败都必须停止；不能重新执行 pair，也不能改走手工步骤来绕过已经烧掉的 reservation
+- `action=paired` 之后按已验证 runtime 的并行 connector 执行指引继续；这不证明真实推理已经返回，也不允许创建替代 worker
+
+下方手工命令仍是独立兼容路径，供尚未开始新 cell 的上下文使用。不要在一个已启动的配对上混用两条写入路径。两条路径都保留实际 raw 字节、精确 CAS revision/readback、固定身份和状态目录、当前过期检查；没有自动唤醒或隐藏轮询。
+
 消息包含 bootstrap_document_id、bootstrap_tab_id、join_code。通过受信任的文件写入方式把
 join_code 保存到 `JOIN_CODE_PRIVATE.txt`，权限 0600，父目录 0700。不要把 code 插入 shell 命令、
 CLI 参数或环境变量。其余证据文件也应是 0600。
@@ -60,6 +72,8 @@ python3 -m remote_transport.router_join inspect \
 
 ## 2. 平台接纳与双向 raw-file probe
 
+下述 native 接纳只适用于尚未由 Global parent 完成接纳与导入的上下文。Global child 已有真实接纳证据，不能再次生成 native 计划或 spawn。
+
 若 `inspect.required_selection` 不为空，必须先按[模型选择规程第 3 节](MODEL_SELECTION.zh-CN.md#3-dots-端必须真实接纳指定组合)
 运行 `plan-native`，由可信父上下文实际调用计划中的 `collaboration.spawn_agent`，再运行
 `record-native` 保存真实返回证据。此路径使用 bootstrap V3；后续 `plan-admit` 必须增加
@@ -68,6 +82,19 @@ python3 -m remote_transport.router_join inspect \
 
 使用平台实际支持的接纳机制创建本轮专用 native worker，记录真实 `ACTUAL_NATIVE_TASK_ID`。
 不要把未来模型请求正文放入 spawn prompt，也不要把计划中的身份当作已接纳身份。
+
+### 已接纳 child 的双向 probe 并行顺序
+
+在 Global 的实际 parent import（或其他配对的真实 native 接纳记录）与签名 bootstrap inspect 都成功以后，可以把两个独立的外部 I/O 分支放在同一个有限执行段中：
+
+1. 先串行调用一次 `prepare-probe`，将反向 probe 字节及一次性 reservation 落盘；准备失败就停止，不启动上传
+2. 分支 A：读取已验证 forward file ID 的 metadata，再使用该返回值提供的原始下载引用取得真实 raw bytes
+3. 分支 B：把已预留的反向 probe 原字节上传一次，保存真实返回 ID，再按该 ID 回读 metadata/raw bytes 并核验
+4. 两个分支都结束后，串行执行 `verify-forward-probe` 等会修改同一 ledger 的 helper；两边证据都成功才 fresh-read bootstrap 并生成 `plan-admit`
+
+这只是现有工具的安全调度顺序，不会减少任何 probe 校验或赋予新权限。每个分支内部的数据依赖不可并行：不能在 metadata 返回前猜下载 URL，也不能在上传返回前猜 file ID。外部工具调用可并行，同一个 ledger 的修改不并行。任一分支失败，都要保留已返回的实际证据并等待已经发出的操作结束；不能重新上传、重新准备 probe、换目录或执行后续 CAS。无结果的已发出上传仍为未知，不把取消当作未执行证明。
+
+非 Global 的配对也必须先完成本节要求的真实 native 接纳；等待接纳时不能提前进行 probe。上述顺序没有后台任务、定时器或自动重试。
 
 ### Mac → connector
 

@@ -86,8 +86,11 @@ def materialize(root, source):
     return {'path':str(path),'bytes':len(raw),'sha256':hash_bytes(raw)}
 
 
-def packet_chunk(path, expected_sha256=None, offset=0, max_chars=16384):
-    require(type(offset) is int and offset>=0 and type(max_chars) is int and 1<=max_chars<=16384,
+def packet_chunk(path, expected_sha256=None, offset=0, max_chars=16384, *, large_output=False):
+    require(type(large_output) is bool,'invalid_packet_chunk_range')
+    char_limit=65536 if large_output else 16384
+    byte_limit=64000 if large_output else 16000
+    require(type(offset) is int and offset>=0 and type(max_chars) is int and 1<=max_chars<=char_limit,
             'invalid_packet_chunk_range')
     raw=read_private_file(Path(path),MAX_STATE)
     digest=hash_bytes(raw)
@@ -98,9 +101,9 @@ def packet_chunk(path, expected_sha256=None, offset=0, max_chars=16384):
         return {'text':text[offset:end],'offset_chars':offset,'next_offset_chars':end,
                 'total_chars':len(text),'eof':end==len(text),'sha256':digest}
     # Bound serialized OUTPUT bytes as well as character count, including JSON
-    # escaping and worst-case Unicode. The native shell cap is token-based; a
-    # 20k token budget is conservative for at most 16k bytes of JSON output.
-    while len(json.dumps(packet(end),ensure_ascii=False).encode('utf-8'))>16000:
+    # escaping and worst-case Unicode. The opt-in wide mode requires a larger
+    # shell output budget. Legacy readers keep their unchanged 16k byte bound.
+    while len(json.dumps(packet(end),ensure_ascii=False).encode('utf-8'))>byte_limit:
         end=offset+(end-offset)//2
     return packet(end)
 
@@ -126,14 +129,16 @@ def main():
     p.add_argument('operation',choices=['capture','capture-begin','capture-append','capture-seal','unwrap-capture','materialize','input-chunk','packet-chunk'])
     p.add_argument('--root');p.add_argument('--source');p.add_argument('--path');p.add_argument('--sha256')
     p.add_argument('--offset',type=int,default=0);p.add_argument('--max-chars',type=int,default=12000)
+    p.add_argument('--large-output',action='store_true')
     a=p.parse_args();os.umask(0o077)
+    require(not a.large_output or a.operation=='packet-chunk','invalid_large_packet_chunk_operation')
     if a.operation=='capture':value=capture(a.root,sys.stdin.buffer.read(MAX_STATE+1))
     elif a.operation=='capture-begin':value=begin_capture(a.root)
     elif a.operation=='capture-append':value=append_capture(a.root,a.path,a.offset,sys.stdin.buffer.read(65537))
     elif a.operation=='capture-seal':value=seal_capture(a.root,a.path)
     elif a.operation=='unwrap-capture':value=unwrap_capture(a.root,a.path)
     elif a.operation=='materialize':value=materialize(a.root,a.source)
-    elif a.operation=='packet-chunk':value=packet_chunk(a.path,a.sha256,a.offset,a.max_chars)
+    elif a.operation=='packet-chunk':value=packet_chunk(a.path,a.sha256,a.offset,a.max_chars,large_output=a.large_output)
     else:value=input_chunk(a.path,a.sha256,a.offset,a.max_chars)
     print(json.dumps(value,ensure_ascii=False))
 

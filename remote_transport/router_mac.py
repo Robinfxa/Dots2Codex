@@ -132,7 +132,11 @@ def _create_workspace_doc(drive, folder_id, title):
 
 
 def _blank_doc_info(docs, document_id):
-    doc = docs.get_document(document_id)
+    return _blank_resource_info(docs.get_document(document_id), document_id)
+
+
+def _blank_resource_info(doc, document_id):
+    require(isinstance(doc, dict), "router_document_mismatch")
     require(doc.get("documentId") == document_id, "router_document_mismatch")
     tabs = doc.get("tabs")
     require(type(tabs) is list and len(tabs) == 1, "router_single_tab_required")
@@ -156,8 +160,12 @@ def _finish_operation(path, record, **changes):
     return record
 
 
-def _initialize_bootstrap(docs, document_id, tab_id, state, runtime):
-    doc = docs.get_document(document_id)
+def _initialize_bootstrap(docs, document_id, tab_id, state, runtime, *, source_resource=None):
+    # Only an exact full blank resource captured earlier in this same bounded
+    # preparation may be supplied. The provider revision still guards the write.
+    doc = docs.get_document(document_id) if source_resource is None else source_resource
+    actual_tab, doc = _blank_resource_info(doc, document_id)
+    require(actual_tab == tab_id, "router_tab_id_mismatch")
     require(_document_text(doc, tab_id) == "\n", "bootstrap_document_must_be_blank")
     revision = doc.get("revisionId"); require(isinstance(revision, str) and revision, "bootstrap_revision_required")
     args = {"document_id": document_id,
@@ -421,7 +429,7 @@ def configure(args):
     return Launcher(config=args.config, active=getattr(args, "active", DEFAULT_ACTIVE)).configure(args)
 
 
-def _create_doc_once(drive, docs, active_path, active, config, label):
+def _create_doc_once(drive, docs, active_path, active, config, label, *, return_snapshot=False):
     _check_cancelled(active)
     title = "Dots2Codex Router " + label + " " + active["session_id"]
     path, rec = _operation(active["runtime"], "create-" + label.lower(),
@@ -434,8 +442,9 @@ def _create_doc_once(drive, docs, active_path, active, config, label):
     # Record the returned ID before any later read can fail.
     active = _write_active(active_path, active, **{label.lower() + "_document_id": document_id})
     _finish_operation(path, rec, status="returned", document_id=document_id)
-    tab_id, _ = _blank_doc_info(docs, document_id)
-    return _write_active(active_path, active, **{label.lower() + "_tab_id": tab_id})
+    tab_id, resource = _blank_doc_info(docs, document_id)
+    result = _write_active(active_path, active, **{label.lower() + "_tab_id": tab_id})
+    return (result, resource) if return_snapshot else result
 
 
 def _create_forward_probe(raw_drive, active, config):

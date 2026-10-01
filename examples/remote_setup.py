@@ -12,7 +12,12 @@ from remote_transport.model import ProtocolError, require
 from .google_clients import create_drive_client, create_docs_client
 
 
-def initialize_blank(client, pin, document_id, tab_id, control_id, writer_identity):
+def initialize_blank(client, pin, document_id, tab_id, control_id, writer_identity, *, return_snapshot=False):
+    """Initialize once and verify once; optionally return that exact readback.
+
+    The default operator-facing result is unchanged. A composing caller may use
+    the verified snapshot immediately instead of issuing a duplicate GET.
+    """
     document = client.get_document(document_id)
     require(document.get("documentId") == document_id, "control_document_mismatch")
     require(_document_text(document, tab_id) == "\n", "control_document_must_be_blank")
@@ -29,7 +34,10 @@ def initialize_blank(client, pin, document_id, tab_id, control_id, writer_identi
             "control_initialization_unverified")
     control = GoogleDocsCASControlStore(client, document_id, tab_id, control_id,
         pin.body["identity"]["session_id"], writer_identity)
-    require(control.read().state == state, "control_initialization_readback_mismatch")
+    verified = control.read()
+    require(verified.state == state, "control_initialization_readback_mismatch")
+    if return_snapshot:
+        return verified
     return {"initialized": True, "phase": "IDLE", "native_execution_authorized": False}
 
 

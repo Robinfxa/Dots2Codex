@@ -16,11 +16,10 @@ function fixture({lost=false,failVerify=false}={}){
   };
   return {calls,diagnostics,io,cell:createGlobalControllerCell(io)};
 }
-test('JOIN is accepted then immediate first heartbeat before returning',async()=>{
+test('Strict JOIN and real first heartbeat pair is accepted by one checked CAS',async()=>{
   const f=fixture();const result=await f.cell.joinAndFirstHeartbeat({capacity:3,seconds:14400});
   assert.equal(result.verified,true);assert.deepEqual(f.calls,[
-    'read','plan:join','check','write:join','read','verify:join','nextSecond',
-    'read','plan:heartbeat','check','write:heartbeat','read','verify:heartbeat']);
+    'read','plan:join-heartbeat','check','write:join-heartbeat','read','verify:join-heartbeat']);
 });
 test('Unknown write is only reconciled by readback; no second write',async()=>{
   const f=fixture({lost:true});await f.cell.heartbeat();
@@ -43,42 +42,41 @@ function routeFixture(options={}){
   f.io.heartbeatDue=async()=>{f.calls.push('due');return due[index++];};
   const plan=f.io.plan;
   f.io.plan=async(kind,source,extra)=>{
-    if(kind==='claim'||kind==='begin')assert.deepEqual(extra,{routeId:'synthetic-route'});
+    if(kind==='claim-startup')assert.deepEqual(extra,{routeId:'synthetic-route'});
     return plan(kind,source);
   };
   return f;
 }
-test('Grouped route uses separate verified claim and fresh begin without native planning',async()=>{
+test('Grouped route uses one checked exact claim/begin CAS without native planning',async()=>{
   const f=routeFixture();const result=await f.cell.claimAndBegin({routeId:'synthetic-route'});
   assert.equal(result.claim_verified,true);assert.equal(result.begin_verified,true);
   assert.equal(result.native_spawn_prepared,false);
-  assert.deepEqual(f.calls,['read','due','plan:claim','check','write:claim','read','verify:claim','due',
-    'read','plan:begin','check','write:begin','read','verify:begin','due']);
+  assert.deepEqual(f.calls,['read','plan:claim-startup','check','write:claim-startup','read','verify:claim-startup','due']);
 });
-test('Due heartbeats are verified before, between and after route CAS without a timer',async()=>{
+test('Due trailing heartbeat is verified after host-selected atomic startup group without a timer',async()=>{
   const f=routeFixture({due:[true,true,true]});await f.cell.claimAndBegin({routeId:'synthetic-route'});
   assert.deepEqual(f.calls.filter(x=>x.startsWith('write:')),
-    ['write:heartbeat','write:claim','write:heartbeat','write:begin','write:heartbeat']);
+    ['write:claim-startup','write:heartbeat']);
   for(let i=0;i<f.calls.length;i++)if(f.calls[i].startsWith('write:'))assert.equal(f.calls[i-1],'check');
   assert.equal(f.calls.filter(x=>x==='nextSecond').length,0);
 });
-test('Unknown claim acceptance cannot trigger begin or a due heartbeat',async()=>{
+test('Unknown grouped acceptance cannot trigger a due heartbeat',async()=>{
   const f=routeFixture({lost:true,failVerify:true});
   await assert.rejects(f.cell.claimAndBegin({routeId:'synthetic-route'}),/global_cas_outcome_unknown_no_replay/);
-  assert.deepEqual(f.calls.filter(x=>x.startsWith('write:')),['write:claim']);
-  assert.equal(f.calls.filter(x=>x==='due').length,1);
+  assert.deepEqual(f.calls.filter(x=>x.startsWith('write:')),['write:claim-startup']);
+  assert.equal(f.calls.filter(x=>x==='due').length,0);
 });
-test('Unverified claim result fails closed before begin',async()=>{
+test('Unverified grouped result fails closed before heartbeat',async()=>{
   const f=routeFixture();f.io.verify=async()=>({verified:false});
-  await assert.rejects(f.cell.claimAndBegin({routeId:'synthetic-route'}),/global_claim_unverified/);
-  assert.deepEqual(f.calls.filter(x=>x.startsWith('write:')),['write:claim']);
+  await assert.rejects(f.cell.claimAndBegin({routeId:'synthetic-route'}),/global_claim_begin_unverified/);
+  assert.deepEqual(f.calls.filter(x=>x.startsWith('write:')),['write:claim-startup']);
 });
-test('Unknown begin cannot trigger trailing heartbeat or native planning',async()=>{
-  const f=routeFixture({due:[false,false,true]}),verify=f.io.verify;
-  f.io.verify=async(plan,...args)=>{if(plan.kind==='begin')throw Error('stale');return verify(plan,...args);};
+test('Unknown grouped readback cannot trigger trailing heartbeat or native planning',async()=>{
+  const f=routeFixture({due:[true]}),verify=f.io.verify;
+  f.io.verify=async(plan,...args)=>{if(plan.kind==='claim-startup')throw Error('stale');return verify(plan,...args);};
   await assert.rejects(f.cell.claimAndBegin({routeId:'synthetic-route'}),/global_cas_outcome_unknown_no_replay/);
-  assert.deepEqual(f.calls.filter(x=>x.startsWith('write:')),['write:claim','write:begin']);
-  assert.equal(f.calls.filter(x=>x==='due').length,2);
+  assert.deepEqual(f.calls.filter(x=>x.startsWith('write:')),['write:claim-startup']);
+  assert.equal(f.calls.filter(x=>x==='due').length,0);
 });
 test('Expired route dispatch check stops before any write or subsequent operation',async()=>{
   const f=routeFixture();f.io.check=async()=>{throw Error('global_cas_dispatch_window_expired_no_replay');};
@@ -86,10 +84,10 @@ test('Expired route dispatch check stops before any write or subsequent operatio
   assert.equal(f.calls.some(x=>x.startsWith('write:')),false);
   assert.equal(f.calls.includes('plan:begin'),false);
 });
-test('Reconciled lost route responses retain exactly one write per operation',async()=>{
+test('Reconciled lost grouped response retains exactly one write for both events',async()=>{
   const f=routeFixture({lost:true});const result=await f.cell.claimAndBegin({routeId:'synthetic-route'});
   assert.equal(result.begin_verified,true);
-  assert.deepEqual(f.calls.filter(x=>x.startsWith('write:')),['write:claim','write:begin']);
+  assert.deepEqual(f.calls.filter(x=>x.startsWith('write:')),['write:claim-startup']);
 });
 
 test('Closed before JOIN is distinct and never dispatches a write',async()=>{
@@ -106,7 +104,7 @@ test('Lost write diagnostic is saved before failed readback, without heartbeat o
     return {epoch:0};
   };
   await assert.rejects(f.cell.joinAndFirstHeartbeat({}),/global_cas_outcome_unknown_no_replay/);
-  assert.equal(f.calls.filter(x=>x==='write:join').length,1);
+  assert.equal(f.calls.filter(x=>x==='write:join-heartbeat').length,1);
   assert.equal(f.calls.filter(x=>x==='write:heartbeat').length,0);
   assert.equal(f.diagnostics.length,2);
   assert.equal(f.diagnostics[0].context.stage,'write');
@@ -126,7 +124,7 @@ test('Failed private diagnostic capture is neither repeated nor followed by anot
   f.io.recordFailure=async()=>{captures++;throw Error('global_private_diagnostic_capture_failed_no_replay');};
   await assert.rejects(f.cell.joinAndFirstHeartbeat({}),/global_private_diagnostic_capture_failed_no_replay/);
   assert.equal(captures,1);assert.equal(f.calls.filter(x=>x==='read').length,1);
-  assert.equal(f.calls.filter(x=>x==='write:join').length,1);
+  assert.equal(f.calls.filter(x=>x==='write:join-heartbeat').length,1);
 });
 
 function adapterFixture({writeError=null,writeResult=null,verificationError=null,planError=null,readbackError=null}={}) {
@@ -144,18 +142,22 @@ function adapterFixture({writeError=null,writeResult=null,verificationError=null
       commands.push(cmd);
       if(cmd.includes("'packet-chunk'")) {
         const text=JSON.stringify(nextResult);return {exit_code:0,output:JSON.stringify({offset_chars:0,text,
-          sha256:'synthetic-hash',next_offset_chars:text.length,eof:true})};
+          sha256:'a'.repeat(64),next_offset_chars:text.length,total_chars:text.length,eof:true})};
       }
       const error=cmd.includes("'verify'")?verificationError:
-        cmd.includes("'plan-join'")||cmd.includes("'plan-heartbeat'")?planError:null;
+        cmd.includes("'plan-join'")||cmd.includes("'plan-join-heartbeat'")||cmd.includes("'plan-heartbeat'")?planError:null;
       if(error)return {exit_code:1,output:JSON.stringify(error)};
-      if(cmd.includes("'inspect'"))nextResult={controller:{heartbeat_at:Date.now()/1000},
+      if(cmd.includes("'inspect-heartbeat'"))nextResult={controller:{heartbeat_at:Date.now()/1000},
         controller_timing:{heartbeat_interval_seconds:25},first_heartbeat_required:false};
       else if(cmd.includes("'check-cas'"))nextResult={dispatch_allowed:true,checked_at:Date.now()/1000,execute_before:Date.now()/1000+120};
       else if(cmd.includes("'verify'"))nextResult={verified:true,first_heartbeat_required:false,heartbeat_due_at:Date.now()/1000+25};
-      else nextResult={plan_file:'/private/synthetic-plan.json',operation_id:'synthetic-operation',
-        tool_arguments:{document_id:'synthetic-doc',write_control:{requiredRevisionId:'synthetic-revision'}}};
-      return {exit_code:0,output:'null'};
+      else {const now=Date.now()/1000;nextResult={plan_file:'/private/synthetic-plan.json',operation_id:'synthetic-operation',
+        tool_arguments:{document_id:'synthetic-doc',write_control:{requiredRevisionId:'synthetic-revision'}},
+        execute_before:now+120,dispatch_check:{dispatch_allowed:true,checked_at:now,execute_before:now+120}};}
+      if(cmd.includes("'--inline-evidence'"))nextResult={...nextResult,snapshot_file:'/private/exact-inline-snapshot'};
+      const text=JSON.stringify(nextResult);
+      return {exit_code:0,output:cmd.includes("'--result-first-chunk'")?JSON.stringify({offset_chars:0,text,
+        sha256:'a'.repeat(64),next_offset_chars:text.length,total_chars:text.length,eof:true}):text};
     }
   };
   const adapter=createGlobalControllerToolAdapter(tools,{cwd:'/private/package',stateDir:'/private/state',
@@ -163,13 +165,13 @@ function adapterFixture({writeError=null,writeResult=null,verificationError=null
     async value=>{captures.push(value);return '/private/capture-'+captures.length;});
   return {adapter,captures,calls,commands,diagnostics:()=>captures.filter(x=>x.contract==='dots-global-controller-diagnostic/1')};
 }
-test('Grouped tool adapter forwards exact route only to claim and begin helpers',async()=>{
+test('Grouped tool adapter forwards exact route to finite host-clock startup chooser',async()=>{
   const f=adapterFixture();await f.adapter.cell.claimAndBegin({routeId:'synthetic-route'});
-  const routePlans=f.commands.filter(x=>x.includes("'plan-claim'")||x.includes("'plan-begin'"));
-  assert.equal(routePlans.length,2);
+  const routePlans=f.commands.filter(x=>x.includes("'plan-claim-startup'"));
+  assert.equal(routePlans.length,1);
   for(const cmd of routePlans)assert.match(cmd,/'--route-id' 'synthetic-route'/);
   assert.equal(f.commands.some(x=>x.includes("'plan-native'")||x.includes("'check-native'")),false);
-  assert.deepEqual(f.calls,['read','write','read','read','write','read']);
+  assert.deepEqual(f.calls,['read','write','read']);
 });
 test('Tool-shaped write error retains category before closure verification but no provider text',async()=>{
   const f=adapterFixture({writeResult:{isError:true,structuredContent:{error:{code:429,status:'RESOURCE_EXHAUSTED',

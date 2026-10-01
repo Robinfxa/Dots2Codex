@@ -6,6 +6,7 @@ Codex config, or claim native readiness from a listening port. Defaults retain t
 production readiness gate; real Mac/connector acceptance is a separate step.
 """
 import argparse
+import concurrent.futures
 import copy
 import fcntl
 import os
@@ -13,6 +14,7 @@ import json
 from pathlib import Path
 import secrets
 import sqlite3
+import threading
 import time
 
 from . import global_control as queue
@@ -113,7 +115,7 @@ def mirror_verified_queue(store,state,code,pins=None):
 
 class GoogleQueueBridge:
     def __init__(self,store,root,docs,drive,initial_state,join_code,*,mac_writer='global-mac',worker_writer='global-native',
-                 bootstrap_seconds=600,request_seconds=14400):
+                 bootstrap_seconds=600,request_seconds=14400,parallel_preparation=False):
         queue.verify(initial_state,join_code)
         require(store.activation(initial_state['activation_id']) is not None,'global_activation_mismatch')
         require(type(bootstrap_seconds) is int and 60<=bootstrap_seconds<=1800 and type(request_seconds) is int
@@ -123,6 +125,10 @@ class GoogleQueueBridge:
         self.document_id=initial_state['document_id'];self.tab_id=initial_state['tab_id']
         self.config={'folder_id':initial_state['folder_id'],'mac_writer_identity':mac_writer,'worker_writer_identity':worker_writer}
         self.bootstrap_seconds=bootstrap_seconds;self.request_seconds=request_seconds;self.facades={}
+        require(type(parallel_preparation) is bool,'invalid_global_parallel_preparation')
+        # Explicit caller assertion: these ports have independent transports and
+        # credential objects. Unknown injected ports retain the serial path.
+        self.parallel_preparation=parallel_preparation
         self.lease=os.open(self.root/'bridge.lock',os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)
         try:fcntl.flock(self.lease,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError:
@@ -131,6 +137,15 @@ class GoogleQueueBridge:
         require(not (self.root/'stop-requested.json').exists(),'global_session_stopped_new_activation_required')
     def read(self):
         value=queue.snapshot(self.docs.get_document(self.document_id),self.document_id,self.tab_id)
+        return self._observe_snapshot(value)
+    def _observe_snapshot(self,value):
+        """Persist the full resource just read, without another provider GET.
+
+        Only same-operation reads/readbacks enter here; no cross-step snapshot is
+        retained. Authentication and durable prefix checks remain identical for
+        an ordinary read and an exact CAS readback.
+        """
+        require(value.document_id==self.document_id and value.tab_id==self.tab_id,'global_document_mismatch')
         queue.verify(value.state,self.code,expected_root=self.source_root,require_fresh=False)
         # Durable anti-rollback observation, including across process restarts.
         path=self.root/'queue-observation.json'
@@ -167,8 +182,9 @@ class GoogleQueueBridge:
         try:
             readback=self.docs.get_document(self.document_id)
             fresh=queue.verify_update(packet,response,readback,self.code)
-            # Anti-rollback read observes the actual latest document, not invented state.
-            self.read()
+            # Observe the exact authenticated provider readback, not the planned
+            # state or a second GET that could race a later controller event.
+            self._observe_snapshot(fresh)
         except Exception:
             mac._finish_operation(path,record,status='unknown');raise ProtocolError('global_mac_cas_unknown_no_retry') from None
         mac._finish_operation(path,record,status='verified',revision=fresh.revision_id);return fresh
@@ -178,9 +194,134 @@ class GoogleQueueBridge:
                 '\nRun one bounded active native Router controller using docs/GLOBAL_NATIVE_CONTROLLER.md. '
                 'Only this signed queue, folder, deadline and reviewed per-thread model pairs are authorized. '
                 'No background Python spawning or automatic wake. Never post this code in logs or third-party messages.')
+    def _prepare_resources(self,active_path,active,source,expires,recovery=None):
+        """Overlap independent ports, never calls on the same port.
+
+        All Docs work stays on the caller/RecoveringDocs owner thread. One finite
+        Drive worker serializes its transport and token-provider access. Separate
+        durable reservations precede writes; disjoint receipts and serialized
+        read/merge/write updates preserve every returned resource on failure.
+        """
+        # Active facades already use these ports. Limit newly introduced
+        # concurrency to cold preparation, where ownership is demonstrably
+        # exclusive; warm-route preparation retains its existing serial path.
+        if not self.parallel_preparation or self.facades:
+            active=mac._create_doc_once(self.drive,self.docs,active_path,active,self.config,'Control')
+            active,blank=mac._create_doc_once(self.drive,self.docs,active_path,active,self.config,'Bootstrap',return_snapshot=True)
+            return active,mac._create_forward_probe(self.drive,active,self.config),blank
+        blank_resources={}
+        cancelled=recovery.cancelled if recovery is not None else threading.Event()
+        merge_lock=threading.Lock()
+        def check():
+            require(not cancelled.is_set(),'global_resource_preparation_cancelled')
+            self._check_running();mac._check_cancelled(active)
+            now=time.time()
+            require(active['created']<=now<expires,'global_resource_preparation_expired')
+            activation=self.store.activation(source.state['activation_id'])
+            require(activation['enabled'] and now<activation['expires'],'global_activation_disabled')
+            with self.store.transaction() as db:
+                require(not self.store._docs_reads_paused(db),'global_docs_read_recovery_pending')
+            state=recovery.state if recovery is not None and recovery.state is not None else source.state
+            queue.require_active(state['logical']['controller'],state['controller_timing'],now,initialized=True)
+        def drive_call(function,*args):
+            if recovery is not None: return recovery.drive(check,function,*args)
+            check();return function(*args)
+        def merge(**changes):
+            with merge_lock:
+                current=mac._load_private_json(active_path)
+                require(current['session_id']==active['session_id'] and current['bootstrap_id']==active['bootstrap_id']
+                        and current['runtime']==active['runtime'],'global_child_runtime_mismatch')
+                return mac._write_active(active_path,current,**changes)
+        reservations={}
+        for label in ('Control','Bootstrap'):
+            title='Dots2Codex Router '+label+' '+active['session_id']
+            reservations[label]=mac._operation(active['runtime'],'create-'+label.lower(),
+                {'folder_id':self.config['folder_id'],'title':title})
+        check()
+        # Drive ID generation reserves an ID only; no object is created. The
+        # resulting exact upload attempt is durable before any creation starts.
+        nonce=secrets.token_hex(24)
+        raw=canonical({'contract':'dots-router-forward-probe/1','bootstrap_id':active['bootstrap_id'],'nonce':nonce})
+        forward={'file_id':self.drive.generate_id(),
+                 'name':'dots2codex-router-forward-probe-'+active['bootstrap_id']+'.json',
+                 'sha256':hash_bytes(raw),'nonce':nonce}
+        probe_path,probe_record=mac._operation(active['runtime'],'create-forward-probe',forward)
+        def create_document(label):
+            path,record=reservations[label]
+            check()
+            try:document_id=mac._create_workspace_doc(self.drive,self.config['folder_id'],record['arguments']['title'])
+            except Exception:
+                cancelled.set()
+                mac._finish_operation(path,record,status='unknown')
+                raise RuntimeError('router_document_create_unknown_no_retry') from None
+            # Even cancellation/expiry during the POST cannot discard its ID.
+            try:
+                mac._finish_operation(path,record,status='returned',document_id=document_id)
+                merge(**{label.lower()+'_document_id':document_id})
+            except BaseException:
+                cancelled.set();raise
+            return document_id
+        def upload_probe():
+            nonlocal probe_record
+            returned=self.drive.create_bytes(self.config['folder_id'],forward['name'],raw,forward['file_id'])
+            # Persist the returned ID inside the dispatch/drain barrier, even if
+            # pause, Stop or expiry occurred during the one-attempt upload.
+            probe_record=mac._finish_operation(probe_path,probe_record,status='returned',returned_file_id=returned)
+            require(returned==forward['file_id'],'forward_probe_returned_id_mismatch')
+        def create_probe():
+            try:
+                drive_call(upload_probe)
+                meta=drive_call(self.drive.get_metadata,forward['file_id'])
+                require(meta.get('id')==forward['file_id'] and meta.get('name')==forward['name'] and meta.get('trashed') is False
+                        and self.config['folder_id'] in meta.get('parents',[]),'forward_probe_metadata_mismatch')
+                require(drive_call(self.drive.get_bytes,forward['file_id'],131072)==raw,'forward_probe_raw_mismatch')
+                drive_call(lambda: None)
+            except Exception:
+                cancelled.set()
+                mac._finish_operation(probe_path,probe_record,status='unknown')
+                raise RuntimeError('forward_probe_outcome_unknown_no_retry') from None
+            mac._finish_operation(probe_path,probe_record,status='verified')
+            return forward
+        executor=concurrent.futures.ThreadPoolExecutor(max_workers=1,thread_name_prefix='global-prepare-drive')
+        def guarded(function,*args):
+            try:return function(*args)
+            except BaseException:
+                # Fence the next queued task before this worker releases it,
+                # even if the owner has not observed this future's failure yet.
+                cancelled.set();raise
+        try:
+            futures={label:executor.submit(guarded,drive_call,create_document,label) for label in ('Control','Bootstrap')}
+            probe_future=executor.submit(guarded,create_probe)
+            for label in ('Control','Bootstrap'):
+                document_id=futures[label].result()
+                check();tab_id,resource=mac._blank_doc_info(self.docs,document_id)
+                blank_resources[label]=resource
+                if recovery is not None: recovery.reconcile()
+                check()
+                merge(**{label.lower()+'_tab_id':tab_id})
+            probe_future.result();check()
+        except BaseException:
+            cancelled.set()
+            raise
+        finally:
+            # No caller can advance/return while an in-flight effect could still
+            # update its receipt. Unstarted reservations stay burned, not retried.
+            executor.shutdown(wait=True,cancel_futures=True)
+        return mac._load_private_json(active_path),forward,blank_resources['Bootstrap']
     def prepare_child(self,route_id):
+        scope=getattr(self.docs,'preparation_scope',None)
+        if self.parallel_preparation and not self.facades and callable(scope):
+            with scope(self) as recovery:
+                result=self._prepare_child(route_id,recovery)
+                recovery.reconcile()
+                return result
+        return self._prepare_child(route_id)
+    def _prepare_child(self,route_id,recovery=None):
         self._check_running()
-        source=self.read();route=self.store.route(route_id)
+        source=self.read()
+        if recovery is not None:
+            if recovery.reconcile() is not None: source=recovery.snapshot
+        route=self.store.route(route_id)
         queue.require_active(source.state['logical']['controller'],source.state['controller_timing'],time.time(),initialized=True)
         require(route['state']=='pending' and route['generation']==source.state['activation_id'],'global_local_demand_not_pending')
         require(route_id not in source.state['logical']['demands'],'global_demand_already_published')
@@ -197,10 +338,10 @@ class GoogleQueueBridge:
                 'worker_config_file':str(runtime/'worker-config.json'),'control_initialization_attempted':False}
         mac._private_json(active_path,active);cc=queue.child_code(self.code,source.state['activation_id'],route_id)
         mac._private_json(runtime/'private-pairing.json',{'join_code':cc})
-        active=mac._create_doc_once(self.drive,self.docs,active_path,active,self.config,'Control')
-        active=mac._create_doc_once(self.drive,self.docs,active_path,active,self.config,'Bootstrap')
-        forward=mac._create_forward_probe(self.drive,active,self.config)
         expires=min(int(route['expires']),source.state['expires'])
+        preparation_expires=min(expires,now+self.bootstrap_seconds,source.state['logical']['controller']['lease_expires'])
+        if recovery is not None: recovery.limit(preparation_expires)
+        active,forward,blank=self._prepare_resources(active_path,active,source,preparation_expires,recovery)
         initial=child.initial_state(bootstrap_id=active['bootstrap_id'],session_id=route_id,created=now,
                     expires=min(expires,now+self.bootstrap_seconds,source.state['logical']['controller']['lease_expires']),join_code=cc,folder_id=self.config['folder_id'],
                     control_document_id=active['control_document_id'],control_tab_id=active['control_tab_id'],
@@ -208,7 +349,14 @@ class GoogleQueueBridge:
                     worker_writer_identity=self.config['worker_writer_identity'],bootstrap_document_id=active['bootstrap_document_id'],
                     bootstrap_tab_id=active['bootstrap_tab_id'],forward_probe=forward,required_selection=json.loads(route['selection']))
         active=mac._write_active(active_path,active,bootstrap_root=child.root_context(initial))
-        mac._initialize_bootstrap(self.docs,active['bootstrap_document_id'],active['bootstrap_tab_id'],initial,runtime)
+        self._check_running();mac._check_cancelled(active)
+        require(now<=time.time()<preparation_expires,'global_resource_preparation_expired')
+        activation=self.store.activation(source.state['activation_id'])
+        require(activation['enabled'] and time.time()<activation['expires'],'global_activation_disabled')
+        current=recovery.state if recovery is not None and recovery.state is not None else source.state
+        queue.require_active(current['logical']['controller'],current['controller_timing'],time.time(),initialized=True)
+        mac._initialize_bootstrap(self.docs,active['bootstrap_document_id'],active['bootstrap_tab_id'],initial,runtime,source_resource=blank)
+        if recovery is not None: recovery.reconcile()
         mac._write_active(active_path,active,stage='WAITING_FOR_WORKER')
         return self.event('demand',{'route_id':route_id,'generation':route['generation'],
                     'identity_sha256':hash_bytes(canonical(json.loads(route['identity']))),'selection':json.loads(route['selection']),
@@ -260,22 +408,29 @@ class GoogleQueueBridge:
             active=mac._write_active(active_path,active,control_initialization_attempted=True)
             arguments={'document_id':active['control_document_id'],'pin':pin.oid}
             op=runtime/'initialize-control.json'
+            initialized=None
             if op.exists():
                 record=mac._load_private_json(op)
                 require(record['arguments']==arguments,'global_control_initialization_binding_mismatch')
             else:
                 op,record=mac._operation(runtime,'initialize-control',arguments)
                 from examples.remote_setup import initialize_blank
-                try:initialize_blank(self.docs,pin,active['control_document_id'],active['control_tab_id'],active['control_id'],self.config['mac_writer_identity'])
+                try:initialized=initialize_blank(self.docs,pin,active['control_document_id'],active['control_tab_id'],active['control_id'],self.config['mac_writer_identity'],return_snapshot=True)
                 except Exception:pass  # Read-only exact reconciliation only.
             from .control import initial_state
             check=GoogleDocsCASControlStore(self.docs,active['control_document_id'],active['control_tab_id'],active['control_id'],route_id,self.config['mac_writer_identity'])
-            require(check.read().state==initial_state(pin,active['control_id']),'global_control_initialization_unknown')
+            # A successful initializer already performed an exact full-resource
+            # readback. Unknown/restarted attempts still require a new GET and
+            # never reissue the initialization write.
+            if initialized is None:initialized=check.read()
+            require(initialized.state==initial_state(pin,active['control_id']),'global_control_initialization_unknown')
             mac._finish_operation(op,record,status='verified')
             config={'document_id':active['control_document_id'],'tab_id':active['control_tab_id'],'control_id':active['control_id'],
                     'writer_identity':self.config['worker_writer_identity'],'folder_id':self.config['folder_id']}
             raw=canonical(config);private_write(runtime/'worker-config.json',raw)
-            fresh=child.snapshot_from_document(self.docs.get_document(snap.document_id),snap.document_id,snap.tab_id)
+            # Same-call authenticated admission snapshot remains revision-bound.
+            # A concurrent bootstrap writer causes a burned conflict, never replay.
+            fresh=snap
             nxt=child.bundle_ready(fresh.state,join_code=cc,pin_raw=pin.raw,config_raw=raw,deployment_hash=pin.oid)
             mac._bootstrap_cas(self.docs,fresh,nxt,join_code=cc,runtime=runtime)
             mac._write_active(active_path,active,stage='BUNDLE_READY')
@@ -284,10 +439,16 @@ class GoogleQueueBridge:
         if snap.state['stage']=='BUNDLE_READY':return {'route_id':route_id,'state':'await_child_polling'}
         if d['state']!='ready':child.verify_worker_polling(snap.state,cc)
         pin=Object.parse(read_private_file(runtime/'pin.json',2*1024*1024))
-        if d['state']!='ready':self.event('ready',{'route_id':route_id,'pin':pin.value,'child_bootstrap':snap.state})
-        if snap.state['stage']=='WORKER_POLLING' and time.time()<snap.state['expires']:
-            mac._bootstrap_cas(self.docs,snap,child.consume_bundle(snap.state,join_code=cc),join_code=cc,runtime=runtime)
-        source=self.read();credentials=mirror_verified_queue(self.store,source.state,self.code,{route_id:pin})
+        bootstrap_state=snap.state
+        if bootstrap_state['stage']=='WORKER_POLLING' and time.time()<bootstrap_state['expires']:
+            # Consume first: the following exact ready CAS readback is then a
+            # queue checkpoint after both external effects, not a stale cache.
+            bootstrap_state=mac._bootstrap_cas(self.docs,snap,child.consume_bundle(bootstrap_state,join_code=cc),join_code=cc,runtime=runtime)
+        if d['state']!='ready':
+            source=self.event('ready',{'route_id':route_id,'pin':pin.value,'child_bootstrap':bootstrap_state})
+        else:
+            source=self.read()  # Existing-route recovery retains its fresh gate.
+        credentials=mirror_verified_queue(self.store,source.state,self.code,{route_id:pin})
         backend=GoogleDriveBackend(self.drive,self.config['folder_id'],discovery='control_refs')
         control=GoogleDocsCASControlStore(self.docs,active['control_document_id'],active['control_tab_id'],active['control_id'],route_id,self.config['mac_writer_identity'])
         controller=CASController(Journal(runtime/'controller',pin,'controller'),backend,SessionCoordinator(control,backend))
@@ -309,7 +470,10 @@ class GoogleQueueBridge:
         return {'route_id':route_id,'state':'ready','production_ready':False}
     def sync_heartbeat(self):
         self._check_running()
-        return mirror_verified_queue(self.store,self.read().state,self.code)
+        return self._sync_heartbeat(self.read())
+    def _sync_heartbeat(self,source):
+        self._check_running()
+        return mirror_verified_queue(self.store,source.state,self.code)
     def close_local_facades(self):
         # Local transport shutdown does NOT assert that native children stopped.
         for facade in self.facades.values():facade.close()
@@ -319,11 +483,11 @@ class GoogleQueueBridge:
         if (self.root/'stop-requested.json').exists():return {'state':'closed','native_children_stopped':False}
         source=self.read();state=source.state;c=state['logical']['controller']
         if state['logical']['closed']:
-            try:self.sync_heartbeat()
+            try:self._sync_heartbeat(source)
             except ProtocolError:pass
             return {'state':'closed','native_children_stopped':False}
         if c is None:return {'state':'await_native_join','automatic_wake':False}
-        try:self.sync_heartbeat()
+        try:self._sync_heartbeat(source)
         except ProtocolError as exc:
             if str(exc) in ('global_controller_not_active_restart_required','global_controller_clock_rollback',
                             'global_controller_not_active_prepared_event_expired'):
@@ -372,7 +536,7 @@ class GoogleQueueBridge:
 
 
 def prepare_session(store,root,docs,drive,folder_id,*,mac_writer='global-mac',worker_writer='global-native',
-                    bootstrap_seconds=600):
+                    bootstrap_seconds=600,parallel_preparation=False):
     """Explicitly authorized control-resource creation; every effect is one-attempt.
 
     Caller must bind/verify the gateway before invoking this function. An unknown
@@ -387,7 +551,7 @@ def prepare_session(store,root,docs,drive,folder_id,*,mac_writer='global-mac',wo
         initial=strict_json(read_private_file(initial_path,queue.MAX_BYTES));code=read_private_file(code_path,256).decode()
         require(initial['folder_id']==folder_id,'global_authorized_folder_changed')
         bridge=GoogleQueueBridge(store,root,docs,drive,initial,code,mac_writer=mac_writer,worker_writer=worker_writer,
-                                 bootstrap_seconds=bootstrap_seconds)
+                                 bootstrap_seconds=bootstrap_seconds,parallel_preparation=parallel_preparation)
         try:bridge.read()
         except Exception:bridge.close();raise
         return bridge
@@ -408,7 +572,7 @@ def prepare_session(store,root,docs,drive,folder_id,*,mac_writer='global-mac',wo
         max_children=store.config()['max_children'])
     private_write(initial_path,canonical(initial))
     bridge=GoogleQueueBridge(store,root,docs,drive,initial,code,mac_writer=mac_writer,worker_writer=worker_writer,
-                                 bootstrap_seconds=bootstrap_seconds)
+                                 bootstrap_seconds=bootstrap_seconds,parallel_preparation=parallel_preparation)
     try:bridge.initialize_blank_queue()
     except Exception:bridge.close();raise
     private_write(root/'global-join.txt',bridge.join_message().encode())
@@ -432,7 +596,8 @@ def main():
         from examples.google_clients import create_docs_client,create_drive_client
         docs=create_docs_client();drive=create_drive_client()
         bridge=prepare_session(store,a.bridge_dir,docs,drive,config['folder_id'],
-                               mac_writer=config['mac_writer_identity'],worker_writer=config['worker_writer_identity'])
+                               mac_writer=config['mac_writer_identity'],worker_writer=config['worker_writer_identity'],
+                               parallel_preparation=True)
         print(json.dumps({'state':'await_native_join','private_join_file':str(bridge.root/'global-join.txt'),
                           'production_ready':False,'global_config_changed':False}),flush=True)
         until=min(time.time()+a.seconds,bridge.initial['expires']);last=None

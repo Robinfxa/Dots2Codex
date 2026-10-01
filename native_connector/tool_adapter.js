@@ -68,6 +68,13 @@ function createNativeToolAdapter(tools, config) {
     return saved.path;
   }
   function captured(path){if(!captures.has(path))throw Error('unknown_capture');return captures.get(path);}
+  async function downloadRawResponse({reference,response}) {
+    const r=structured(response);
+    if(!r || r.id!==reference.locator.file_id || !r.file_uri ||
+        typeof r.file_uri.file_id!=='string' || !/^sediment:\/\/file_[A-Za-z0-9_-]+$/.test(r.file_uri.file_id))
+      throw Error('exact_raw_file_reference_required');
+    return tools.download_file({file_id:r.file_uri.file_id.slice('sediment://'.length)});
+  }
   const io={
     startBatch:({seq})=>batch('start',['--seq',String(seq)]),
     upload:({object})=>tools.mcp__codex_apps__google_drive_upload_file({file_uri:object.path,
@@ -83,11 +90,7 @@ function createNativeToolAdapter(tools, config) {
       return tools.mcp__codex_apps__google_drive_fetch({url:m.url,download_raw_file:true,include_base64:false});
     },
     materializeRaw:async({reference,response})=>{
-      const r=structured(captured(response));
-      if(!r || r.id!==reference.locator.file_id || !r.file_uri ||
-          typeof r.file_uri.file_id!=='string' || !/^sediment:\/\/file_[A-Za-z0-9_-]+$/.test(r.file_uri.file_id))
-        throw Error('exact_raw_file_reference_required');
-      const file=await tools.download_file({file_id:r.file_uri.file_id.slice('sediment://'.length)});
+      const file=await downloadRawResponse({reference,response:captured(response)});
       await captureContext({stage:'raw_download',context:{reference},response:file});
       if(!file || typeof file.path!=='string')throw Error('download_path_required');
       const saved=await command('remote_transport.connector_files',['materialize','--root',root,'--source',file.path]);
@@ -110,6 +113,14 @@ function createNativeToolAdapter(tools, config) {
     acceptCas:({response,readback})=>worker('accept',['--response',response,'--readback',readback])
   };
   return {io,worker,captureValue,
+    // Optional bounded orchestration primitive. Existing materializeRaw keeps
+    // its complete capture/materialization path; callers using this primitive
+    // must durably capture returned evidence and materialize actual bytes.
+    async downloadRaw(input) {
+      const file=await downloadRawResponse(input);
+      if(!file || typeof file.path!=='string')throw Error('download_path_required');
+      return file;
+    },
     async now() {
       const result=await tools.exec_command({cmd:"python3 -c 'import time; print(time.monotonic_ns() / 1000000)'",
         workdir:cwd,max_output_tokens:200,yield_time_ms:10000});
