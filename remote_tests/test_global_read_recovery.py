@@ -442,24 +442,24 @@ class GlobalReadRecoveryFaultTests(unittest.TestCase):
         with self.assertRaisesRegex(ProtocolError, 'queue_closed'):
             self.ledger.plan_event(snapshot, 'join', self.root/'native'/'closed-join.json', capacity=2, seconds=100)
 
-    def test_repeated_reads_never_refresh_signed_180_second_heartbeat(self):
+    def test_repeated_reads_never_refresh_signed_900_second_heartbeat(self):
         controller = self.join()
         before_writes = self.service.count('batch')
-        self.now = controller['heartbeat_at'] + 175
+        self.now = controller['heartbeat_at'] + 895
         self.service.read_faults = [ProviderHTTPError(503), ConnectionResetError('secret')]
         self.assertEqual(self.bridge.step()['state'], 'controller_active')
-        self.assertEqual(self.now, controller['heartbeat_at'] + 178)
+        self.assertEqual(self.now, controller['heartbeat_at'] + 898)
         self.assertTrue(self.store.status()['controller_active'])
         self.assertEqual(self.bridge.read().state['logical']['controller'], controller)
         self.assertEqual(self.service.count('batch'), before_writes)
-        self.now = controller['heartbeat_at'] + 180
+        self.now = controller['heartbeat_at'] + 900
         self.assertTrue(self.bridge.step()['restart_required'])
         self.assertFalse(self.store.status()['controller_active'])
-        self.assertEqual(TIMING['freshness_seconds'], 180)
+        self.assertEqual(TIMING['freshness_seconds'], 900)
 
     def test_read_retry_crossing_freshness_deadline_cannot_revive_controller(self):
         controller = self.join()
-        self.now = controller['heartbeat_at'] + 178
+        self.now = controller['heartbeat_at'] + 898
         self.service.read_faults = [ProviderHTTPError(503), TimeoutError('secret')]
         self.assertTrue(self.bridge.step()['restart_required'])
         self.assertFalse(self.store.status()['controller_active'])
@@ -477,15 +477,16 @@ class GlobalReadRecoveryFaultTests(unittest.TestCase):
 
     def test_unobserved_fresh_remote_heartbeat_cannot_erase_local_outage_fence(self):
         controller = self.join()
-        self.now = controller['heartbeat_at'] + 100
+        self.now = controller['heartbeat_at'] + 850
         # Native writes a genuine new signed heartbeat while the Mac cannot read.
         self.event('heartbeat')
-        self.now = controller['heartbeat_at'] + 181
+        self.now = controller['heartbeat_at'] + 901
         self.assertTrue(self.bridge.step()['restart_required'])
         self.assertFalse(self.store.status()['controller_active'])
         current = self.bridge.read().state['logical']['controller']
-        self.assertEqual(current['heartbeat_at'], controller['heartbeat_at'] + 100)
-        self.assertLess(self.now-current['heartbeat_at'], 180)
+        self.assertEqual(current['heartbeat_at'], controller['heartbeat_at'] + 850)
+        self.assertLess(self.now-current['heartbeat_at'], 120)
+        self.assertLess(self.now-current['heartbeat_at'], 900)
         # A fresh remote timestamp cannot replace the expired local checkpoint.
         with self.assertRaisesRegex(ProtocolError, 'not_active'):
             self.bridge.sync_heartbeat()
@@ -521,7 +522,7 @@ class GlobalReadRecoveryFaultTests(unittest.TestCase):
         controller = self.join()
         token = secrets.token_hex(16)
         self.store.pause_docs_reads(self.generation, token)
-        self.now = controller['heartbeat_at'] + 180
+        self.now = controller['heartbeat_at'] + 900
         with self.assertRaisesRegex(ProtocolError, 'not_active_restart_required'):
             self.store.require_read_recovery_current()
         self.store.resume_docs_reads(self.generation, token)

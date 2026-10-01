@@ -8,7 +8,7 @@ from remote_transport.model import ProtocolError
 
 class GlobalNativeDiagnosticTests(unittest.TestCase):
     def setUp(self):
-        self.f=fixtures.GlobalHeartbeatTests('test_exact_180_root_policy_and_no_old_protocol_migration')
+        self.f=fixtures.GlobalHeartbeatTests('test_exact_900_root_policy_and_no_old_protocol_migration')
         self.f.setUp()
         self.addCleanup(self.f.doCleanups)
 

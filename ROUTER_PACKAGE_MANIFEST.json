@@ -1,46 +1,33 @@
 {
   "contract": "dots2codex-desktop-global-pilot/1",
-  "base_commit": "280d0eb060c9d43aead631313ed7438e7fb63339",
-  "base_source_tree_sha256": "630f7c0eeddb5f0183ed20afc6fae5696d751c4034bedf9a311fbfba2e196558",
+  "base_commit": "90d6a315a9bc3a41008831b10a6597383ab38d34",
+  "base_source_tree_sha256": "ea80d375ef303024b4bd87a8e6fac88460a73a1545fe484bbb0f47804e909820",
   "input_launcher_source_tree_sha256": "7774123803de7f12e89b8cb8be7a510f5cfc2e829572921c0fde33632d4e096e",
   "input_gateway_source_tree_sha256": "ab3026308c240f613b8be00b623cfa3eb67cd73fcac4e87556da7d1619215891",
-  "source_tree_sha256": "ea80d375ef303024b4bd87a8e6fac88460a73a1545fe484bbb0f47804e909820",
+  "source_tree_sha256": "46e5dc80c7208f9f9008417719260f236aa304b5e30c39088843f1679b48989e",
   "source_tree_hash_algorithm": "SHA-256 of UTF-8 canonical JSON files array (sort_keys=true,separators=comma/colon,ensure_ascii=false); array sorted by path",
-  "hashed_file_count": 231,
+  "hashed_file_count": 232,
   "manifest_self_excluded": true,
   "changed_files": [
     "GLOBAL_GATEWAY_CONTRACT.json",
     "GLOBAL_GATEWAY_README.txt",
     "docs/DESKTOP_GLOBAL.zh-CN.md",
-    "docs/GLOBAL_GATEWAY.zh-CN.md",
     "docs/GLOBAL_NATIVE_CONTROLLER.md",
-    "docs/ROUTER_JOIN_V1.zh-CN.md",
-    "native_connector/global_controller_cell.js",
-    "native_connector/global_controller_cell.test.js",
-    "remote_tests/test_global_child_admission.py",
+    "docs/HEARTBEAT_V2_VALIDATION.md",
     "remote_tests/test_global_claim_begin_cell.py",
-    "remote_tests/test_global_cold_start.py",
-    "remote_tests/test_global_prewarm.py",
+    "remote_tests/test_global_control.py",
+    "remote_tests/test_global_heartbeat.py",
+    "remote_tests/test_global_native_diagnostics.py",
     "remote_tests/test_global_read_recovery.py",
-    "remote_tests/test_global_staged_cli.py",
-    "remote_transport/global_control.py",
-    "remote_transport/global_desktop.py",
-    "remote_transport/global_gateway.py",
-    "remote_transport/global_google.py",
-    "remote_transport/global_native.py",
-    "remote_transport/global_pilot.py",
-    "remote_transport/router_join.py"
+    "remote_tests/test_global_timing_independent.py",
+    "remote_transport/global_timing.py"
   ],
   "added_files": [
-    "remote_tests/test_global_child_admission.py",
-    "remote_tests/test_global_claim_begin_cell.py",
-    "remote_tests/test_global_cold_start.py",
-    "remote_tests/test_global_prewarm.py",
-    "remote_tests/test_global_staged_cli.py"
+    "remote_tests/test_global_timing_independent.py"
   ],
   "all_six_source_bindings_preserved": true,
   "existing_runtime_migration": "fresh_activation_and_v2_join_required",
-  "status": "preflight-prewarm-offline-validated-awaiting-live-acceptance",
+  "status": "heartbeat15-offline-validated-awaiting-live-acceptance",
   "launcher_global_menu_supported": true,
   "production_ready": false,
   "ready_for_config": false,
@@ -91,13 +78,13 @@
     {
       "path": "GLOBAL_GATEWAY_CONTRACT.json",
       "bytes": 2653,
-      "sha256": "61cd6f92c6e5e1e148cdff157114da9589cd51a0edaac0d5124ec8e321144be4",
+      "sha256": "ed3f768b2c376aad71ccf35e2475ab46614fa640a8539ec5a6c018439b72fe6e",
       "mode": "0644"
     },
     {
       "path": "GLOBAL_GATEWAY_README.txt",
-      "bytes": 3320,
-      "sha256": "4ab86f69d7f7bece55d8fa617e492691fafc63105c75bffd6ed4e891a0bc151e",
+      "bytes": 3539,
+      "sha256": "9903f3a6a5e38b8abc5b85ecee86bf1e039084a96987c3dcb22bda32e7345e7a",
       "mode": "0644"
     },
     {
@@ -276,8 +263,8 @@
     },
     {
       "path": "docs/DESKTOP_GLOBAL.zh-CN.md",
-      "bytes": 8796,
-      "sha256": "e0683b30d80c5e9db49e8cd9e6794cd6dd131c8dc668caabb039e97d7ae4f442",
+      "bytes": 8924,
+      "sha256": "4bdd3aa5be4363bf7b92a92b931bcc1cef447ad3984ba9ac99f964f451b63685",
       "mode": "0644"
     },
     {
@@ -306,8 +293,8 @@
     },
     {
       "path": "docs/GLOBAL_NATIVE_CONTROLLER.md",
-      "bytes": 23529,
-      "sha256": "3f2956e4337d250bb612a721f38a36bf0134d0d91f3bfc2f8005767b1923c2a1",
+      "bytes": 24304,
+      "sha256": "40bf410b909a5208e569bfc306c224d9445627053b1b16b151879b09511a7ca6",
       "mode": "0644"
     },
     {
@@ -318,8 +305,8 @@
     },
     {
       "path": "docs/HEARTBEAT_V2_VALIDATION.md",
-      "bytes": 4244,
-      "sha256": "69d08ff6cdd30c820f52b7334f7f21335135bd3d2950230a71df418ee166af42",
+      "bytes": 4838,
+      "sha256": "e5f86e1c1f985bf126b4c9029ab2c72a369868cff91463cef2bd2b75c7ab9e9d",
       "mode": "0644"
     },
     {
@@ -799,7 +786,7 @@
     {
       "path": "remote_tests/test_global_claim_begin_cell.py",
       "bytes": 2899,
-      "sha256": "8114fbbb2a68b8af309f0f97d6a62d5fcb9f9cb1101df3e889b1b0f82fbe3354",
+      "sha256": "d0491b2552641dbc1f7e4a1eb0ba7e16ceb72e2f97c8bd4b2681c5064a405d6c",
       "mode": "0644"
     },
     {
@@ -817,7 +804,7 @@
     {
       "path": "remote_tests/test_global_control.py",
       "bytes": 17534,
-      "sha256": "7dc61db03678a93e014e2d751d898424130eae3b3282244d5a9a942a0df6ccf1",
+      "sha256": "4cec95d360303f05b069d623a8fd1f6d66bcecc096dd2223bd4bca9285c81805",
       "mode": "0644"
     },
     {
@@ -834,14 +821,14 @@
     },
     {
       "path": "remote_tests/test_global_heartbeat.py",
-      "bytes": 14883,
-      "sha256": "2a97681a84fecb8a7fdd01c5d6073b75794723798d080fcab1731fe9e1f52d97",
+      "bytes": 16610,
+      "sha256": "95fef443d8f0492bfe3c540f79e394366501b361fbefe6f4c825b477807031da",
       "mode": "0644"
     },
     {
       "path": "remote_tests/test_global_native_diagnostics.py",
       "bytes": 4653,
-      "sha256": "ef93f186c895be7ae5f55efa850a6837ee206bc3a4b7c68380c03c8ca60128d4",
+      "sha256": "9a0ecab7be9fb10107491b4ad953c223086392d976bb3d4314cded0b21ce8594",
       "mode": "0644"
     },
     {
@@ -858,14 +845,20 @@
     },
     {
       "path": "remote_tests/test_global_read_recovery.py",
-      "bytes": 31865,
-      "sha256": "4b139e171e1c8920b0ef2998aa788108049abfaa0db5d2099405fe06ebb3bd68",
+      "bytes": 31928,
+      "sha256": "b76ca09d77f13c04bfd74bf278e456c591165ce4209ba79f98bbef467af7eeac",
       "mode": "0644"
     },
     {
       "path": "remote_tests/test_global_staged_cli.py",
       "bytes": 23598,
       "sha256": "12ec687504bb19425922c19b5cb4db899f21fea0ac2870a8984e44d20d82c5a9",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_tests/test_global_timing_independent.py",
+      "bytes": 11675,
+      "sha256": "6f3c2295ecbc47247ffcad90f0254087be4e2da60389b41d33ad15ac3bf457e4",
       "mode": "0644"
     },
     {
@@ -1099,7 +1092,7 @@
     {
       "path": "remote_transport/global_timing.py",
       "bytes": 2200,
-      "sha256": "6a4e91879878ac48bce69354daf3ed2f9c99c6c4cb95a99ad6cc7f1a2dc28707",
+      "sha256": "b8efa28d784300fcd8b0a840ffe146f3f71040c96bc8e98fb08424e781010fb5",
       "mode": "0644"
     },
     {
@@ -1439,7 +1432,7 @@
       "mode": "0644"
     }
   ],
-  "parent_commit": "280d0eb060c9d43aead631313ed7438e7fb63339",
+  "parent_commit": "90d6a315a9bc3a41008831b10a6597383ab38d34",
   "global_config_pilot_gate_implemented": true,
   "global_config_pilot_runtime_exercised": false,
   "input_desktop_global_source_tree_sha256": "7999cd2b2a5e028bc706760d7a290f44a3b5365b76c5f38f88a4d9478a89b4f3",
@@ -1466,7 +1459,7 @@
   "config_target_bound_to_proof": true,
   "client_compatibility_verified": false,
   "all_chatgpt_work_cloud_compatibility_verified": false,
-  "controller_freshness_seconds": 180,
+  "controller_freshness_seconds": 900,
   "controller_heartbeat_target_seconds": 25,
   "first_request_admission_wait_seconds": 180,
   "prior_config_first_validation": {
@@ -1492,37 +1485,52 @@
     "real_mac_native_google_acceptance": false
   },
   "test_results": {
-    "source_tree_sha256": "ea80d375ef303024b4bd87a8e6fac88460a73a1545fe484bbb0f47804e909820",
+    "source_tree_sha256": "46e5dc80c7208f9f9008417719260f236aa304b5e30c39088843f1679b48989e",
     "final_snapshot_validated": true,
-    "full_remote_discovered": 648,
-    "full_remote_passed": 637,
-    "full_remote_skipped": 11,
-    "full_remote_seconds": 301.517,
-    "full_remote_exit_code": 0,
-    "real_toml_parser_skipped": 9,
-    "optional_sdk_skipped_in_default_remote_environment": 2,
-    "base_python_passed": 134,
-    "cas_audit_passed": 47,
-    "drive_audit_passed": 48,
-    "setup_passed": 37,
-    "sdk_offline_passed": 3,
-    "node_passed": 45,
-    "supplemental_sdk_read_tests_passed": 29,
-    "supplemental_sdk_read_tests_overlap_remote_suite": true,
-    "independent_frozen_python_passed": 112,
-    "independent_frozen_node_passed": 20,
-    "independent_restart_probes_passed": 2,
-    "independent_audit_tests_overlap_aggregate_suites": true,
-    "python_syntax_files_passed": 124,
-    "relative_markdown_links_checked": 161,
-    "final_snapshot_full_remote_rerun": true,
     "live_mac_google_native_verified": false,
     "google_writes": 0,
     "native_inference_calls": 0,
-    "configuration_changes": 0,
     "dependency_install_performed": false,
-    "toml_parser_integration_verified": false,
-    "scope": "Global preflight child prewarm, verified native parent admission import, single-CAS claim/begin, and cold-start recovery"
+    "tests": {
+      "tests": 974,
+      "passed": 965,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "python": {
+      "tests": 929,
+      "passed": 920,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "node": {
+      "tests": 45,
+      "passed": 45,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "parallel_workers": 6,
+    "full_run_seconds": 164.261,
+    "affected_v2_rerun_tests": 41,
+    "affected_v2_rerun_seconds": 6.715,
+    "unchanged_exact_byte_jobs_reused": 57,
+    "skip_reason": "9 optional real tomlkit integration tests; dependency unavailable",
+    "fixture_correction": "Short-activation fixture now uses a matching idle lifetime; affected modules rerun successfully",
+    "independent_audit": "32 focused cases and 8 additional probe groups passed; final source/package independently verified",
+    "current_controller_freshness_seconds": 900,
+    "heartbeat_target_seconds": 25,
+    "cas_budget_seconds": 120,
+    "native_dispatch_window_seconds": 10,
+    "requires_new_activation": true
   },
   "prior_heartbeat_v2_validation": {
     "full_remote_discovered": 551,
@@ -1576,7 +1584,7 @@
     "scope": "START.command Global start Docs read recovery and native controller diagnostics",
     "direct_cli_supervisor_recovery_verified": false
   },
-  "preflight_prewarm_validation": {
+  "prior_preflight_prewarm_validation": {
     "source_tree_sha256": "ea80d375ef303024b4bd87a8e6fac88460a73a1545fe484bbb0f47804e909820",
     "final_snapshot_validated": true,
     "full_remote_discovered": 648,
@@ -1608,5 +1616,53 @@
     "dependency_install_performed": false,
     "toml_parser_integration_verified": false,
     "scope": "Global preflight child prewarm, verified native parent admission import, single-CAS claim/begin, and cold-start recovery"
+  },
+  "heartbeat15_validation": {
+    "source_tree_sha256": "46e5dc80c7208f9f9008417719260f236aa304b5e30c39088843f1679b48989e",
+    "final_snapshot_validated": true,
+    "live_mac_google_native_verified": false,
+    "google_writes": 0,
+    "native_inference_calls": 0,
+    "dependency_install_performed": false,
+    "tests": {
+      "tests": 974,
+      "passed": 965,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "python": {
+      "tests": 929,
+      "passed": 920,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "node": {
+      "tests": 45,
+      "passed": 45,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "parallel_workers": 6,
+    "full_run_seconds": 164.261,
+    "affected_v2_rerun_tests": 41,
+    "affected_v2_rerun_seconds": 6.715,
+    "unchanged_exact_byte_jobs_reused": 57,
+    "skip_reason": "9 optional real tomlkit integration tests; dependency unavailable",
+    "fixture_correction": "Short-activation fixture now uses a matching idle lifetime; affected modules rerun successfully",
+    "independent_audit": "32 focused cases and 8 additional probe groups passed; final source/package independently verified",
+    "current_controller_freshness_seconds": 900,
+    "heartbeat_target_seconds": 25,
+    "cas_budget_seconds": 120,
+    "native_dispatch_window_seconds": 10,
+    "requires_new_activation": true
   }
 }

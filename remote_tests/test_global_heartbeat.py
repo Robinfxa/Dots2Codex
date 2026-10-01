@@ -55,9 +55,11 @@ class GlobalHeartbeatTests(unittest.TestCase):
     def assertError(self,text,fn,*args,**kwargs):
         with self.assertRaisesRegex(ProtocolError,text):fn(*args,**kwargs)
 
-    def test_exact_180_root_policy_and_no_old_protocol_migration(self):
+    def test_exact_900_root_policy_and_no_old_protocol_migration(self):
         self.assertEqual(self.initial['controller_timing'],TIMING)
-        for change in ({'freshness_seconds':181},{'heartbeat_interval_seconds':10}):
+        self.assertEqual(TIMING['freshness_seconds'],900)
+        for change in ({'freshness_seconds':180},{'freshness_seconds':899},{'freshness_seconds':901},
+                       {'heartbeat_interval_seconds':10}):
             bad=copy.deepcopy(self.initial);bad['controller_timing'].update(change)
             self.assertError('timing',q.verify,bad,self.code)
         old=copy.deepcopy(self.initial);old['contract']='dots-global-admissions/1'
@@ -95,15 +97,15 @@ class GlobalHeartbeatTests(unittest.TestCase):
 
     def test_strict_boundary_and_clock_rollback(self):
         self.join();c=self.source().state['logical']['controller'];at=c['heartbeat_at']
-        self.assertTrue(controller_active(at,c['lease_expires'],TIMING,at+179.999))
-        self.assertFalse(controller_active(at,c['lease_expires'],TIMING,at+180))
+        self.assertTrue(controller_active(at,c['lease_expires'],TIMING,at+899.999))
+        self.assertFalse(controller_active(at,c['lease_expires'],TIMING,at+900))
         self.assertFalse(controller_active(at,c['lease_expires'],TIMING,at-.01))
         self.clock+=10;self.ledger.inspect(self.source());self.clock-=1
         self.assertError('clock_rollback',self.ledger.inspect,self.source())
         self.clock+=2;self.assertError('clock_rollback',self.ledger.inspect,self.source())
 
     def test_stale_planned_tick_cannot_revive_either_ledger_or_gateway(self):
-        self.join();self.clock+=179;path,out=self.plan('heartbeat')
+        self.join();self.clock+=899;path,out=self.plan('heartbeat')
         self.clock+=2
         response=self.google.batch_update_document(**out['tool_arguments']) # emulate late in-flight completion
         self.assertError('acceptance_window',self.ledger.verify_plan,path,response,self.google.get_document(self.initial['document_id']))
@@ -121,17 +123,22 @@ class GlobalHeartbeatTests(unittest.TestCase):
         self.assertFalse(self.store.status()['controller_active'])
 
     def test_operation_budget_rejects_even_unexpired_heartbeat(self):
-        self.join();self.clock+=1;path,out=self.plan('heartbeat');self.clock+=120
+        self.join();self.clock+=1;path,out=self.plan('heartbeat');prepared=self.clock
+        self.assertEqual(out['execute_before'],prepared+120)
+        self.clock=prepared+119.999
+        self.assertTrue(self.ledger.check_plan(self.source(),path)['dispatch_allowed'])
+        self.clock=prepared+120
+        self.assertTrue(self.store.status()['controller_active'])
         self.assertError('dispatch_window',self.ledger.check_plan,self.source(),path)
         self.assertError('unresolved',self.ledger.plan_event,self.source(),'heartbeat',self.path('retry'))
 
     def test_missing_write_reconciliation_cannot_be_reissued_as_new_tick(self):
         self.join();self.clock+=25;path,out=self.plan('heartbeat')
         self.assertError('not_observed',self.ledger.verify_plan,path,None,self.google.get_document(self.initial['document_id']))
-        self.clock+=1;self.assertError('unresolved',self.ledger.plan_event,self.source(),'heartbeat',self.path('new'))
+        self.clock+=181;self.assertError('unresolved',self.ledger.plan_event,self.source(),'heartbeat',self.path('new'))
 
     def test_known_write_unknown_response_reconciles_without_rewrite(self):
-        self.join();self.clock+=25;path,out=self.plan('heartbeat')
+        self.join();self.clock+=300;path,out=self.plan('heartbeat')
         self.google.batch_update_document(**out['tool_arguments']);before=len(self.google.calls)
         self.assertTrue(self.ledger.verify_plan(path,None,self.google.get_document(self.initial['document_id']))['verified'])
         self.assertEqual(len(self.google.calls),before)
@@ -175,9 +182,26 @@ class GlobalHeartbeatTests(unittest.TestCase):
 
     def test_spawn_plan_expires_without_replacement_attempt(self):
         self.join();rid=self.demand();self.event('claim',route_id=rid);self.event('begin',route_id=rid)
-        path=self.path('spawn');self.ledger.plan_spawn(self.source(),rid,path,self.package)
-        self.clock+=10;self.assertError('dispatch_window',self.ledger.check_spawn,self.source(),path)
+        path=self.path('spawn');out=self.ledger.plan_spawn(self.source(),rid,path,self.package);prepared=self.clock
+        self.assertEqual(out['execute_before'],prepared+10)
+        self.clock=prepared+9.999
+        self.assertTrue(self.ledger.check_spawn(self.source(),path)['dispatch_allowed'])
+        self.clock=prepared+10;self.assertError('dispatch_window',self.ledger.check_spawn,self.source(),path)
         self.assertError('already_reserved',self.ledger.plan_spawn,self.source(),rid,self.path('again'),self.package)
+
+    def test_unknown_native_spawn_stays_reserved_beyond_the_old_freshness_window(self):
+        self.join();rid=self.demand();self.event('claim',route_id=rid);self.event('begin',route_id=rid)
+        path=self.path('spawn');self.ledger.plan_spawn(self.source(),rid,path,self.package)
+        self.clock+=300
+        self.event('heartbeat');self.bridge.sync_heartbeat();self.event('unknown',route_id=rid)
+        before=len(self.google.calls);source=self.source()
+        self.assertTrue(self.store.status()['controller_active'])
+        self.assertEqual(source.state['logical']['demands'][rid]['state'],'unknown')
+        self.assertError('dispatch_window',self.ledger.check_spawn,source,path)
+        self.assertError('already_reserved_no_replay',self.ledger.plan_spawn,source,rid,self.path('again'),self.package)
+        restarted=NativeLedger(self.root/'native',source.state,self.code,self.ledger.identity)
+        self.assertError('already_reserved_no_replay',restarted.plan_spawn,source,rid,self.path('restart'),self.package)
+        self.assertEqual(len(self.google.calls),before)
 
     def test_future_signed_tick_clock_rollback_latches_before_freshness_verification(self):
         self.join();source=self.source();heartbeat=source.state['logical']['controller']['heartbeat_at']
@@ -190,9 +214,9 @@ class GlobalHeartbeatTests(unittest.TestCase):
 
     def test_gateway_expiry_fence_survives_failed_transaction_and_clock_restore(self):
         self.join();heartbeat=self.source().state['logical']['controller']['heartbeat_at']
-        self.clock=heartbeat+180
+        self.clock=heartbeat+900
         self.assertError('not_ready',self.store.admission,self.gen,identity(),select(load_catalog(),'gpt-6.1-sol','high'))
-        self.clock=heartbeat+179
+        self.clock=heartbeat+899
         self.assertFalse(self.store.status()['controller_active'])
         self.assertError('not_active',self.bridge.sync_heartbeat)
 

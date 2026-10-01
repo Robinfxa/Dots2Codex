@@ -1,11 +1,11 @@
 """Versioned controller timing. No timers, network, renewal, or native activity.
 
 Signed event times use the trusted controller host wall clock, never provider
-modifiedTime. A 180-second liveness allowance does not extend a session lease.
+modifiedTime. A 900-second liveness allowance does not extend a session lease.
 """
 from .model import require
 
-TIMING = {'contract': 'dots-global-timing/1', 'freshness_seconds': 180,
+TIMING = {'contract': 'dots-global-timing/1', 'freshness_seconds': 900,
           'heartbeat_interval_seconds': 25, 'operation_budget_seconds': 120,
           'spawn_check_seconds': 10}
 

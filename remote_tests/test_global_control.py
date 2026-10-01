@@ -197,7 +197,7 @@ class GlobalControlTests(unittest.TestCase):
     def test_stale_controller_and_closed_queue_reject_spawn_exposure(self):
         rid,_,_=self.demand();self.execute('claim',rid);self.execute('begin',rid);source=self.bridge.read()
         c=source.state['logical']['controller']
-        with patch('time.time',return_value=c['heartbeat_at']+181):
+        with patch('time.time',return_value=c['heartbeat_at']+901):
             self.error('not_active',self.ledger.plan_spawn,source,rid,self.path('stale.json'),self.package)
         self.bridge.event('close',{'confirm':True})
         self.error('queue_closed',self.ledger.plan_spawn,self.bridge.read(),rid,self.path('closed.json'),self.package)

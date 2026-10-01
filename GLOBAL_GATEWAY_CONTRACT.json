@@ -35,7 +35,7 @@
   "client_compatibility_verified": false,
   "all_chatgpt_work_cloud_compatibility_verified": false,
   "config_first_reference_commit": "1bc68e293f635a065fa984d4c2ca7604fbd77854",
-  "controller_freshness_seconds": 180,
+  "controller_freshness_seconds": 900,
   "controller_heartbeat_target_seconds": 25,
   "prepared_cas_budget_seconds": 120,
   "existing_activation_migration": "fresh_activation_and_v2_join_required",
