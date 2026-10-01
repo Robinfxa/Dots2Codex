@@ -69,3 +69,11 @@ operation ID/返回 ID 后人工对账，不能假称未创建。停止本地进
 通用 CAS `rebind` 明确禁止从或到 selected binding，哪怕会话当前 IDLE/DELIVERED；
 本版本没有实现同会话热切换。新 checkout 的 worker 源 hash 列表还覆盖选择验证器和能力快照，
 正在运行的旧 materialization 不可原地覆盖。
+
+
+## 六文件 source-hash 消费端修复
+
+若配对成功后生成首个 cell 报 `router_parallel_runtime_source_changed`，先核对是否为
+[已知六项/四项合约不一致](ROUTER_SOURCE_HASH_FIX.zh-CN.md)。修复保留全部六项校验，
+但会改变已固定的 `connector_cell.py` digest，因此必须新会话；不要改旧 materialization
+记录或为继续运行而删掉 `selection.py` / `native_capabilities.json` 两项。

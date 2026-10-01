@@ -1,20 +1,26 @@
 {
-  "contract": "dots2codex-model-selection-release/1",
-  "base_commit": "4508189d58ca641abbf5278101f65c254f67cc73",
-  "previous_manifest_sha256": "832fd4be937480957fd180a81b8f25275e5b0c9e2a97ecfc10cfa1119b7e2fec",
-  "source_tree_sha256": "91924c8eabb84afa22fcb381850f2788c6eb2b6f486d0bf71c46923ab1a18621",
+  "contract": "dots2codex-router-source-contract-fix/1",
+  "base_commit": "020cd1a58459c25fffc8077b5944995d0b484b4f",
+  "base_source_tree_sha256": "91924c8eabb84afa22fcb381850f2788c6eb2b6f486d0bf71c46923ab1a18621",
+  "source_tree_sha256": "b5854e06d221c1152bafc9f93508fc5a0b356d39e3c53bdd6b2313463cc312c4",
   "source_tree_hash_algorithm": "SHA-256 of UTF-8 canonical JSON files array (sort_keys=true,separators=comma/colon,ensure_ascii=false); array sorted by path",
-  "hashed_file_count": 176,
+  "hashed_file_count": 178,
   "manifest_self_excluded": true,
-  "native_inference_live_tested": false,
-  "one_click_bootstrap_live_tested": false,
-  "emitted_codex_wire_live_tested": false,
-  "official_codex_catalog_parse_pairs_passed": 25,
+  "production_files_changed": [
+    "remote_transport/connector_cell.py"
+  ],
+  "all_six_source_bindings_preserved": true,
+  "existing_runtime_migration": "fresh_paired_session_required",
   "test_results": {
-    "python_passed": 519,
+    "python_passed": 525,
     "node_passed": 25,
-    "independent_adversarial_passed": 20
+    "new_materialize_cell_tests": 6,
+    "independent_generated_cell_workflows": 2,
+    "independent_fault_checks": 64
   },
+  "live_fix_rollout_performed": false,
+  "native_inference_calls": 0,
+  "google_writes": 0,
   "files": [
     {
       "path": ".gitignore",
@@ -90,8 +96,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 14660,
-      "sha256": "f0bf4ef18569246ff59cf6116ac3f82504872a0c9aafe9e51c2a77cb13c7bca4",
+      "bytes": 15011,
+      "sha256": "7c41c5671a52d2734639387258f9229a42ffa1c9758624de5d94d6fb1483670c",
       "mode": "0644"
     },
     {
@@ -234,8 +240,8 @@
     },
     {
       "path": "docs/MODEL_SELECTION_VALIDATION.md",
-      "bytes": 4507,
-      "sha256": "0e74484fdfd463b889728f545142353b10d71040d4e2dd7bd8ff7657dc8af9c3",
+      "bytes": 5655,
+      "sha256": "f6a0230acddf513788388167954a25b8f15115ccf3c125874495a24bacd167ae",
       "mode": "0644"
     },
     {
@@ -269,9 +275,15 @@
       "mode": "0600"
     },
     {
+      "path": "docs/ROUTER_SOURCE_HASH_FIX.zh-CN.md",
+      "bytes": 4806,
+      "sha256": "8023d079efbf72ea402c054bb3ad98b42e8a0e8a2f5acb33b64a588bde3deb35",
+      "mode": "0644"
+    },
+    {
       "path": "docs/ROUTER_UPGRADE.zh-CN.md",
-      "bytes": 5503,
-      "sha256": "6153f359d5808c1d091cb631c406dbc10e8c477af5ff65715b2939bfecaad607",
+      "bytes": 5950,
+      "sha256": "d1bed01ef15927c8ea7848776731bba999d30c9669003bcbccf0902eab15303f",
       "mode": "0644"
     },
     {
@@ -653,6 +665,12 @@
       "mode": "0600"
     },
     {
+      "path": "remote_tests/test_router_cell_materialization.py",
+      "bytes": 9617,
+      "sha256": "df5ccdfb201a30b0774bd11f83824f57e4d38cd30956db1db8e6424d0cf24999",
+      "mode": "0644"
+    },
+    {
       "path": "remote_tests/test_router_lifecycle.py",
       "bytes": 12911,
       "sha256": "4964f13f825d5909d6438bf8d15b9edfbeba43aa5b15478aa6e92f867676a21d",
@@ -714,8 +732,8 @@
     },
     {
       "path": "remote_transport/connector_cell.py",
-      "bytes": 2798,
-      "sha256": "223ebc79ed7fa8dd8d83b2ac422e1e771f7711f016fce19559dd00d899a8cb57",
+      "bytes": 2885,
+      "sha256": "fe5d2976a38392a5967936cb6933879b03991960bce736811adc3865abbec812",
       "mode": "0644"
     },
     {

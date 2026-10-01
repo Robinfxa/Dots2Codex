@@ -80,3 +80,23 @@ this change. Do not confuse catalog parsing with these live acceptance stages.
 Follow the [upgrade notes](ROUTER_UPGRADE.zh-CN.md) and
 [model selection guide](MODEL_SELECTION.zh-CN.md) for rollout. Both endpoints
 must use the same complete reviewed source version.
+
+
+## Subsequent live-acceptance defect: Router source-hash contract
+
+A real pairing attempt reached its first REQUESTED state but failed locally while
+generating the claim/begin cell. The materializer recorded six source hashes,
+while the generator duplicated an outdated four-file exact allowlist. The earlier
+offline checks missed the positive materialize-to-cell boundary.
+
+The isolated fix changes only connector_cell.py in production: consume the same
+complete six-file hash function as the materializer. It does not remove the two
+model-binding files, relax integrity validation, or update active runtime records.
+The fixed tree passed **525 Python + 25 Node tests**, including six new integration
+methods and per-file/per-phase tamper cases. Its positive tests failed on the
+published baseline before the fix, then passed on the fixed source.
+
+The generator itself is pinned, so this change requires a fresh paired session;
+there is no safe in-place rehash migration. See the
+[source-hash fix and recovery guide](ROUTER_SOURCE_HASH_FIX.zh-CN.md). Generated-cell
+and fake-connector integration tests are not evidence of a fresh live rollout.

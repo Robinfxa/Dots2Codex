@@ -68,6 +68,10 @@ git rev-parse HEAD
 
 ### 4. 为新会话固定真实 native admission 的模型与 effort
 
+> 修复说明：模型选择版的 materializer 六文件 hash 与 cell 生成器四文件名单曾不一致，
+> 导致配对后的首个请求在本地生成阶段失败。本候选已统一合约并增加跨模块回归；
+> 已有 runtime 不能原地改 hash，须新会话。见[修复与恢复边界](docs/ROUTER_SOURCE_HASH_FIX.zh-CN.md)。
+
 ```sh
 # 离线查看本版本支持的组合；不是实时账号权限检查
 python3 -m remote_transport.router_mac models
