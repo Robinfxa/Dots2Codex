@@ -15,17 +15,19 @@
 
 ## 快速开始
 
-> **本次新增功能是实验预览：统一 Mac 启动器 + 全局 gateway 离线原型。**
-> 两部分已合并进同一源码包，但没有完成一键全局接管。`START.command` 仍只启动单会话 Router；
-> 全局菜单保持不支持，gateway 的 `production_ready` / `ready_for_config` 恒为 `false`，
-> 不会应用全局 Codex 配置。真实 Mac / Google / native 现场验收仍未完成；
-> 9 个真实 TOML parser 测试因可选依赖未安装而跳过。
-> 详见[合并预览验证](docs/EXPERIMENTAL_PREVIEW_VALIDATION.md)与[全局原型说明](docs/GLOBAL_GATEWAY.zh-CN.md)。
+> **本次新增功能是桌面 Global 有界试用流程。**
+> `START.command` 菜单已接通稳定网关、独立 Global 原生控制器 JOIN、真实原生预检与精确配置差异确认。
+> `production_ready` / `ready_for_config` 仍为 `false`；独立试用门槛要求活跃控制器、
+> 新鲜原生预检、已安装的真实 TOML parser、匹配的桌面与终端 CLI，以及用户明确确认配置差异。
+> 发布源码不会自动启用你的 Mac。真实 Mac / Google / native 现场验收仍未完成；
+> 9 个真实 parser 测试因可选依赖未安装而跳过。
+> 详见[桌面 Global 启用步骤](docs/DESKTOP_GLOBAL.zh-CN.md)与[本次集成验证](docs/DESKTOP_GLOBAL_VALIDATION.md)。
 
 ### 1. 选择入口
 
 | 你的场景 | 从这里开始 |
 | --- | --- |
+| 桌面端与终端的新线程使用 Global 路由 | [桌面 Global 启用步骤](docs/DESKTOP_GLOBAL.zh-CN.md) |
 | 已有经批准的 Mac OAuth 文件、专用 Drive folder 和双向访问条件 | [已有环境的 Mac Router 操作手册](docs/gemini_setup/03_MAC_ROUTER_RUNBOOK.zh-CN.md) |
 | 第一次配置 Google Cloud / OAuth / Gemini 辅助设置 | [Google Cloud 与 Gemini 指南](START_HERE_GEMINI_GUIDES.md) |
 | 需要手动配置远程传输或排查 CAS | [远程安装配置](docs/REMOTE_SETUP.zh-CN.md) |
@@ -50,29 +52,35 @@ git rev-parse HEAD
 版本不匹配会停止，其他版本需独立验收。[官方 Codex CLI](https://github.com/openai/codex)
 须自行安装，本仓库不打包 CLI、模型或凭据。
 
-### 3. 实验性 Mac Router：首次与日常共用一个入口
+### 3. 桌面 Global 与单会话 Router 共用一个入口
 
-双击 `START.command`。第一次确认私有 Python 环境安装，选择本人批准的已有 OAuth 文件、
-Drive folder、已有 Codex 与工作目录、model/effort；只读验证后确认保存。以后复用健康环境与设置，
-不每次重装、不重复 OAuth。可选 `Router.app` 外壳需在 Mac 构建，实际 Mac 运行尚未验收。
+双击 `START.command` 打开菜单。首次运行会分别确认私有 Python 环境安装和已有凭据、
+Drive folder、Codex、工作目录、model/effort 设置；以后复用健康环境与已保存设置。
+可选 `Router.app` 外壳需在 Mac 构建，实际 Mac 运行尚未验收。
 
-1. 新会话沿原协议创建独立 bootstrap Doc 和正式 Control Doc，完成 forward probe
-2. 确认复制本轮私有 join 消息，发送给获授权 Dots，随后清空剪贴板
-3. Dots 必须真实 native admission，再验证签名、双向 probe 和正式 Control CAS
-4. 只有收到签名 polling ack 并通过 facade readiness 后，才显示 `ROUTER_READY` 并进入 Codex
+使用 Global 时选择 **Start Global desktop routing**：
 
-状态用 `ROUTER_STATUS.command`，结束用 `STOP_ROUTER.command`；
-`./START.command menu` 提供设置、状态与停止。已有活动或未完成会话时不另建 Docs。
-旧 `INSTALL_ROUTER.command` / `START_ROUTER.command` 保留为统一后端入口。
+1. 核对终端与桌面内置 CLI 均为 `codex-cli 0.159.2`，并选择二者实际共用的 `CODEX_HOME`
+2. 确认本轮 Google 控制流程，发送一次私有 `DOTS2CODEX_GLOBAL_JOIN_V1` 给 Dots，建立持续活跃的原生控制器
+3. 一次激活最长 **4 小时、最多 3 个原生子任务**；其中 1 个用于预检，另外 2 个供新工作线程使用，仍受平台剩余槽位限制
+4. 必须完成签名队列、独立子任务和真实原生预检，再逐项确认 `config.toml` 的准确改动；仅有监听器或布尔开关不能启用配置
+5. 完全退出并重开桌面端，再创建新线程；终端也须新启动并使用同一 `CODEX_HOME`。旧线程、恢复线程、profile 或其他覆盖可能继续使用原 provider
 
-**当前是单会话启动器；不修改全局 Codex 配置，也不接管桌面或其他 CLI 会话。**
-完整设置、权限、恢复与 `.app` 构建见[统一 Mac 启动器](docs/UNIFIED_MAC_LAUNCHER.zh-CN.md)。
-原生 worker 仍需手动真实接纳并保持活跃，写入 Drive 不会自动唤醒它。
+Global status、stop 和 restore 在同一菜单中。停止本地进程不代表原生任务已停止。
+详细配置、恢复与验收见[桌面 Global 流程](docs/DESKTOP_GLOBAL.zh-CN.md)。
 
-- 默认 **4 小时 / 128 次模型请求**；硬上限 **8 小时 / 128 次**，工具续轮计入预算
+使用独立单会话模式时选择 **Start single-session Router**。原协议仍创建独立 bootstrap Doc
+和正式 Control Doc，发送普通 `DOTS2CODEX_ROUTER_JOIN_V1`，完成真实 native admission、
+签名、双向 probe、Control CAS、polling ack 和 facade readiness 后才显示 `ROUTER_READY`。
+普通单会话 JOIN 不能代替 Global JOIN；单会话模式不修改全局配置。
+
+- 单会话 Router 默认 **4 小时 / 128 次模型请求**；硬上限 **8 小时 / 128 次**，工具续轮计入预算
+- `ROUTER_STATUS.command`、`STOP_ROUTER.command` 和旧 `START_ROUTER.command` 仍控制单会话路径
 - 保留 Codex `on-request` 审批、`workspace-write` 沙箱与原 parallel connector-cell runner
-- 内部 bootstrap 未选模型时为 V2、显式选择为 V3；入口消息保留 `DOTS2CODEX_ROUTER_JOIN_V1`
-- 可选 Google/OAuth helper 仍独立运行，不随启动器自动执行
+- 原生控制器与 worker 必须真实接纳并保持活跃，Drive 写入不能自动唤醒它们
+- 可选 Google/OAuth helper 独立运行，不随启动器自动执行
+
+完整设置、权限、恢复与 `.app` 构建见[统一 Mac 启动器](docs/UNIFIED_MAC_LAUNCHER.zh-CN.md)。
 
 ### 4. 为新会话固定真实 native admission 的模型与 effort
 
@@ -127,8 +135,9 @@ Mac / controller                        已活跃的原生 worker
 
 **离线测试通过不等于真实账号、Mac 或多小时运行已验收。**
 
-本次合并预览的完整回归与跳过项见[合并预览验证](docs/EXPERIMENTAL_PREVIEW_VALIDATION.md)。
-全局原型的两线程隔离、工具续轮与恢复使用 fake Google/native ports；不是实际全局路由验收。
+本次 Desktop Global 集成与尚未完成的验收见[集成验证](docs/DESKTOP_GLOBAL_VALIDATION.md)。
+此前合并预览的完整回归保留在[历史验证](docs/EXPERIMENTAL_PREVIEW_VALIDATION.md)。
+Global 离线测试的线程隔离、工具续轮与恢复使用 fake Google/native ports；不是实际全局路由验收。
 
 | 范围 | 已有证据 | 尚未证明 |
 | --- | --- | --- |
@@ -154,7 +163,7 @@ Mac / controller                        已活跃的原生 worker
 
 - Router：[统一 Mac 入口](docs/UNIFIED_MAC_LAUNCHER.zh-CN.md) · [安装 / 启动 / 停止](docs/ROUTER_ONE_CLICK.zh-CN.md) · [Dots 配对规程](docs/ROUTER_JOIN_V1.zh-CN.md) · [升级与验收](docs/ROUTER_UPGRADE.zh-CN.md)
 - 模型选择：[新会话的 model + effort、真实接纳、官方 CLI 与旧配置兼容](docs/MODEL_SELECTION.zh-CN.md)
-- 全局实验原型：[离线使用与边界](docs/GLOBAL_GATEWAY.zh-CN.md) · [原生控制线程规程](docs/GLOBAL_NATIVE_CONTROLLER.md) · [原型验证](docs/GLOBAL_GATEWAY_VALIDATION.md) · [本次合并验证](docs/EXPERIMENTAL_PREVIEW_VALIDATION.md)
+- 桌面 Global 试用：[启用与恢复](docs/DESKTOP_GLOBAL.zh-CN.md) · [本次集成验证](docs/DESKTOP_GLOBAL_VALIDATION.md) · [网关边界](docs/GLOBAL_GATEWAY.zh-CN.md) · [原生控制器规程](docs/GLOBAL_NATIVE_CONTROLLER.md) · [历史合并验证](docs/EXPERIMENTAL_PREVIEW_VALIDATION.md)
 - Google Cloud / Gemini：[总入口](START_HERE_GEMINI_GUIDES.md) · [章节索引](docs/gemini_setup/00_README.zh-CN.md) · [离线 HTML](docs/gemini_setup/ALL_GUIDES.html) · [PDF](docs/gemini_setup/HANDBOOK.pdf) · [Word](docs/gemini_setup/HANDBOOK.docx)
 - Gemini 辅助：[启动提示词](docs/gemini_setup/PROMPT_GEMINI_START.txt) · [13 段提示词](docs/gemini_setup/02_GEMINI_PROMPTS.zh-CN.md) · [可选设置 helper](docs/gemini_setup/tools/README.zh-CN.md)
 - 手动远程：[安装配置](docs/REMOTE_SETUP.zh-CN.md) · [长会话与恢复](docs/REMOTE_LONG_SESSIONS.zh-CN.md) · [活跃 worker 契约](docs/ACTIVE_CONNECTOR_WORKER.md)
@@ -224,11 +233,14 @@ Codex CLI and an already active, authorized native inference worker. It preserve
 the local POSIX bridge and adds a Drive/Docs revision-CAS transport, bounded long
 sessions, Mac tool continuations, and a one-message Router pairing flow.
 
-This release also includes an experimental unified Mac starter and an offline global
-gateway prototype. The starter still launches a single Router session; its global
-menu remains unsupported. Production readiness and global configuration gates stay
-false. This is not a completed one-click desktop/CLI takeover. Real Mac/Google/native
-acceptance and nine skipped real-TOML-parser tests remain outstanding.
+The unified Mac starter now includes Global mode: a stable per-thread gateway,
+bounded native controller JOIN, native preflight, and an explicitly confirmed
+global config transaction. Read [the desktop Global flow](docs/DESKTOP_GLOBAL.zh-CN.md).
+The production flag remains false. A separate pilot gate requires authenticated
+live native evidence, the installed real TOML parser, matching client binaries,
+and the exact reviewed diff. Real Mac/Google/native acceptance and nine skipped
+real-TOML-parser tests remain outstanding; this source package does not activate
+the user's desktop by itself.
 
 The historical baseline completed four live requests including one Mac tool cycle.
 The repaired Router, parallel executor, and optional setup helper are offline

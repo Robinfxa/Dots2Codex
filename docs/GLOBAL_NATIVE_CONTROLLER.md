@@ -1,6 +1,6 @@
 # Bounded global native controller, protocol v1
 
-Status: the Google queue, native helper and per-child v3 JOIN adapter are implemented and tested with offline ports. No actual Google/native-controller/Mac acceptance has been performed. `production_ready` and global-config apply remain false. A control Doc and a Python process do not create or wake a native agent.
+Status: the Google queue, native helper, per-child v3 JOIN adapter and desktop Global launcher are integrated and tested with offline ports. No actual Google/native-controller/Mac acceptance has been performed. `production_ready` remains false. An explicit pilot config transaction requires a fresh authenticated native preflight and exact diff confirmation; ordinary production apply stays closed. A control Doc and a Python process do not create or wake a native agent.
 
 ## Authority and scope
 
@@ -36,7 +36,7 @@ These are implementation interfaces, not instructions to run them against an acc
 
 3. The user sends that JOIN once. The active native controller completes the steps below. A stale or finished controller produces an explicit not-ready condition; no Python fallback spawns an agent.
 
-4. Only after separate production acceptance and an explicitly reviewed config transaction may the launcher offer global apply. Do not edit readiness booleans to bypass this gate.
+4. The desktop Global supervisor first runs a nonce preflight on a separate pinned native child. Only a live authenticated controller, exact completed native route, matching client/parser/package bytes, fresh signed evidence and an explicitly reviewed config transaction allow pilot apply. The production gate stays closed. Do not edit readiness booleans to bypass either gate. The active controller must continue supervising so each later desktop thread receives its own child.
 
 ## Active native controller procedure
 

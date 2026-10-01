@@ -1,11 +1,10 @@
 # Mac 统一启动器
 
 本候选基于已发布 `00156e4621444eefa90752545dc1a40521639fb1`，新增共用后端。
-双击根目录 `START.command`：第一次完成受控设置，然后开始一个 Router 会话；以后复用健康环境和已保存设置。
+双击根目录 `START.command`：选择 Global 桌面模式或独立单会话模式；第一次完成受控设置，以后复用健康环境和已保存设置。
 `Router.app` 是可选的原生 AppleScript applet，必须在 Mac 构建，最终也打开同一个 START 入口。
 
-**当前是单会话 Router 启动器。它不修改全局 Codex 配置，不接管桌面应用或其他 CLI 会话。**
-菜单里的全局功能明确返回不支持；稳定多会话 gateway 尚未集成，不能把现有单会话 facade 当作全局代理。
+Global 模式已接入稳定多线程网关、全局控制器 JOIN 和带证据门槛的配置确认，详见 [桌面全局模式](DESKTOP_GLOBAL.zh-CN.md)。下列历史单会话步骤继续适用于菜单中的 Single-session；全局模式不使用单会话 facade 作为所有线程的共享 worker。
 
 ## 第一次双击
 
@@ -25,8 +24,8 @@ Google 只读预检成功只说明精确 folder 可读。实际跨 OAuth app 访
 ## 日常入口与控制
 
 ```sh
-./START.command                     # 首次设置或启动
-./START.command menu                # 启动 / 设置 / 状态 / 停止 / 全局说明 / 退出
+./START.command                     # 打开 Global / Single-session 菜单
+./START.command menu                # Global 启动/状态/停止/恢复；Single-session；设置/退出
 ./START.command settings            # 修改新会话默认值，活动会话时拒绝
 ./START.command status              # 本地阶段与实际 loopback readiness，不触发安装或 OAuth
 ./START.command stop                # 原 authoritative CAS close 与精确 PID 停机

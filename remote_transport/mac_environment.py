@@ -26,12 +26,14 @@ IMPORTS = ['jsonschema', 'googleapiclient.discovery', 'google.auth', 'google_aut
            'httplib2', 'requests', 'google_auth_oauthlib']
 
 
-def pinned_requirements(root):
+def pinned_requirements(root, *, include_global=False):
     root = Path(root)
     result = {}; visiting = set()
+    allowed = {'requirements-router-mac.txt', 'requirements-remote.txt',
+               'requirements-google-example.txt'}
+    if include_global: allowed.add('requirements-global.txt')
     def read(name):
-        require(name in {'requirements-router-mac.txt', 'requirements-remote.txt',
-                         'requirements-google-example.txt'}, 'launcher_unexpected_requirements_file')
+        require(name in allowed, 'launcher_unexpected_requirements_file')
         require(name not in visiting, 'launcher_recursive_requirements')
         visiting.add(name)
         for line in (root / name).read_text().splitlines():
@@ -45,6 +47,7 @@ def pinned_requirements(root):
             result[key] = version
         visiting.remove(name)
     read('requirements-router-mac.txt')
+    if include_global: read('requirements-global.txt')
     return result
 
 
@@ -69,14 +72,18 @@ def private_lock(path):
 
 
 class Environment:
-    def __init__(self, root, state, *, run=subprocess.run, python=None):
+    def __init__(self, root, state, *, run=subprocess.run, python=None, include_global=False):
         self.root, self.state = Path(root), no_symlinks(state)
         self.run = run
         self.python = str(python or sys.executable)
-        self.pins = pinned_requirements(self.root)
+        self.include_global = include_global
+        self.pins = pinned_requirements(self.root, include_global=include_global)
+        self.imports = IMPORTS + (['tomlkit'] if include_global else [])
         self.fingerprint = hashlib.sha256(json.dumps({'pins':self.pins,
             'python':list(sys.version_info[:2]), 'contract':1}, sort_keys=True).encode()).hexdigest()
-        self.pointer = self.state / 'environment.json'
+        # Keep the established single-session environment usable after Global
+        # setup; changing modes must not trigger a replacement installation.
+        self.pointer = self.state / ('environment-global.json' if include_global else 'environment.json')
 
     def _run(self, args, timeout=60):
         return self.run(args, capture_output=True, text=True, timeout=timeout,
@@ -97,7 +104,7 @@ class Environment:
                       'pins=json.loads(sys.argv[2]); '
                       'assert all(m.version(k)==v for k,v in pins.items()); '
                       '[importlib.import_module(k) for k in json.loads(sys.argv[3])]; print("healthy")')
-            result = self._run([str(python), '-I', '-B', '-c', script, str(path), json.dumps(self.pins), json.dumps(IMPORTS)])
+            result = self._run([str(python), '-I', '-B', '-c', script, str(path), json.dumps(self.pins), json.dumps(self.imports)])
             if result.returncode or result.stdout.strip() != 'healthy': return False
             return self._run([str(python), '-I', '-m', 'pip', 'check']).returncode == 0
         except Exception: return False
@@ -123,7 +130,8 @@ class Environment:
         require(sys.version_info >= (3,11), 'launcher_python_311_required')
         current = self.current()
         if current: return current / 'bin/python3'
-        if not ui.confirm('Create a private Python environment and download the pinned Router dependencies from https://pypi.org?\n'
+        dependencies = 'Router and Global desktop dependencies (including tomlkit==0.13.3)' if self.include_global else 'Router dependencies'
+        if not ui.confirm(f'Create a private Python environment and download the pinned {dependencies} from https://pypi.org?\n'
             f'Location: {self.state / "environments"}\nNo global Python or Codex changes. Existing environments and session evidence are kept.'):
             raise Cancelled()
         private_directory(self.state, create=True)

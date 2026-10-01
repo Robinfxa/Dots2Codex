@@ -1,41 +1,30 @@
-Dots2Codex Global Gateway: offline-integrated preview
+Dots2Codex Desktop Global integration
 
-This is an EXPERIMENTAL offline prototype, based on published commit 00156e4.
-It is not an activated global Codex installation. Production global-config apply
-is deliberately disabled. Real user auth/config and the active Router runtime
-were not modified. The unified first-launch Mac launcher is now included in the
-same source package, but its global menu stays unsupported. A shared package is
-not an accepted, seamless global workflow. See docs/EXPERIMENTAL_PREVIEW_VALIDATION.md.
+Double-click START.command and choose Global start.
+Read docs/DESKTOP_GLOBAL.zh-CN.md for the actual desktop activation flow.
 
-Start reading:
-  docs/GLOBAL_GATEWAY.zh-CN.md
-  docs/GLOBAL_NATIVE_CONTROLLER.md
-  docs/GLOBAL_GATEWAY_VALIDATION.md
+Global mode starts its dedicated stable-port supervisor, creates one bounded
+signed Google control queue after consent, and supplies the private
+DOTS2CODEX_GLOBAL_JOIN_V1 message. This activates a native controller, which must
+remain active and create a distinct selected child for each new desktop thread.
+It is different from the ordinary single-worker JOIN.
 
-Safe offline demo (temporary private fixture files only):
-  python3 -m remote_transport.global_fixture
+A native nonce preflight must complete through the same gateway before the UI
+can show and confirm a global config diff. The pilot gate rechecks controller,
+activation/catalog, route/pin, native admission, request/response, exact binaries,
+installed TOML parser, package hashes, and proof expiry at replacement time.
+Production readiness stays false. A listening socket or boolean cannot enable it.
 
-Focused tests:
-  python3 -m unittest discover -s remote_tests -p 'test_global_*.py' -v
+Fully quit and reopen Codex after apply, then create a new thread. Existing or
+resumed threads may keep their previous provider. Profiles, CLI overrides and
+managed settings can take precedence. Use the actual shared CODEX_HOME.
 
-Implemented:
-- Stable private loopback gateway, generation + client/thread isolation
-- Exact model/effort pinned before a thread is admitted
-- Authenticated bounded Docs CAS admission queue and active-native-controller helper
-- Durable one-attempt native admission and unknown-effect/no-replay rules
-- Separate existing v3 child JOIN, raw probes, pins, CAS controls, journals and facades
-- Bounded first-request wait using parsed Responses JSON heartbeat events
-- Same native child/pin/history retained on transport restart
-- Explicit global config preview/backup/CAS/restore helper, behind a closed production gate
+Global status/stop/restore are available without dependency installation.
+Restore recovers config transactions even after an interrupted success marker.
+Local stop never claims that the bounded native controller/children stopped.
 
-Still unverified or blocked:
-- Real native-controller tool admissions, connected Google and actual Mac desktop/CLI acceptance
-- Optional tomlkit installation was not authorized; nine real-parser tests are skipped
-- New comments inside owned TOML nodes need real-parser preservation/conflict verification
-- One seamless unified Mac launcher + production global configuration workflow
-
-The gateway implementation preserves the source-bound execution contract. The
-combined package intentionally includes the unified launcher's wrapper and
-preflight/stop changes. No launcher entry point activates this global mode.
-Validation did not perform global configuration, real Google operations,
-dependency installation, or native inference.
+Offline validation uses temporary homes, native-shaped fake ports and real local
+gateways/facades. No real user config/auth, Google resources, dependency install,
+native inference or push occurred during this integration. Real Mac/Google/
+native acceptance remains pending. tomlkit is absent; nine real-parser tests
+remain explicit skips until its installation is authorized.

@@ -1,8 +1,9 @@
 """Explicit, one-CODEX_HOME config preview/apply/restore transactions.
 
 No auth.json, OAuth, keychain, system proxy, safety policy, profile or project
-file is read or written. apply requires a freshly authenticated bound gateway
-whose production controller reports ready. The prototype cannot meet that gate.
+file is read or written. Default apply requires a freshly authenticated bound
+gateway whose production controller reports ready. A separate explicit PILOT
+proof permits an evidence-bound preview; it never changes production readiness.
 Locks are cooperative; arbitrary external editors cannot be made atomic by an
 os.replace compare-before-write sequence. Unknown races are never auto-retried.
 """
@@ -244,14 +245,24 @@ def commit(path,expected,raw,*,delete=False,before_commit=None,after_replace=Non
 
 
 def apply(state_dir,codex_home,*,cli_version,expected_before_hash,confirm=False,desktop_version=None,
-          before_commit=None,after_replace=None):
+          pilot_proof_id=None,expected_after_hash=None,before_commit=None,after_replace=None):
     require(confirm is True,'explicit_global_config_confirmation_required')
     versions(cli_version,desktop_version);home=known_home(codex_home)
-    info=readiness(state_dir,live=True)  # Before any target-home mutation, including the lock.
+    # Production readiness is unchanged. The separate, short-lived PILOT proof
+    # is evidence-bound, never a caller-supplied readiness boolean.
+    def gate():
+        if pilot_proof_id is None:return readiness(state_dir,live=True)
+        from .global_pilot import require_pilot
+        require(isinstance(expected_after_hash,str) and len(expected_after_hash)==64,
+                'pilot_exact_preview_confirmation_required')
+        return require_pilot(state_dir,pilot_proof_id,cli_version,desktop_version)
+    info=gate()  # Before any target-home mutation, including the lock.
     with home_lock(home):
         path=home/'config.toml';before=snapshot(path)
         require(before['hash']==expected_before_hash,'preview_outdated')
         after=render_patch(before['raw'],info)
+        if pilot_proof_id is not None:
+            require(hash_bytes(after)==expected_after_hash,'preview_outdated')
         require(before['raw']!=after,'config_already_matches_no_transaction')
         directory=private_dir(Path(state_dir)/'config-transactions',create=True)
         # Outstanding transactions for this same target must be restored/reconciled first.
@@ -266,12 +277,19 @@ def apply(state_dir,codex_home,*,cli_version,expected_before_hash,confirm=False,
                   'after_hash':hash_bytes(after),'before_exists':before['exists'],'before_identity':before['identity'],
                   'before_mode':before['mode'],'backup':str(backup),'postimage':str(postimage),
                   'cli_version_evidence':cli_version,'desktop_version_evidence':desktop_version,
-                  'restart_required':True,'live_route_observed':False}
+                  'restart_required':True,'live_route_observed':pilot_proof_id is not None,
+                  'pilot_proof_id':pilot_proof_id,'production_ready':False}
         journal=directory/(tid+'.json');save_manifest(journal,manifest)
-        written=commit(path,before,after,before_commit=before_commit,after_replace=after_replace)
+        def final_check():
+            if before_commit:before_commit()
+            fresh=gate()
+            require(all(fresh.get(k)==info.get(k) for k in ('generation','base_url','catalog_path','selection')),
+                    'gateway_activation_mismatch')
+        written=commit(path,before,after,before_commit=final_check,after_replace=after_replace)
         manifest.update(phase='committed',after_identity=written['identity']);save_manifest(journal,manifest)
         return {'transaction_id':tid,'phase':'committed','config_path':str(path),'restart_required':True,
-                'live_route_observed':False,'auth_file_touched':False}
+                'live_route_observed':pilot_proof_id is not None,'auth_file_touched':False,
+                'pilot_proof_id':pilot_proof_id,'production_ready':False}
 
 
 def load_transaction(state_dir,tid):
@@ -304,10 +322,27 @@ def reconcile(state_dir,tid):
         return {'phase':value['phase'],'write_performed':False}
 
 
+def owned_node_bytes(doc,path):
+    """Include syntax and trivia: equal TOML values do not imply safe removal."""
+    node=doc;keys=[]
+    for part in path:
+        if part not in node:return None
+        container=node if hasattr(node,'body') else getattr(node,'value',None)
+        body=getattr(container,'body',())
+        matches=[key for key,item in body if key is not None and getattr(key,'key',None)==part]
+        # Ambiguous/out-of-order syntax must not silently discard user trivia.
+        require(len(matches)<=1,'restore_owned_syntax_unsupported')
+        keys.append((matches[0].as_string(),getattr(matches[0],'sep',None)) if matches else part)
+        node=node[part]
+    trivia=getattr(node,'trivia',None)
+    return (keys,node.as_string(),tuple(getattr(trivia,k,None) for k in ('indent','comment_ws','comment','trail')))
+
+
 def restore_bytes(before,after,current):
-    original_doc,original=decoded(before);_,ours=decoded(after);doc,present=decoded(current)
+    original_doc,original=decoded(before);after_doc,ours=decoded(after);doc,present=decoded(current)
     for path in OWNED:
         require(value_at(present,path)==value_at(ours,path),'restore_owned_value_conflict')
+        require(owned_node_bytes(doc,path)==owned_node_bytes(after_doc,path),'restore_owned_syntax_conflict')
     for path in OWNED:
         # Copy original TOML nodes rather than reconstructing strings or comments.
         node=original_doc
@@ -362,7 +397,9 @@ def main():
         p=sub.add_parser(name);p.add_argument('--state-dir',required=True);p.add_argument('--codex-home',required=True)
         p.add_argument('--cli-version',required=True);p.add_argument('--desktop-version')
         if name=='preview':p.add_argument('--profile')
-        else:p.add_argument('--expected-before-hash',required=True);p.add_argument('--confirm',action='store_true')
+        else:
+            p.add_argument('--expected-before-hash',required=True);p.add_argument('--confirm',action='store_true')
+            p.add_argument('--pilot-proof-id');p.add_argument('--expected-after-hash')
     for name in ('restore','reconcile'):
         p=sub.add_parser(name);p.add_argument('--state-dir',required=True);p.add_argument('--transaction-id',required=True)
         if name=='restore':p.add_argument('--confirm',action='store_true')

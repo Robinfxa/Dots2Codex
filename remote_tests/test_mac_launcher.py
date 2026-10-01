@@ -203,10 +203,14 @@ class SessionTests(LauncherFixture):
     def test_stop_preserves_partial_result_and_reports_no_restore(self):
         self.active_write();result=self.launcher.stop(self.args)
         self.assertFalse(result['closed']);self.assertTrue(result['process_stopped'])
-        self.assertEqual(result['global_config_restore'],'unsupported_no_global_config_written')
-    def test_global_placeholder_never_touches_codex_config(self):
-        self.args.operation='restore-global';result=self.launcher.dispatch(self.args)
-        self.assertFalse(result['supported']);self.assertEqual(self.ports.calls,[]);self.assertFalse(self.state.exists())
+        self.assertEqual(result['global_config_restore'],'not_applicable_single_session')
+    def test_global_restore_alias_delegates_without_single_session_mutations(self):
+        self.args.operation='restore-global'
+        with patch.object(self.launcher,'global_backend') as backend:
+            backend.return_value.restore.return_value={'global_config_restored':False,'stage':'NOT_STARTED'}
+            result=self.launcher.dispatch(self.args)
+            backend.return_value.restore.assert_called_once_with(self.args)
+        self.assertFalse(result['global_config_restored']);self.assertEqual(self.ports.calls,[]);self.assertFalse(self.state.exists())
     def test_safe_errors_drop_arbitrary_provider_secret(self):
         self.assertEqual(launch.safe_error(RuntimeError(self.secret+' https://example.invalid')), 'RuntimeError')
         self.assertEqual(launch.safe_error(ProtocolError('launcher_config_changed_retry_settings')),'launcher_config_changed_retry_settings')
@@ -354,7 +358,7 @@ class SafetyRegressionTests(LauncherFixture):
         self.assertTrue(result['process_stopped'])
         self.assertEqual(self.ports.calls[0][0],'stop')
     def test_status_stop_and_menu_do_not_require_installation(self):
-        for argv, choices in [(['status'],[]),(['stop'],[]),(['menu'],['Status']),(['menu'],['Stop'])]:
+        for argv, choices in [(['status'],[]),(['stop'],[]),(['menu'],['Single-session status']),(['menu'],['Stop single-session Router'])]:
             ui=FakeUI(choices=choices)
             with patch.object(launch,'UI',return_value=ui),patch.object(launch,'verify_package'),patch.object(launch.Environment,'ensure') as ensure,patch.object(launch.Environment,'current',return_value=None),patch.object(launch.Launcher,'dispatch',return_value={'router_ready':False}):
                 launch.main(argv+['--state',str(self.state),'--config',str(self.config),'--active',str(self.active)])

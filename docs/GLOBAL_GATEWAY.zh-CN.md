@@ -1,7 +1,6 @@
 # 全局 Codex gateway：离线验证阶段
 
-本次发布把全局 gateway 离线原型与统一 Mac 启动器放在同一源码包中；启动器的 wrapper、预检与停止改进保留。
-全局菜单仍不支持，生产配置门槛仍关闭，不代表一键全局接管已完成。未修改旧会话、六处源代码绑定或 runner。
+全局 gateway 已接入统一 Mac 启动器；入口、预检、配置确认和恢复见 [桌面全局模式](DESKTOP_GLOBAL.zh-CN.md)。生产标记保持关闭，新增的试用配置门槛要求实际活跃控制器和已完成原生预检。源代码集成不代表用户的桌面已完成现场验收。未修改旧会话、六处源代码绑定或 runner。
 
 ## 当前可验证的部分
 
@@ -26,7 +25,7 @@ python3 -m unittest discover -s remote_tests -p 'test_global_*.py' -v
 
 签名 Google 控制队列、活动原生控制线程 helper、Mac 同步器和每线程 v3 JOIN 接线已有离线端到端测试。真实 Google/native admission、Mac 桌面与 CLI 工具循环仍未验收。Python 不能创建平台原生子线程，JOIN 文件或心跳也不能让已结束的原生线程自动醒来。
 
-本版本 gateway 的 production_ready 和 ready_for_config 恒为 false；global_config.apply 必须看到绑定端口的已验证生产 gateway 才能改配置，因此本原型不能打开配置门槛。离线 fixture 也不满足它。不要手改 ready_for_config 绕过它。
+本版本 gateway 的 production_ready 和 ready_for_config 恒为 false。默认生产配置门槛保持关闭；独立试用入口必须给出该激活的已签名、新鲜原生预检证据、准确客户端和解析器绑定，以及待写配置两端散列，才能在用户明确确认后写入。离线 fixture 不满足试用门槛。不要手改 ready_for_config 绕过它。
 
 ## 首次请求、重启和停止
 
@@ -44,7 +43,7 @@ Mac supervisor 为新线程最多等待 180 秒，让已活动的原生控制线
 
 可选格式保持依赖为 requirements-global.txt 中的 tomlkit。当前执行环境未安装；本次没有安装依赖。相应真实 TOML roundtrip/merge 测试明确跳过（包括用户在受管值旁新增注释的保留行为尚待验收），不能称配置编辑已完整验证。备份、CAS 文件替换、并发编辑保护、崩溃对账和精确原字节恢复的标准库测试可独立运行。
 
-preview 只显示改动和范围；apply 需要精确版本、预览 hash、显式确认和生产就绪探针。每次写入保存私有原字节/hash、postimage 和先行日志，写前重新核对文件身份/hash，然后 fsync + atomic replace + 重读。文件锁只对合作进程有效；无法对任意外部编辑器承诺真正的全局 CAS。
+preview 只显示改动和范围；普通 apply 的生产就绪门槛保持关闭。独立试用 apply 需要精确版本、配置前后 hash、显式确认，以及该激活的新鲜签名原生预检、真实解析器和客户端二进制绑定。每次写入保存私有原字节/hash、postimage 和先行日志，写前重新核对文件身份/hash，然后 fsync + atomic replace + 重读。文件锁只对合作进程有效；无法对任意外部编辑器承诺真正的全局 CAS。
 
 恢复时：精确 postimage 则恢复原字节；有无关编辑则只反向修改仍匹配的受管值；受管值被 CC Switch 或用户修改则冲突停止。原本不存在和空文件分别处理。崩溃/未知结果先 reconcile，绝不盲目覆盖。恢复保留 generation catalog，不停止已运行的客户端。
 

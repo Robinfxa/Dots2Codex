@@ -1,7 +1,7 @@
-"""Unified Mac entry point; setup is not readiness and global routing is unsupported.
+"""Mac desktop Global gateway and explicit single-session Router controls.
 
-Ports and UI are injectable for headless offline tests. The existing router owns
-all remote mutations, admission/probe gates, lifecycle locking, and exact cleanup.
+Ports, Global backend, and UI are injectable for headless offline tests. Each
+backend owns its mutations, admission/probe gates, lifecycle, and exact cleanup.
 """
 from __future__ import annotations
 import argparse
@@ -30,8 +30,36 @@ DEFAULT_STATE = Path.home() / '.config/dots2codex-launcher'
 CODEX_INSTRUCTIONS = 'https://github.com/openai/codex'
 REUSE_NOTICE = ('Reuse this Mac\'s existing authorized-user file for Google access?\n'
     'The recorded drive.readonly scope can read broadly across your Drive, beyond this folder. '
-    'The launcher only checks the exact folder; the Router later creates its two Docs and probe there. '
+    'The launcher only checks the exact folder. The selected routing mode asks separately '
+    'before creating its control Docs and probes there. '
     'No new OAuth, scope expansion, token copying, sharing changes, or Cloud project creation.\n')
+MENU_ACTIONS = {
+    'Start Global desktop routing': 'global-start',
+    'Global status': 'global-status',
+    'Stop Global routing': 'global-stop',
+    'Restore Global config': 'global-restore',
+    'Settings': 'settings',
+    'Start single-session Router': 'single-start',
+    'Single-session status': 'single-status',
+    'Stop single-session Router': 'single-stop',
+    'Quit': 'quit',
+}
+OPERATION_ALIASES = {'start':'single-start', 'status':'single-status',
+                     'stop':'single-stop', 'restore-global':'global-restore'}
+
+
+def choose_operation(ui):
+    selected = ui.choose('Dots2Codex desktop routing', MENU_ACTIONS)
+    operation = MENU_ACTIONS[selected]
+    if operation == 'quit': raise Cancelled()
+    return operation
+
+
+def desktop_global(**kwargs):
+    # Optional Global dependencies must not make single-session recovery or
+    # opening/cancelling the launcher menu depend on a Global installation.
+    from .global_desktop import DesktopGlobal
+    return DesktopGlobal(**kwargs)
 
 
 def safe_error(exc):
@@ -74,7 +102,7 @@ class Ports:
                'facade_owned':owned, 'closed':active.get('closed') is True,
                'process_stopped':active.get('process_stopped') is True,
                'router_ready':False, 'worker_stop_confirmed':False,
-               'underlying_model_verified':False, 'global_routing_supported':False}
+               'underlying_model_verified':False, 'mode':'single-session'}
         if active.get('stage') == 'READY' and owned and not router._cancelled(active):
             try:
                 ready = router._load_private_json(active['ready_file'])
@@ -89,11 +117,19 @@ class Ports:
 
 class Launcher:
     def __init__(self, *, root=ROOT, state=DEFAULT_STATE, config=router.DEFAULT_CONFIG,
-                 active=router.DEFAULT_ACTIVE, ui=None, ports=None):
+                 active=router.DEFAULT_ACTIVE, ui=None, ports=None, global_factory=None,
+                 global_ports=None):
         self.root, self.state = Path(root), no_symlinks(state)
         self.config, self.active = no_symlinks(config), no_symlinks(active)
         self.ui, self.ports = ui or UI(), ports or Ports()
+        self.global_factory, self.global_ports = global_factory or desktop_global, global_ports
         self.consent = self.state / 'approved-config.json'
+
+    def global_backend(self):
+        kwargs = {'root':self.root, 'state':self.state / 'global',
+                  'config':self.config, 'ui':self.ui}
+        if self.global_ports is not None: kwargs['ports'] = self.global_ports
+        return self.global_factory(**kwargs)
 
     def load(self):
         if not self.config.exists(): return None
@@ -169,10 +205,12 @@ class Launcher:
         validate_local(config)
         print('[launcher] Checking exact Google folder metadata (read only)...', flush=True)
         self.ports.google(config)  # read-only; no workspace/config mkdir before this succeeds
-        summary = ('Save these settings for new Router sessions?\n'
+        summary = ('Save these routing settings and defaults for new sessions?\n'
             f'Config: {self.config}\nCredential path: {credential}\nFolder ID: {folder}\nWorkspace: {work}\n'
             f'Codex: {codex}\nModel: {pair["model"]}\nEffort: {pair["reasoning_effort"]}\n'
-            'Folder preflight passed; bidirectional pairing is still pending. Global Codex routing is unsupported.')
+            'Folder preflight passed; bidirectional pairing is still pending. '
+            'These settings provide defaults for new single-session and Global desktop sessions. '
+            'Global Codex config changes require a separate exact-diff confirmation.')
         if not self.ui.confirm(summary): raise Cancelled()
         private_directory(self.state, create=True)
         private_directory(self.config.parent, create=True)
@@ -184,7 +222,7 @@ class Launcher:
             _save(self.consent, self._approval(config))
         return {'configured':True,'folder_verified':True,'router_ready':False,
                 'bidirectional_access_verified':False,'model':pair['model'],'effort':pair['reasoning_effort'],
-                'credentials_copied':False,'global_routing_supported':False}
+                'credentials_copied':False,'global_config_changed':False}
 
     def copy_join(self, active, message=None):
         if message is None:
@@ -201,7 +239,7 @@ class Launcher:
 
     def status(self):
         active = self.active_record()
-        if active is None: return {'configured':self.config.exists(),'stage':'NOT_STARTED','router_ready':False,'global_routing_supported':False}
+        if active is None: return {'configured':self.config.exists(),'stage':'NOT_STARTED','router_ready':False,'mode':'single-session'}
         return self.ports.active_status(active)
 
     def _active_menu(self, args):
@@ -250,28 +288,52 @@ class Launcher:
         # router's authoritative close and exact PID cleanup decide the outcome.
         call = SimpleNamespace(**vars(args)); call.config, call.active = str(self.config), str(self.active)
         result = self.ports.stop(call)
-        result['global_config_restore'] = 'unsupported_no_global_config_written'
+        result['global_config_restore'] = 'not_applicable_single_session'
+        return result
+
+    def global_start(self, args):
+        config = self.load()
+        if config is None or config.get('model_selection') is None: self.configure(args)
+        config_raw = read_private_file(self.config, 131072)
+        config = router._validate_config(json.loads(config_raw))
+        pair = router._resolve_selection(args, config)
+        validate_local(config)
+        self.reuse(config)
+        self.ports.google(config)
+        require(pair is not None, 'launcher_choose_model_effort_in_settings')
+        call = SimpleNamespace(**vars(args))
+        call.config = str(self.config)
+        call.expected_config_sha256 = hashlib.sha256(config_raw).hexdigest()
+        # The desktop backend obtains bounded cloud and exact config-diff
+        # consent. It never calls router.start or opens a sandboxed CLI session.
+        result = self.global_backend().start(call)
+        private_directory(self.state, create=True)
+        _save(self.consent, self._approval(config))
         return result
 
     def dispatch(self, args):
-        operation = args.operation
-        if operation == 'menu': operation = self.ui.choose('Dots2Codex Router', ['Start','Settings','Status','Stop','Global routing','Quit']).lower()
+        operation = OPERATION_ALIASES.get(args.operation, args.operation)
+        if operation == 'menu': operation = choose_operation(self.ui)
         if operation in {'quit','cancel'}: raise Cancelled()
-        if operation in {'global routing','restore-global'}:
-            return {'supported':False,'global_routing_supported':False,
-                    'reason':'Stable multi-session gateway is not integrated; this launcher never edits global Codex config.'}
+        if operation == 'global-start': return self.global_start(args)
+        if operation in {'global-status','global-stop','global-restore'}:
+            return getattr(self.global_backend(), operation.removeprefix('global-'))(args)
         if operation == 'settings': return self.configure(args)
-        if operation == 'status': return self.status()
-        if operation == 'stop': return self.stop(args)
+        if operation == 'single-status': return self.status()
+        if operation == 'single-stop': return self.stop(args)
+        require(operation == 'single-start', 'launcher_unknown_operation')
         return self.start(args)
 
 
 def parser():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('operation', choices=['start','settings','status','stop','menu','restore-global'], nargs='?', default='start')
+    p.add_argument('operation', choices=['menu','global-start','global-status','global-stop','global-restore',
+        'settings','single-start','single-status','single-stop', *OPERATION_ALIASES], nargs='?', default='menu')
     p.add_argument('--config', default=str(router.DEFAULT_CONFIG)); p.add_argument('--active', default=str(router.DEFAULT_ACTIVE))
     p.add_argument('--state', default=str(DEFAULT_STATE))
     p.add_argument('--credentials'); p.add_argument('--folder-id'); p.add_argument('--workdir'); p.add_argument('--codex')
+    p.add_argument('--codex-home', help='Explicit existing Codex desktop home for Global routing')
+    p.add_argument('--desktop-codex', help='Explicit installed Codex desktop executable for Global verification')
     p.add_argument('--model','-m'); p.add_argument('--effort'); p.add_argument('--catalog')
     p.add_argument('--no-launch-codex', action='store_true')
     return p
@@ -281,31 +343,31 @@ def main(argv=None):
     args = parser().parse_args(argv); os.umask(0o077)
     require(sys.version_info >= (3,11), 'launcher_python_311_required')
     require((args.model is None) == (args.effort is None), 'model_and_effort_required_together')
-    if args.operation not in {'start','settings'}:
-        require(args.model is None and args.effort is None and args.catalog is None,
-                'selection_flags_require_new_session_start')
     ui = UI()
     verify_package(ROOT)
     launcher = Launcher(state=args.state, config=args.config, active=args.active, ui=ui)
     if args.operation == 'menu':
-        chosen = ui.choose('Dots2Codex Router', ['Start','Settings','Status','Stop','Global routing','Quit'])
-        if chosen == 'Quit': raise Cancelled()
-        args.operation = 'restore-global' if chosen == 'Global routing' else chosen.lower()
+        args.operation = choose_operation(ui)
+    args.operation = OPERATION_ALIASES.get(args.operation, args.operation)
+    if args.operation not in {'single-start','global-start','settings'}:
+        require(args.model is None and args.effort is None and args.catalog is None,
+                'selection_flags_require_new_session_start')
     # Stop never has an installation prerequisite. Prefer a healthy known
     # interpreter, otherwise router.stop still attempts exact local termination
     # and leaves authoritative close unverified if Google SDK/auth is unavailable.
     python = None
-    needs_setup = args.operation in {'start','settings'} and not launcher.active_blocks()
+    is_global = args.operation.startswith('global-')
+    needs_setup = args.operation == 'global-start' or (args.operation in {'single-start','settings'} and not launcher.active_blocks())
     if needs_setup:
-        python = Environment(ROOT, args.state).ensure(ui)
-    elif args.operation in {'start','settings','stop'}:
+        python = Environment(ROOT, args.state, include_global=is_global).ensure(ui)
+    elif args.operation in {'single-start','settings','single-stop','global-status','global-stop','global-restore'}:
         try:
-            current = Environment(ROOT, args.state).current()
+            current = Environment(ROOT, args.state, include_global=is_global).current()
             if current: python = current / 'bin/python3'
         except Exception: pass
     if python is not None and absolute_path(sys.prefix) != python.parent.parent:
         forwarded = [args.operation]
-        for key in ('config','active','state','credentials','folder_id','workdir','codex','model','effort','catalog'):
+        for key in ('config','active','state','credentials','folder_id','workdir','codex','codex_home','desktop_codex','model','effort','catalog'):
             value = getattr(args, key)
             if value is not None: forwarded.extend(['--' + key.replace('_', '-'), value])
         if args.no_launch_codex: forwarded.append('--no-launch-codex')

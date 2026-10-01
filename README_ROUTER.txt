@@ -12,8 +12,11 @@ Read docs/UNIFIED_MAC_LAUNCHER.zh-CN.md for setup, permissions and recovery.
 Optional Router.app requires a Mac build via mac_router/build-app.command.
 The app is unsigned and unnotarized; actual Mac build and launch remain unverified.
 
-This launcher keeps the single-session Router protocol. Global routing is NOT
-integrated. It never edits global Codex config, auth, proxy, login or other CLI sessions.
+Global desktop mode is integrated into the START.command menu. It uses a
+separate bounded GLOBAL controller JOIN and one pinned child per desktop thread.
+Read docs/DESKTOP_GLOBAL.zh-CN.md. The exact global config diff requires fresh
+native preflight evidence and confirmation; production readiness remains false.
+Single-session Router actions remain separate. Auth/login/proxy are untouched.
 
 Install only after explicit approval into a private versioned environment.
 Reuse only this Mac's existing authorized-user credential, with explicit consent.

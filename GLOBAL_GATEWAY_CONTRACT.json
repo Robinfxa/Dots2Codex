@@ -1,10 +1,10 @@
 {
-  "contract": "dots-global-experimental-combined-release/1",
+  "contract": "dots-desktop-global-pilot/1",
   "gateway_protocol": "dots-global-gateway/1",
   "controller_protocol": "dots-global-controller/1",
   "base_published_commit": "00156e4",
   "base_source_tree_sha256": "b5854e06d221c1152bafc9f93508fc5a0b356d39e3c53bdd6b2313463cc312c4",
-  "status": "offline-integrated-global-controller-awaiting-live-acceptance",
+  "status": "desktop-global-flow-integrated-awaiting-live-acceptance",
   "global_config_production_gate": "closed-until-parser-and-live-acceptance",
   "native_spawn_from_python": false,
   "automatic_native_wake": false,
@@ -20,8 +20,9 @@
   "first_request_admission_wait_seconds": 180,
   "existing_base_files_changed_scope": "Original isolated gateway candidate only; the combined package retains launcher base changes listed in ROUTER_PACKAGE_MANIFEST.json",
   "combined_source_package": true,
-  "launcher_global_menu_supported": false,
+  "launcher_global_menu_supported": true,
   "production_ready": false,
   "ready_for_config": false,
-  "combined_validation": "docs/EXPERIMENTAL_PREVIEW_VALIDATION.md"
+  "combined_validation": "docs/DESKTOP_GLOBAL.zh-CN.md",
+  "pilot_config_gate": "fresh-authenticated-native-preflight-parser-binaries-exact-diff"
 }

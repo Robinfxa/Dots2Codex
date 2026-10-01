@@ -1,3 +1,5 @@
+> Historical validation snapshot for published f4ef05d. The current desktop Global integration supersedes the unsupported-menu statement below; see [the current activation guide](DESKTOP_GLOBAL.zh-CN.md) and [integration validation](DESKTOP_GLOBAL_VALIDATION.md).
+
 # Experimental launcher + global gateway preview, 2026-10-01
 
 ## Release boundary

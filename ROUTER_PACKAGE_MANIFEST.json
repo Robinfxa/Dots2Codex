@@ -1,90 +1,47 @@
 {
-  "contract": "dots2codex-experimental-launcher-global-preview/1",
-  "base_commit": "00156e4621444eefa90752545dc1a40521639fb1",
-  "base_source_tree_sha256": "b5854e06d221c1152bafc9f93508fc5a0b356d39e3c53bdd6b2313463cc312c4",
+  "contract": "dots2codex-desktop-global-pilot/1",
+  "base_commit": "f4ef05ded45a2391be8715db2cec64a22fcbdd9a",
+  "base_source_tree_sha256": "f1dd2ade5de38bfc1f87525348ca5dc8a069b21755840b0c44615e89c5346966",
   "input_launcher_source_tree_sha256": "7774123803de7f12e89b8cb8be7a510f5cfc2e829572921c0fde33632d4e096e",
   "input_gateway_source_tree_sha256": "ab3026308c240f613b8be00b623cfa3eb67cd73fcac4e87556da7d1619215891",
-  "source_tree_sha256": "f1dd2ade5de38bfc1f87525348ca5dc8a069b21755840b0c44615e89c5346966",
+  "source_tree_sha256": "091ed895060ed4a0d1703b8e1ecf8392d9039e6418c6754a6ead254746974cce",
   "source_tree_hash_algorithm": "SHA-256 of UTF-8 canonical JSON files array (sort_keys=true,separators=comma/colon,ensure_ascii=false); array sorted by path",
-  "hashed_file_count": 205,
+  "hashed_file_count": 212,
   "manifest_self_excluded": true,
   "changed_files": [
-    ".gitignore",
     "GLOBAL_GATEWAY_CONTRACT.json",
     "GLOBAL_GATEWAY_README.txt",
-    "INSTALL_ROUTER.command",
     "README.md",
     "README_ROUTER.txt",
-    "ROUTER_STATUS.command",
-    "START.command",
-    "START_ROUTER.command",
-    "STOP_ROUTER.command",
+    "docs/DESKTOP_GLOBAL.zh-CN.md",
+    "docs/DESKTOP_GLOBAL_VALIDATION.md",
     "docs/EXPERIMENTAL_PREVIEW_VALIDATION.md",
     "docs/GLOBAL_GATEWAY.zh-CN.md",
-    "docs/GLOBAL_GATEWAY_VALIDATION.md",
     "docs/GLOBAL_NATIVE_CONTROLLER.md",
-    "docs/ROUTER_ONE_CLICK.zh-CN.md",
     "docs/UNIFIED_MAC_LAUNCHER.zh-CN.md",
-    "docs/UNIFIED_MAC_LAUNCHER_VALIDATION.md",
-    "mac_router/Router.applescript",
-    "mac_router/build-app.command",
-    "mac_router/install.command",
-    "mac_router/launch.command",
-    "mac_router/start-router.command",
-    "mac_router/status.command",
-    "mac_router/stop-router.command",
-    "remote_tests/test_drive_http.py",
-    "remote_tests/test_global_config.py",
-    "remote_tests/test_global_control.py",
-    "remote_tests/test_global_gateway.py",
+    "remote_tests/test_global_desktop.py",
+    "remote_tests/test_global_pilot.py",
+    "remote_tests/test_mac_global_launcher.py",
     "remote_tests/test_mac_launcher.py",
-    "remote_transport/drive_http.py",
     "remote_transport/global_config.py",
-    "remote_transport/global_control.py",
-    "remote_transport/global_fixture.py",
-    "remote_transport/global_gateway.py",
-    "remote_transport/global_google.py",
-    "remote_transport/global_native.py",
+    "remote_transport/global_desktop.py",
+    "remote_transport/global_pilot.py",
     "remote_transport/mac_environment.py",
-    "remote_transport/mac_launcher.py",
-    "remote_transport/mac_setup.py",
-    "remote_transport/mac_ui.py",
-    "remote_transport/router_mac.py",
-    "requirements-global.txt"
+    "remote_transport/mac_launcher.py"
   ],
   "added_files": [
-    "GLOBAL_GATEWAY_CONTRACT.json",
-    "GLOBAL_GATEWAY_README.txt",
-    "START.command",
-    "docs/EXPERIMENTAL_PREVIEW_VALIDATION.md",
-    "docs/GLOBAL_GATEWAY.zh-CN.md",
-    "docs/GLOBAL_GATEWAY_VALIDATION.md",
-    "docs/GLOBAL_NATIVE_CONTROLLER.md",
-    "docs/UNIFIED_MAC_LAUNCHER.zh-CN.md",
-    "docs/UNIFIED_MAC_LAUNCHER_VALIDATION.md",
-    "mac_router/Router.applescript",
-    "mac_router/build-app.command",
-    "mac_router/launch.command",
-    "remote_tests/test_global_config.py",
-    "remote_tests/test_global_control.py",
-    "remote_tests/test_global_gateway.py",
-    "remote_tests/test_mac_launcher.py",
-    "remote_transport/global_config.py",
-    "remote_transport/global_control.py",
-    "remote_transport/global_fixture.py",
-    "remote_transport/global_gateway.py",
-    "remote_transport/global_google.py",
-    "remote_transport/global_native.py",
-    "remote_transport/mac_environment.py",
-    "remote_transport/mac_launcher.py",
-    "remote_transport/mac_setup.py",
-    "remote_transport/mac_ui.py",
-    "requirements-global.txt"
+    "docs/DESKTOP_GLOBAL.zh-CN.md",
+    "docs/DESKTOP_GLOBAL_VALIDATION.md",
+    "remote_tests/test_global_desktop.py",
+    "remote_tests/test_global_pilot.py",
+    "remote_tests/test_mac_global_launcher.py",
+    "remote_transport/global_desktop.py",
+    "remote_transport/global_pilot.py"
   ],
   "all_six_source_bindings_preserved": true,
   "existing_runtime_migration": "fresh_paired_session_required",
-  "status": "experimental-source-package-coexistence-only",
-  "launcher_global_menu_supported": false,
+  "status": "desktop-global-flow-integrated-awaiting-live-acceptance",
+  "launcher_global_menu_supported": true,
   "production_ready": false,
   "ready_for_config": false,
   "global_config_enabled": false,
@@ -95,10 +52,10 @@
   "native_inference_calls": 0,
   "google_writes": 0,
   "test_results": {
-    "python_discovered": 649,
-    "python_passed": 640,
-    "python_skipped": 9,
-    "node_passed": 25
+    "focused_discovered_distinct": 190,
+    "focused_executed_pass": 181,
+    "real_parser_skipped": 9,
+    "independent_offline_probes": 8
   },
   "files": [
     {
@@ -139,14 +96,14 @@
     },
     {
       "path": "GLOBAL_GATEWAY_CONTRACT.json",
-      "bytes": 1355,
-      "sha256": "d9dbf1a135a8aeb440b3ef4b69d67b253020579597df7157eea95ef637bb4044",
+      "bytes": 1411,
+      "sha256": "e3db2e242b7ba51622743dcc8f2b2983f94dfd74dbabe903c9c8a8d3a4a382b4",
       "mode": "0644"
     },
     {
       "path": "GLOBAL_GATEWAY_README.txt",
-      "bytes": 2200,
-      "sha256": "7fd4c416241e01e96fff9f553f08d77a47e89a50f330e44fa03d1e9d7eb0645b",
+      "bytes": 1765,
+      "sha256": "73112e4847aead47f9690fc6e6e6d8a7515270943e047f69e59ec6c4536713ba",
       "mode": "0644"
     },
     {
@@ -187,14 +144,14 @@
     },
     {
       "path": "README.md",
-      "bytes": 16682,
-      "sha256": "434d5d31bcd06feb9d7e993a0f23dac656094bbbdd2b376a6f2643af88b7b2b7",
+      "bytes": 17855,
+      "sha256": "87aefbcacd76a5b7228eab4479c1b35722f672a6affad6d01f74c89726a734b3",
       "mode": "0644"
     },
     {
       "path": "README_ROUTER.txt",
-      "bytes": 1446,
-      "sha256": "7fc44b0d7a3ed6d2da4f9217aef5ff7c7fe775df0e7d3a5542ecc174d8770ecb",
+      "bytes": 1670,
+      "sha256": "c26866fc0853e92b491adf4b9ac37dc009a7a15efc9510f40a2e65fa98913e8c",
       "mode": "0644"
     },
     {
@@ -318,15 +275,27 @@
       "mode": "0644"
     },
     {
+      "path": "docs/DESKTOP_GLOBAL.zh-CN.md",
+      "bytes": 4982,
+      "sha256": "0d8e03c15e539de9e1423a6ab009b361a10f10d61951315d392f3e87db83847c",
+      "mode": "0644"
+    },
+    {
+      "path": "docs/DESKTOP_GLOBAL_VALIDATION.md",
+      "bytes": 3249,
+      "sha256": "88386cc17381fb8d8a277a0d8973961bf47b09478031e68ba7809fac473431ce",
+      "mode": "0644"
+    },
+    {
       "path": "docs/EXPERIMENTAL_PREVIEW_VALIDATION.md",
-      "bytes": 4137,
-      "sha256": "5f924d2bd803f68f2170ac7087038b50cefaf644b4f76f08665dbd59eebf24ca",
+      "bytes": 4402,
+      "sha256": "d59d36de58c931885c8c1ec5b164d93f83aa7df0ce5a25720acf612ff4c66766",
       "mode": "0644"
     },
     {
       "path": "docs/GLOBAL_GATEWAY.zh-CN.md",
-      "bytes": 6181,
-      "sha256": "f60791c32681d9987f3a3de7a8fcba5f80f606cffc2809e1a494d8642a12361a",
+      "bytes": 6488,
+      "sha256": "9b41108e06c841069d8b5cbf1e0e47abf17f34fbbe48df08d7a9e1ccee195f4c",
       "mode": "0644"
     },
     {
@@ -337,8 +306,8 @@
     },
     {
       "path": "docs/GLOBAL_NATIVE_CONTROLLER.md",
-      "bytes": 11898,
-      "sha256": "91cdda841c3f3dfff063e9581fc33b86892094c32f15c3e47028b9b436efe4ad",
+      "bytes": 12352,
+      "sha256": "30ba280b7063d02d623e07d006aa6497c6bcd2806ef14089e253f2e8791a325e",
       "mode": "0644"
     },
     {
@@ -415,8 +384,8 @@
     },
     {
       "path": "docs/UNIFIED_MAC_LAUNCHER.zh-CN.md",
-      "bytes": 7505,
-      "sha256": "e9784707cb1da44f04866f75449529207a055ae75b1cd91c25b0f353a4833dea",
+      "bytes": 7593,
+      "sha256": "4a884163de589488832882ab3324255f4e7cdc1b38a7dad1866f1486720100a8",
       "mode": "0644"
     },
     {
@@ -792,9 +761,21 @@
       "mode": "0644"
     },
     {
+      "path": "remote_tests/test_global_desktop.py",
+      "bytes": 9909,
+      "sha256": "0ddd14c456570afc8a18c76fc2253b58e0a30903f417dbf45d507dab36c61338",
+      "mode": "0644"
+    },
+    {
       "path": "remote_tests/test_global_gateway.py",
       "bytes": 20037,
       "sha256": "bda93d8feb9183fae456a3e566bcf51419b29b0328249794cbf748df310df556",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_tests/test_global_pilot.py",
+      "bytes": 16007,
+      "sha256": "6f9cd99c2c4e54981a938d7e6dcf177ce9a1c092037e1dd075a505cb8a9f71c6",
       "mode": "0644"
     },
     {
@@ -810,9 +791,15 @@
       "mode": "0644"
     },
     {
+      "path": "remote_tests/test_mac_global_launcher.py",
+      "bytes": 16557,
+      "sha256": "5fae7ad7c7839529efbcf981edd5081daafaab9bc7b6758972e79421d94bd3d8",
+      "mode": "0644"
+    },
+    {
       "path": "remote_tests/test_mac_launcher.py",
-      "bytes": 27137,
-      "sha256": "8c3fe9951bf6c667fc8e86b55f9cf6c31c4476955898efe8583769929cd873ce",
+      "bytes": 27465,
+      "sha256": "a12ac74735c1e4a45c0184ec3b3065e3c0e8ac165dd5c1c69b3b2be779c1883e",
       "mode": "0644"
     },
     {
@@ -961,14 +948,20 @@
     },
     {
       "path": "remote_transport/global_config.py",
-      "bytes": 19971,
-      "sha256": "9d030a44530072cd16dbfa4d5bed4185a94a69a29ec998fca706e8f3ef23c77a",
+      "bytes": 22210,
+      "sha256": "ad006f33f68c8def2ec2f79722582536d6fa135b3251b871d7d4622ab7a7b028",
       "mode": "0644"
     },
     {
       "path": "remote_transport/global_control.py",
       "bytes": 21393,
       "sha256": "ad353b08d6adfc2e92e66a50965c4cd03aad893fa2c4f40c17dbc7b31761ebe7",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/global_desktop.py",
+      "bytes": 27312,
+      "sha256": "4a0b81bd301adddc62f124e086d7d12a526ece5dee2a05eba264e208fec65ddc",
       "mode": "0644"
     },
     {
@@ -996,15 +989,21 @@
       "mode": "0644"
     },
     {
+      "path": "remote_transport/global_pilot.py",
+      "bytes": 19830,
+      "sha256": "417283cecabf11a67cd3a4f38dcbf7e79ef9bd05134636f404cd5193170cdde0",
+      "mode": "0644"
+    },
+    {
       "path": "remote_transport/mac_environment.py",
-      "bytes": 8983,
-      "sha256": "e7fe1024d3449c5f05fd05b5320c434fa3f8b44ac56abc0cadd7f42e3e7defe9",
+      "bytes": 9657,
+      "sha256": "210bf4393998e5678511fb34e04cb4ff5cd6d9736c14b20b260b04df248959b4",
       "mode": "0644"
     },
     {
       "path": "remote_transport/mac_launcher.py",
-      "bytes": 19814,
-      "sha256": "57f6f62cc7ee08106792dc62e7a38118e5f275b1d9f9d18f743e80288a2252fd",
+      "bytes": 22875,
+      "sha256": "5f36dd6bc79b6d9de3e8f47bd13de1a1cdbdede30a07fc2f1246d5f674e7c75c",
       "mode": "0644"
     },
     {
@@ -1331,5 +1330,24 @@
       "sha256": "4a8b2f264ff4bfe9cad372ba069aa9fca5dfee19dc13f35a17f3d6d7c9ad6c5f",
       "mode": "0644"
     }
-  ]
+  ],
+  "parent_commit": "f4ef05ded45a2391be8715db2cec64a22fcbdd9a",
+  "global_config_pilot_gate_implemented": true,
+  "global_config_pilot_runtime_exercised": false,
+  "input_desktop_global_source_tree_sha256": "7999cd2b2a5e028bc706760d7a290f44a3b5365b76c5f38f88a4d9478a89b4f3",
+  "publication_documentation_corrections": [
+    "README.md",
+    "docs/GLOBAL_GATEWAY.zh-CN.md",
+    "docs/UNIFIED_MAC_LAUNCHER.zh-CN.md"
+  ],
+  "publication_test_results": {
+    "python_discovered": 710,
+    "python_passed": 701,
+    "python_skipped_real_toml_parser": 9,
+    "node_passed": 25,
+    "offline_two_thread_fixture_passed": true,
+    "dependency_install_performed": false,
+    "native_inference_calls": 0,
+    "google_writes": 0
+  }
 }
