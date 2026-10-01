@@ -318,11 +318,11 @@ class GoogleQueueBridge:
     def step(self):
         if (self.root/'stop-requested.json').exists():return {'state':'closed','native_children_stopped':False}
         source=self.read();state=source.state;c=state['logical']['controller']
-        if c is None:return {'state':'await_native_join','automatic_wake':False}
         if state['logical']['closed']:
             try:self.sync_heartbeat()
             except ProtocolError:pass
             return {'state':'closed','native_children_stopped':False}
+        if c is None:return {'state':'await_native_join','automatic_wake':False}
         try:self.sync_heartbeat()
         except ProtocolError as exc:
             if str(exc) in ('global_controller_not_active_restart_required','global_controller_clock_rollback',

@@ -153,11 +153,12 @@ class DesktopAppTrialTests(unittest.TestCase):
         ui=SimpleNamespace(confirm=lambda message:messages.append(message) or False,
                            file=lambda *args:(_ for _ in ()).throw(AssertionError('no picker')))
         launcher=desktop.DesktopGlobal(root=self.root,state=self.root/'launcher-state',config=self.root/'router.json',ui=ui)
-        active={'runtime':str(self.root),'spec':{'generation':self.store.activation()['id'],
+        # The process/current-pointer lifecycle is synthetic in this profile test.
+        active={'run_id':'a'*32,'runtime':str(self.root),'spec':{'run_id':'a'*32,'generation':self.store.activation()['id'],
                 'codex_home':str(home),'cli':cli,'desktop_app':self.app_evidence}}
         preview={'config_path':str(path),'diff':'model_provider: owned change only',
                  'before_hash':args['expected_before_hash'],'after_hash':args['expected_after_hash']}
-        with patch.object(launcher,'_wait_stage',return_value={'stage':'PREFLIGHT_VERIFIED','pilot_proof_id':proof['proof_id']}),patch.object(config,'preview',return_value=preview),patch.object(config,'render_patch',return_value=b'# trial fixture\n'),patch.object(launcher.ports,'owned',return_value=True):
+        with patch.object(launcher,'_wait_stage',return_value={'stage':'PREFLIGHT_VERIFIED','pilot_proof_id':proof['proof_id']}),patch.object(config,'preview',return_value=preview),patch.object(config,'render_patch',return_value=b'# trial fixture\n'),patch.object(launcher.ports,'owned',return_value=True),patch.object(launcher,'active',return_value=active) as current:
             with self.assertRaises(desktop.Cancelled):launcher._continue(active)
             self.assertEqual(path.read_bytes(),b'# before trial\n')
             self.assertIn(str(self.bundle),messages[0]);self.assertIn('26.930.1',messages[0])
@@ -165,6 +166,7 @@ class DesktopAppTrialTests(unittest.TestCase):
             self.assertIn('Restore Global config',messages[0]);self.assertIn(str(path),messages[0])
             ui.confirm=lambda message:messages.append(message) or True
             result=launcher._continue(active)
+        current.assert_called_once_with()
         self.assertEqual(result['phase'],'committed');self.assertEqual(result['client_evidence_profile'],app.TRIAL)
         self.assertFalse(result['production_ready']);self.assertFalse(result['desktop_compatibility_verified'])
         self.assertEqual(path.read_bytes(),b'# trial fixture\n')

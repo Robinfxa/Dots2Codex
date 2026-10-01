@@ -4,18 +4,37 @@
  */
 function createGlobalControllerCell(io) {
   'use strict';
-  for (const name of ['read','plan','check','write','verify'])
+  for (const name of ['read','plan','check','write','verify','recordFailure'])
     if(typeof io[name]!=='function')throw Error('global_cell_ports_required');
   let busy=false;
   async function execute(kind, extra={}) {
-    const source=await io.read();
-    const plan=await io.plan(kind,source,extra); // durable one-attempt reservation
-    await io.check(plan,source); // helper host clock, signed predecessor deadline
-    let response=null;
-    try { response=await io.write(plan.tool_arguments); }
-    catch (_) { /* Unknown outcome: read-only exact event reconciliation once. */ }
-    const readback=await io.read();
-    return io.verify(plan,response,readback); // local accept precedes any agent yield
+    let stage='read',plan=null,writeAttempted=false,writeFailure=null;
+    try {
+      const source=await io.read();
+      stage='plan';plan=await io.plan(kind,source,extra); // durable one-attempt reservation
+      stage='check';await io.check(plan,source); // helper clock, signed predecessor deadline
+      let response=null;
+      stage='write';writeAttempted=true;
+      try { response=await io.write(plan.tool_arguments); }
+      catch (error) {
+        // Preserve the actual sanitized error BEFORE another tool can fail. An
+        // error category is diagnostic evidence, never permission to retry CAS.
+        writeFailure=await io.recordFailure(error,{kind,stage,plan,writeAttempted,
+          outcome:'cas_outcome_unknown_no_replay',writeFailure:null});
+      }
+      stage='readback';const readback=await io.read();
+      stage='verify';return await io.verify(plan,response,readback);
+    } catch (error) {
+      // A failed private capture must not itself be blindly repeated.
+      if(error.message==='global_private_diagnostic_capture_failed_no_replay')throw error;
+      const closedBeforeJoin=!writeAttempted&&kind==='join'&&error.message==='global_queue_closed';
+      const outcome=writeAttempted?'cas_outcome_unknown_no_replay':
+        closedBeforeJoin?'closed_before_join':'not_dispatched';
+      await io.recordFailure(error,{kind,stage,plan,writeAttempted,outcome,writeFailure});
+      if(writeAttempted)throw Error('global_cas_outcome_unknown_no_replay');
+      if(closedBeforeJoin)throw Error('global_queue_closed_before_join');
+      throw error;
+    }
   }
   async function exclusive(fn) {
     if(busy)throw Error('global_cell_already_running');
@@ -37,6 +56,65 @@ function createGlobalControllerCell(io) {
   };
 }
 
+/* Diagnostics deliberately contain no remote message, content, request, stack,
+ * path, URL or arbitrary string. Error bodies may echo credentials or Docs data,
+ * so regex redaction cannot safely preserve their text, even in private files. */
+function sanitizeGlobalControllerError(value, category) {
+  const root=value&&typeof value==='object'?value:{};
+  const structured=root.structuredContent&&typeof root.structuredContent==='object'?root.structuredContent:root;
+  const nested=structured.error&&typeof structured.error==='object'?structured.error:structured;
+  const providerCodes=new Set(['ABORTED','ALREADY_EXISTS','CANCELLED','DEADLINE_EXCEEDED',
+    'FAILED_PRECONDITION','INTERNAL','INVALID_ARGUMENT','NOT_FOUND','OUT_OF_RANGE',
+    'PERMISSION_DENIED','RESOURCE_EXHAUSTED','UNAUTHENTICATED','UNAVAILABLE','UNIMPLEMENTED',
+    'UNKNOWN','ETIMEDOUT','ECONNRESET','ECONNREFUSED','EAI_AGAIN','rateLimitExceeded',
+    'userRateLimitExceeded','quotaExceeded','backendError','forbidden','insufficientPermissions',
+    'invalid','notFound','conditionNotMet','authError']);
+  const localCodes=new Set(['global_queue_closed','global_queue_closed_before_join',
+    'global_operation_not_observed_no_replay','global_cas_acceptance_window_expired_no_replay',
+    'global_cas_dispatch_window_expired_no_replay','global_unresolved_cas_readonly_reconciliation_required',
+    'global_controller_clock_rollback','global_controller_not_active_restart_required',
+    'global_controller_not_active_prepared_event_expired','global_operation_already_issued_no_replay',
+    'global_plan_not_reserved','global_response_document_mismatch','global_exact_replace_required',
+    'global_response_revision_unverified','global_observation_rollback_or_fork',
+    'global_actual_controller_identity_mismatch','global_controller_limits_required',
+    'global_controller_join_required','global_controller_cell_source_mismatch',
+    'global_document_read_failed','global_exact_document_resource_required',
+    'global_result_chunk_invalid','global_cas_outcome_unknown','global_local_helper_failed',
+    'global_local_helper_output_invalid','global_private_diagnostic_capture_failed_no_replay']);
+  const statuses=[nested.status,nested.status_code,nested.statusCode,nested.code,root.status,root.statusCode];
+  const status=statuses.find(x=>Number.isInteger(x)&&x>=100&&x<=599);
+  const rpc=Number.isInteger(nested.code)&&nested.code>=0&&nested.code<=16?nested.code:undefined;
+  const code=[nested.code,nested.status,nested.reason,root.code].find(x=>providerCodes.has(x));
+  const local=[root.error,root.message].find(x=>localCodes.has(x));
+  // Message text can classify an error, but never leaves this function. Labels
+  // are hints only: no error response releases a burned CAS reservation.
+  const texts=[root.message,nested.message];
+  if(Array.isArray(root.content))for(const c of root.content.slice(0,8))
+    if(c&&c.type==='text'&&typeof c.text==='string')texts.push(c.text.slice(0,8192));
+  const message=texts.filter(x=>typeof x==='string').map(x=>x.slice(0,8192)).join(' ');
+  if(category==='connector_error_response'||category==='connector_exception') {
+    if(status===401||status===403||['PERMISSION_DENIED','UNAUTHENTICATED'].includes(code))category='authorization_error';
+    else if(status===429||['RESOURCE_EXHAUSTED','rateLimitExceeded','userRateLimitExceeded','quotaExceeded'].includes(code))category='rate_limited';
+    else if(status>=500||['UNAVAILABLE','INTERNAL','backendError'].includes(code))category='provider_unavailable';
+    else if(status===409||/requiredRevisionId|revision.*(?:mismatch|does not match)/i.test(message))
+      category='revision_conflict_reported';
+    else if(['DEADLINE_EXCEEDED','ETIMEDOUT','ECONNRESET'].includes(code)||/timeout|timed out|ECONNRESET|ETIMEDOUT/i.test(message))
+      category='transport_timeout';
+  }
+  const result={category};
+  if(status!==undefined)result.http_status=status;
+  if(rpc!==undefined)result.rpc_status=rpc;
+  if(code!==undefined)result.provider_code=code;
+  if(local!==undefined)result.local_code=local;
+  const d=root.diagnostic;
+  if(d&&typeof d==='object')result.readback={
+    authenticated:d.authenticated===true,
+    queue_closed:typeof d.queue_closed==='boolean'?d.queue_closed:null,
+    expected_event_observed:typeof d.expected_event_observed==='boolean'?d.expected_event_observed:null
+  };
+  return result;
+}
+
 function createGlobalControllerToolAdapter(tools, config, captureValue) {
   'use strict';
   if(typeof captureValue!=='function')throw Error('exact_private_capture_required');
@@ -45,13 +123,27 @@ function createGlobalControllerToolAdapter(tools, config, captureValue) {
     throw Error('global_cell_config_required');
   const quote=x=>"'"+String(x).replace(/'/g,"'\\''")+"'";
   let serial=0;
+  const failures=new WeakMap();
+  const helperCodes=new Set(['global_queue_closed','global_operation_not_observed_no_replay',
+    'global_cas_acceptance_window_expired_no_replay','global_cas_dispatch_window_expired_no_replay',
+    'global_unresolved_cas_readonly_reconciliation_required','global_controller_clock_rollback',
+    'global_controller_not_active_restart_required']);
+  function failure(code,value,category) {
+    const error=Error(code);failures.set(error,sanitizeGlobalControllerError(value,category));return error;
+  }
   const path=label=>stateDir+'/cell-'+Date.now().toString(36)+'-'+(++serial)+'-'+label+'.json';
   const structured=value=>value&&Object.hasOwn(value,'structuredContent')?value.structuredContent:value;
   async function command(args) {
-    const r=await tools.exec_command({cmd:['python3','-B',...args].map(quote).join(' '),
-      workdir:cwd,max_output_tokens:12000,yield_time_ms:10000});
-    if(r.session_id||r.exit_code!==0)throw Error('global_local_helper_failed');
-    return JSON.parse(r.output);
+    let r;
+    try{r=await tools.exec_command({cmd:['python3','-B',...args].map(quote).join(' '),
+      workdir:cwd,max_output_tokens:12000,yield_time_ms:10000});}
+    catch(error){throw failure('global_local_helper_failed',error,'local_helper_error');}
+    if(r.session_id||r.exit_code!==0) {
+      let detail;try{detail=JSON.parse(r.output);}catch(_){detail={message:r.output};}
+      throw failure(helperCodes.has(detail&&detail.error)?detail.error:'global_local_helper_failed',detail,'local_helper_error');
+    }
+    try{return JSON.parse(r.output);}
+    catch(error){throw failure('global_local_helper_output_invalid',error,'local_helper_error');}
   }
   async function helper(operation,source,args=[]) {
     const resultFile=path('result');
@@ -71,9 +163,11 @@ function createGlobalControllerToolAdapter(tools, config, captureValue) {
   const snapshots=new Map();
   const io={
     async read(){
-      const result=await tools.mcp__codex_apps__google_drive_get_document({document_id:documentId,
-        fields:'documentId,revisionId,suggestionsViewMode,tabs'});
-      if(result&&result.isError)throw Error('global_document_read_failed');
+      let result;
+      try{result=await tools.mcp__codex_apps__google_drive_get_document({document_id:documentId,
+        fields:'documentId,revisionId,suggestionsViewMode,tabs'});}
+      catch(error){throw failure('global_document_read_failed',error,'connector_exception');}
+      if(result&&result.isError)throw failure('global_document_read_failed',result,'connector_error_response');
       const resource=structured(result);
       if(!resource||resource.documentId!==documentId||!resource.revisionId||!resource.tabs)
         throw Error('global_exact_document_resource_required');
@@ -91,9 +185,24 @@ function createGlobalControllerToolAdapter(tools, config, captureValue) {
         throw Error('global_cas_dispatch_window_expired_no_replay');
     },
     async write(args){
-      const value=await tools.mcp__codex_apps__google_drive_batch_update_document(args);
-      if(value&&value.isError)throw Error('global_cas_outcome_unknown');
-      return structured(value);
+      let value;
+      try{value=await tools.mcp__codex_apps__google_drive_batch_update_document(args);}
+      catch(error){throw failure('global_cas_outcome_unknown',error,'connector_exception');}
+      const resource=structured(value);
+      if(value&&value.isError||resource&&typeof resource==='object'&&
+          (resource.error||resource.errors||resource.success===false))
+        throw failure('global_cas_outcome_unknown',value,'connector_error_response');
+      return resource;
+    },
+    async recordFailure(error,context){
+      const detail=failures.get(error)||sanitizeGlobalControllerError(error,'controller_error');
+      try{return await captureValue({contract:'dots-global-controller-diagnostic/1',
+        operation:context.kind,stage:context.stage,outcome:context.outcome,
+        write_attempted:context.writeAttempted,write_failure_capture:context.writeFailure,
+        plan_file:context.plan&&context.plan.plan_file||null,
+        operation_id:context.plan&&context.plan.operation_id||null,
+        retry_allowed:false,native_spawn_allowed:false,error:detail});}
+      catch(_){throw Error('global_private_diagnostic_capture_failed_no_replay');}
     },
     async verify(plan,response,readback){
       const responsePath=response===null?null:await captureValue(response);
@@ -107,4 +216,4 @@ function createGlobalControllerToolAdapter(tools, config, captureValue) {
   };
   return {io,cell:createGlobalControllerCell(io)};
 }
-if(typeof module!=='undefined')module.exports={createGlobalControllerCell,createGlobalControllerToolAdapter};
+if(typeof module!=='undefined')module.exports={createGlobalControllerCell,createGlobalControllerToolAdapter,sanitizeGlobalControllerError};

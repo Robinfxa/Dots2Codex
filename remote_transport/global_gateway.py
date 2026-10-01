@@ -210,6 +210,41 @@ class Store:
                     'unknown_activation')
         return {'disabled':True,'existing_routes_retained':True,'clients_restarted':False}
 
+    def pause_docs_reads(self, generation, token):
+        """Local admission fence only; never renew or erase signed liveness."""
+        with self.transaction() as db:
+            require(db.execute('SELECT id FROM activations WHERE id=?',(generation,)).fetchone() is not None,
+                    'unknown_activation')
+            prior=db.execute("SELECT value FROM meta WHERE key='docs_read_pause'").fetchone()
+            value={'generation':generation,'token':token}
+            require(prior is None or json.loads(prior['value'])==value,'global_docs_read_pause_owner_mismatch')
+            db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)',('docs_read_pause',json.dumps(value)))
+
+    def resume_docs_reads(self, generation, token):
+        with self.transaction() as db:
+            prior=db.execute("SELECT value FROM meta WHERE key='docs_read_pause'").fetchone()
+            require(prior is not None and json.loads(prior['value'])=={'generation':generation,'token':token},
+                    'global_docs_read_pause_owner_mismatch')
+            db.execute("DELETE FROM meta WHERE key='docs_read_pause'")
+
+    def _docs_reads_paused(self, db):
+        return db.execute("SELECT 1 FROM meta WHERE key='docs_read_pause'").fetchone() is not None
+
+    def require_read_recovery_current(self):
+        """Latch expired/rollback native evidence even while transport is paused.
+
+        An initial JOIN may still await its first heartbeat; that is not expiry.
+        Nothing here changes a heartbeat, lease, or the activation deadline.
+        """
+        with self.transaction() as db:
+            row=db.execute('SELECT * FROM controller WHERE id=1').fetchone()
+            if row is None or row['mode']!='native_google_v2':return
+            self._controller_alive(db,row,time.time())
+            checkpoint=json.loads(db.execute("SELECT value FROM meta WHERE key='native_controller_checkpoint'").fetchone()['value'])
+            fence=self.controller_fence(checkpoint['root_hash'],checkpoint['epoch'])
+            require(fence is None,(fence or {}).get('reason','global_controller_not_active_restart_required'))
+            require(not checkpoint.get('terminal_reason'),checkpoint.get('terminal_reason') or 'global_controller_not_active_restart_required')
+
     def controller_fence(self,root_hash,epoch):
         path=self.root/'native-controller-fence.json'
         if not path.exists():return None
@@ -302,6 +337,7 @@ class Store:
                 require(json.loads(old['selection'])==selection, 'thread_selection_immutable')
                 return dict(old)
             require(activation['enabled'] and activation['expires']>time.time(), 'activation_closed')
+            require(not self._docs_reads_paused(db),'global_docs_read_recovery_pending')
             controller=self._live_controller(db)
             if controller['mode']=='native_google_v2':
                 bound=db.execute("SELECT value FROM meta WHERE key='native_activation'").fetchone()
@@ -420,6 +456,7 @@ class Store:
                 raise ProtocolError('delivery_outcome_unknown_no_replay' if prior['state']=='dispatch_intent' else 'tool_or_unknown_delivery_no_replay')
             row=db.execute('SELECT * FROM routes WHERE id=?',(rid,)).fetchone()
             require(row is not None and row['state']=='ready','route_not_ready')
+            require(not self._docs_reads_paused(db),'global_docs_read_recovery_pending')
             controller=self._live_controller(db)
             require(row['controller_epoch']==controller['epoch'],'route_controller_epoch_retired')
             require(row['expires']>time.time(),'route_expired')
@@ -462,10 +499,12 @@ class Store:
             counts={row[0]:row[1] for row in db.execute('SELECT state,COUNT(*) FROM routes GROUP BY state')}
             c=db.execute('SELECT * FROM controller WHERE id=1').fetchone()
             alive=self._controller_alive(db,c,now)
+            paused=self._docs_reads_paused(db)
         value={'protocol':PROTOCOL,'control_protocol':CONTROL_PROTOCOL,'bound':bound,'bound_pid':os.getpid() if bound else None,
                'generation':activation['id'],'base_url':f"http://127.0.0.1:{cfg['port']}/activations/{activation['id']}/v1",
                'catalog_path':activation['catalog'],'selection':json.loads(activation['selection']),
-               'controller_active':alive,'controller_mode':c['mode'] if c else None,
+               'controller_active':alive and not paused,'controller_mode':c['mode'] if c else None,
+               'docs_read_paused':paused,
                'activation_enabled':bool(activation['enabled'] and activation['expires']>now),
                'route_counts':counts,'automatic_wake':False,'production_ready':False,
                'ready_for_config':False,'missing':'live_native_google_and_mac_acceptance',

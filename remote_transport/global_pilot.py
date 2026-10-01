@@ -222,6 +222,7 @@ def _live(store):
     require(read_private_file(activation['catalog'],2*1024*1024)==canonical(global_catalog(info['selection'])),
             'pilot_catalog_changed')
     with store.transaction() as db:
+        require(not store._docs_reads_paused(db), 'global_docs_read_recovery_pending')
         controller=dict(store._live_controller(db))
         bound=db.execute("SELECT value FROM meta WHERE key='native_activation'").fetchone()
         checkpoint=strict_json(db.execute("SELECT value FROM meta WHERE key='native_controller_checkpoint'").fetchone()['value'])

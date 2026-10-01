@@ -70,6 +70,10 @@ Do not copy the native spawn-plan arguments or child JOIN into normal status log
 
 The authoritative queue is one signed Doc per activation. Every mutation requires the exact read revision and literal single-tab replacement; signed event history gives read-only reconciliation. The native and Mac local ledgers reject rollback and repeated attempt issuance. A known conflict and an unknown outcome are different; the current production Docs port conservatively treats ambiguous failures as unknown. It must not automatically resubmit a CAS merely because a subsequent read lacks the desired event.
 
+The generated JOIN/heartbeat cell saves private categorical failure evidence before attempting its one read-only reconciliation. It records the operation, failing stage, whether a write was attempted, a fixed error category, bounded numeric HTTP/RPC status, and explicitly allowlisted provider/local error codes. It does **not** retain provider messages, display content, request bodies, stacks, URLs or arbitrary strings: errors can echo credentials or queue contents, and regex redaction is insufficient. A subsequent readback or verification failure gets a separate linked diagnostic rather than replacing the original write category. If diagnostic capture itself fails, stop without retrying the capture or any connector write.
+
+A queue authenticated as closed before JOIN dispatch produces `global_queue_closed_before_join` and no write. Any error after dispatch remains `global_cas_outcome_unknown_no_replay` until the normal exact-event verifier succeeds within its original acceptance window. In particular, a revision-error category, a missing JOIN event, or a later closed queue is not proof that the attempted write never happened. The private native ledger separately records whether the readback authenticated, whether that queue was closed, and whether the exact expected event prefix was observed. These diagnostic facts do not accept the CAS, refresh controller liveness, clear an attempt, or allow a heartbeat/spawn. A closed readback can contain the JOIN event while the controller is still unusable. Neither case authorizes replaying the old JOIN; preserve the old evidence and use a fresh authorized activation when recovery requires it.
+
 The gateway's SQLite is an additional local dispatch fence, not a substitute for distributed Docs CAS. Native plans are burned locally before tool arguments are exposed. Lost output after that boundary intentionally sacrifices availability rather than risking a duplicate child or side effect.
 
 Ready-route transport restart reopens the same controller journal and acquires the original facade lease. It verifies the same signed admission/pin, request history and current queue controller before rebinding an ephemeral child-facade endpoint behind the unchanged stable gateway port. No new native spawn is made. A historically verified bootstrap may be read after its handshake window only for this existing-route recovery, with its signed terminal state, current control and unexpired deployment pin; that is not fresh worker-health telemetry. Unknown gateway request intents remain non-replayable.
@@ -99,3 +103,12 @@ Other independent deadlines are unchanged: first-request gateway admission wait 
 - Signed/unsigned Mac launcher behavior and explicit global-config confirmation
 
 No normal-flow app installation/name/bundle-ID/signature/internal-binary check is required. The scope is local consumers reading the selected config, not all ChatGPT Work or cloud tasks. A completed route proves traffic through the gateway, not app-process identity or underlying-model attestation.
+
+## Offline diagnostic regressions
+
+Run `node --test native_connector/global_controller_cell.test.js` and
+`python3 -m unittest remote_tests.test_global_native_diagnostics -v` from this checkout.
+The fixtures cover a lost/error-shaped write followed by a failed or closed readback,
+closed-before-JOIN without a write, observed-but-expired events, failed private capture,
+and credential/document-content sentinels. All connector and clock inputs are synthetic;
+these results are not live Google, Mac or native-admission acceptance.

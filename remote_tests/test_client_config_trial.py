@@ -216,15 +216,19 @@ class ClientConfigTrialTests(unittest.TestCase):
         cli=desktop.binary_evidence(self.cli,run=lambda *a,**kw:SimpleNamespace(returncode=0,stdout=config.CODEX_VERSION+'\n'))
         launcher=desktop.DesktopGlobal(root=self.root,state=self.root/'launcher',config=self.root/'router.json',
             ui=SimpleNamespace(confirm=lambda text:messages.append(text) or True))
-        active={'runtime':str(self.root),'spec':{'generation':self.store.activation()['id'],'codex_home':str(self.home),
+        # This profile fixture stubs process ownership; expose the same identified
+        # activation when the launcher re-reads its pointer after diff consent.
+        active={'run_id':'a'*32,'runtime':str(self.root),'spec':{'run_id':'a'*32,'generation':self.store.activation()['id'],'codex_home':str(self.home),
                 'cli':cli,'client_evidence_profile':pilot.CONFIG_TRIAL}}
         args=self.apply_args(proof);preview={'config_path':str(self.config_path),'diff':'owned safe diff',
             'before_hash':args['expected_before_hash'],'after_hash':args['expected_after_hash']}
         with patch.object(launcher,'_wait_stage',return_value={'stage':'PREFLIGHT_VERIFIED','pilot_proof_id':proof['proof_id']}), \
+             patch.object(launcher,'active',return_value=active) as current, \
              patch.object(config,'preview',return_value=preview),patch.object(launcher.ports,'owned',return_value=True), \
              patch.object(config,'render_patch',return_value=b'# after config trial\n'), \
              patch.object(app,'check_application',side_effect=AssertionError('app gate forbidden')):
             result=launcher._continue(active)
+        current.assert_called_once_with()
         self.assertEqual(result['phase'],'committed');self.assertEqual(result['client_evidence_profile'],pilot.CONFIG_TRIAL)
         self.assertFalse(result['production_ready']);self.assertFalse(result['client_compatibility_verified'])
         self.assertTrue((self.root/'config-applied.json').exists());self.assertEqual(len(messages),1)

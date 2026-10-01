@@ -142,8 +142,26 @@ class NativeLedger:
             try:
                 fresh=queue.verify_update(packet,response,readback,self.code)
                 self.observe(saved,fresh)
-            except Exception:
-                record['status']='outcome_unknown_no_replay';self.save(saved);raise
+            except Exception as exc:
+                # Diagnosis is read-only and cannot accept an event, refresh
+                # liveness, or clear the burned CAS reservation. A valid closed
+                # readback and an unobserved event are independent facts: neither
+                # proves that the attempted write was never dispatched/committed.
+                diagnostic={'authenticated':False,'queue_closed':None,'expected_event_observed':None}
+                try:
+                    candidate=queue.snapshot(readback,self.context['document_id'],self.context['tab_id'])
+                    state=queue.verify(candidate.state,self.code,expected_root=self.context,require_fresh=False)
+                    diagnostic={'authenticated':True,'queue_closed':state['logical']['closed'],
+                        'expected_event_observed':state['epoch']>=packet['expected_state']['epoch']
+                            and state['events'][:packet['expected_state']['epoch']]==packet['expected_state']['events']}
+                except Exception:
+                    pass
+                record['status']='outcome_unknown_no_replay'
+                record['last_failure']={'code':str(exc) if isinstance(exc,ProtocolError) else type(exc).__name__,
+                                        'readback':diagnostic}
+                self.save(saved)
+                exc.controller_diagnostic=diagnostic
+                raise
             record.update(status='verified',readback_hash=hash_bytes(canonical(readback)),revision=fresh.revision_id)
             self.save(saved)
             c=fresh.state['logical']['controller']
@@ -268,4 +286,7 @@ def main():
 if __name__=='__main__':
     try:main()
     except Exception as exc:
-        print(json.dumps({'error':str(exc) if isinstance(exc,ProtocolError) else type(exc).__name__}));raise SystemExit(1)
+        error={'error':str(exc) if isinstance(exc,ProtocolError) else type(exc).__name__}
+        diagnostic=getattr(exc,'controller_diagnostic',None)
+        if diagnostic is not None:error['diagnostic']=diagnostic
+        print(json.dumps(error));raise SystemExit(1)

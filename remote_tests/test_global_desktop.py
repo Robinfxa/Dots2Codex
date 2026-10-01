@@ -113,9 +113,57 @@ class DesktopGlobalTests(unittest.TestCase):
     def test_owned_supervisor_record_reconciles_popen_pointer_crash(self):
         runtime,_,_=self.active()
         desktop.save(runtime/'supervisor.json',{'run_id':'a'*32,'facade_pid':123,'facade_identity':'actual-process-fingerprint'})
-        self.assertEqual(self.app.active()['facade_pid'],123)
+        # The child self-record is insufficient without current OS evidence.
+        self.assertIsNone(self.app.active()['facade_pid'])
+        with patch.object(self.app.ports,'owned',return_value=True):
+            self.assertEqual(self.app.active()['facade_pid'],123)
         desktop.save(runtime/'supervisor.json',{'run_id':'c'*32,'facade_pid':123,'facade_identity':'x'})
         with self.assertRaisesRegex(ProtocolError,'identity_mismatch'):self.app.active()
+
+    def test_launcher_identity_race_reconciles_only_same_current_pid(self):
+        runtime,_,_=self.active()
+        record=desktop.read(self.app.current);record.update(facade_pid=123,facade_identity='pre-exec')
+        desktop.save(self.app.current,record)
+        owned={'run_id':'a'*32,'facade_pid':123,'facade_identity':'post-exec'}
+        desktop.save(runtime/'supervisor.json',owned)
+        with patch.object(self.app.ports,'owned',side_effect=lambda value:value==owned):
+            self.assertEqual(self.app.active()['facade_identity'],'post-exec')
+        with patch.object(self.app.ports,'owned',return_value=False):
+            self.assertEqual(self.app.active()['facade_identity'],'pre-exec')
+        owned['facade_pid']=456;desktop.save(runtime/'supervisor.json',owned)
+        with patch.object(self.app.ports,'owned',return_value=True):
+            self.assertEqual(self.app.active()['facade_pid'],123)
+            self.assertEqual(self.app.active()['facade_identity'],'pre-exec')
+        # Status reconciliation never rewrites the durable launch intent.
+        self.assertEqual(desktop.read(self.app.current),record)
+
+    def test_recovery_rejects_alive_but_unowned_supervisor(self):
+        runtime,_,_=self.active('PAUSED_DOCS_READ');active=self.app.active()
+        active['spec']['expires']=self.app.ports.now()+1800
+        current={'stage':'PAUSED_DOCS_READ','supervisor_alive':True,'supervisor_owned':False}
+        with patch.object(self.app,'status',return_value=current):
+            self.assertTrue(self.app._recovery(active,current)['new_activation_required'])
+
+    def test_paused_stage_returns_recoverable_status_without_config_prompt(self):
+        runtime,_,_=self.active('PAUSED_DOCS_READ');active=self.app.active()
+        active['spec']['expires']=self.app.ports.now()+1800
+        current={'stage':'PAUSED_DOCS_READ','supervisor_alive':True,'supervisor_owned':True,
+                 'activation_enabled':True,'queue_closed':False}
+        with patch.object(self.app,'status',return_value=current), patch.object(config,'preview') as preview:
+            result=self.app._continue(active)
+        self.assertTrue(result['resume_possible']);self.assertFalse(result['new_activation_required'])
+        self.assertIn('exact read',result['next']);preview.assert_not_called();self.assertFalse(self.ui.messages)
+
+    def test_unresolved_preflight_never_offers_config_or_claims_it_can_resume(self):
+        runtime,_,_=self.active('PREFLIGHT_UNRESOLVED');active=self.app.active()
+        active['spec']['expires']=self.app.ports.now()+1800
+        current={'stage':'PREFLIGHT_UNRESOLVED','supervisor_alive':True,'supervisor_owned':True,
+                 'activation_enabled':True,'queue_closed':False}
+        with patch.object(self.app,'status',return_value=current), patch.object(config,'preview') as preview:
+            result=self.app._continue(active)
+        self.assertFalse(result['resume_possible']);self.assertTrue(result['new_activation_required'])
+        self.assertIn('will not be replayed',result['next']);preview.assert_not_called()
+        self.assertFalse(self.ui.messages)
 
     def test_binary_symlink_target_and_byte_replacement_are_detected(self):
         target=self.root/'codex-real';target.write_text('#!/bin/sh\necho "codex-cli 0.159.2"\n');target.chmod(0o700)

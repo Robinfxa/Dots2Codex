@@ -30,6 +30,7 @@ from .model import ProtocolError, canonical, hash_bytes, require
 
 CONTRACT = 'dots-desktop-global/1'
 MAX = 2 * 1024 * 1024
+READ_RECOVERY_DELAYS = (1, 2, 4, 8, 15)
 
 
 def read(path, maximum=MAX):
@@ -44,6 +45,89 @@ def safe_error(exc):
     import re
     value = str(exc)
     return value if isinstance(exc, (ProtocolError, ValueError, RuntimeError)) and re.fullmatch(r'[a-z][a-z0-9_]{1,160}', value) else type(exc).__name__
+
+
+class RecoveringDocs:
+    """Retry an exhausted transient GET in place, never its enclosing operation.
+
+    The supervisor may already have issued a one-attempt write before this read.
+    Holding that stack preserves exact reconciliation and all no-replay journals.
+    Background facade calls retain their normal bounded transport behavior.
+    """
+    def __init__(self, docs, *, store, runtime, spec, on_pause, on_resume,
+                 now=None, monotonic=None, wait=None):
+        self.docs, self.store, self.runtime, self.spec = docs, store, Path(runtime), spec
+        self.on_pause, self.on_resume = on_pause, on_resume
+        self.now, self.monotonic, self.wait = now or time.time, monotonic or time.monotonic, wait or time.sleep
+        self.owner = threading.get_ident(); self.token = secrets.token_hex(16)
+        self.expires = min(int(spec['expires']), int(store.activation(spec['generation'])['expires']))
+        self.last_now = self.now(); self.deadline = self.monotonic() + max(0, self.expires - self.last_now)
+        self.paused = False; self.stopping = False
+
+    def _check(self):
+        now = self.now()
+        require(now >= self.last_now, 'global_docs_recovery_clock_rollback')
+        self.last_now = now
+        require(not self.stopping and not (self.runtime / 'stop.json').exists(), 'global_stop_requested')
+        root_stop = self.runtime.parent.parent / 'stop-intent.json'
+        current_stop = read(root_stop, 32768)['request_id'] if root_stop.exists() else None
+        require(current_stop == self.spec.get('stop_intent_id'), 'global_start_cancelled_by_stop')
+        require(now < self.expires and self.monotonic() < self.deadline, 'global_docs_recovery_expired')
+        require(self.store.activation(self.spec['generation'])['enabled'], 'global_activation_disabled')
+        self.store.require_read_recovery_current()
+
+    def get_document(self, document_id):
+        from examples.google_clients import DocsReadError
+        if self.stopping or threading.get_ident() != self.owner:
+            return self.docs.get_document(document_id)
+        failures = 0
+        while True:
+            self._check()
+            try:
+                value = self.docs.get_document(document_id, deadline=self.deadline, check=self._check)
+            except DocsReadError as exc:
+                if not exc.retryable: raise
+                self._check()
+                if not self.paused:
+                    self.store.pause_docs_reads(self.spec['generation'], self.token)
+                    self.paused = True
+                delay = min(READ_RECOVERY_DELAYS[min(failures, len(READ_RECOVERY_DELAYS)-1)],
+                            self.expires-self.now(), self.deadline-self.monotonic())
+                failures += 1
+                self.on_pause(error=safe_error(exc), read_error=exc.diagnostics,
+                              retry_round=failures, retry_at=self.now()+delay,
+                              activation_expires=self.expires)
+                until = self.monotonic() + delay
+                while self.monotonic() < until:
+                    self._check()
+                    self.wait(min(.25, until-self.monotonic()))
+                continue
+            self._check()  # A late in-flight success cannot authorize later effects.
+            return value
+
+    def reconcile(self, bridge):
+        """Clear only after fresh authenticated queue and heartbeat observation."""
+        if not self.paused: return
+        from . import global_control as queue
+        from .global_google import mirror_verified_queue
+        self._check()
+        state = bridge.read().state
+        queue.verify(state, bridge.code, expected_root=bridge.source_root)
+        require(not state['logical']['closed'], 'global_queue_closed')
+        if state['logical']['controller'] is not None:
+            mirror_verified_queue(self.store, state, bridge.code)
+        self._check()
+        self.store.resume_docs_reads(self.spec['generation'], self.token)
+        self.paused = False
+        self.on_resume()
+        return state
+
+    def stop_recovery(self):
+        self.stopping = True
+
+    def batch_update_document(self, *args, **kwargs):
+        if not self.stopping and threading.get_ident() == self.owner: self._check()
+        return self.docs.batch_update_document(*args, **kwargs)
 
 
 def binary_evidence(path, *, run=subprocess.run):
@@ -213,10 +297,16 @@ class DesktopGlobal:
         # Reconcile the Popen-return/current-pointer crash window using the
         # supervisor's own private identity, never by searching process names.
         owned_path = runtime / 'supervisor.json'
-        if value.get('facade_pid') is None and owned_path.exists():
+        if owned_path.exists():
             owned = read(owned_path, 32768)
             require(owned['run_id'] == value['run_id'], 'global_supervisor_identity_mismatch')
-            value.update(facade_pid=owned['facade_pid'], facade_identity=owned['facade_identity'])
+            # Popen can observe a launcher's pre-exec command fingerprint. Adopt
+            # the child's later identity only for that same PID and current OS
+            # evidence; a different PID or stale self-record is never ownership.
+            if (value.get('facade_pid') in (None, owned['facade_pid'])
+                    and type(owned.get('facade_pid')) is int and owned['facade_pid'] > 0
+                    and owned.get('facade_identity') and self.ports.owned(owned)):
+                value.update(facade_pid=owned['facade_pid'], facade_identity=owned['facade_identity'])
         return {**value, 'spec': spec}
 
     def _stop_intent(self):
@@ -236,12 +326,14 @@ class DesktopGlobal:
                   'config_changed': bool(transaction and transaction['phase'] in {'prepared', 'committed', 'restore_prepared'})}
         if transaction and transaction['phase'] in {'prepared', 'restore_prepared'}:
             result['config_recovery_required'] = True
-        for name in ('error', 'preflight_state', 'queue_closed'):
+        for name in ('error', 'read_error', 'retry_round', 'retry_at', 'activation_expires',
+                     'resume_stage', 'preflight_state', 'queue_closed'):
             if name in status: result[name] = status[name]
         try:
             bound = probe(runtime / 'gateway')
             result.update(controller_active=bound['controller_active'],
-                          route_counts=bound['route_counts'], activation_enabled=bound['activation_enabled'])
+                          route_counts=bound['route_counts'], activation_enabled=bound['activation_enabled'],
+                          docs_read_paused=bound.get('docs_read_paused', False))
         except Exception: result['controller_active'] = False
         if result['config_changed']:
             result['restart_required'] = True
@@ -282,7 +374,7 @@ class DesktopGlobal:
             if (runtime / 'status.json').exists():
                 status = read(runtime / 'status.json')
                 if ((status['stage'] in desired and (prior_proof is None or status.get('pilot_proof_id') != prior_proof))
-                        or status['stage'] in {'FAILED', 'STOPPED'}): return status
+                        or status['stage'] in {'FAILED', 'STOPPED', 'PAUSED_DOCS_READ', 'PREFLIGHT_UNRESOLVED'}): return status
             require(self.ports.alive(active), 'global_supervisor_stopped_review_status')
             self.ports.wait(.5)
         return read(runtime / 'status.json') if (runtime / 'status.json').exists() else {'stage': 'STARTING'}
@@ -294,10 +386,17 @@ class DesktopGlobal:
                or status.get('stage') in {'FAILED','STOPPED','STOPPING'}
                or current.get('stage') in {'FAILED','STOPPED','STOPPING'}
                or current.get('activation_enabled') is False
+               or current.get('supervisor_owned') is False
                or not current.get('supervisor_alive',False))
         if ended:
             return {**current,'resume_possible':False,'new_activation_required':True,
                     'next':'This activation cannot resume. Preserve its evidence, use Stop if needed, then explicitly start a new activation and send its new JOIN. No Google resources are created by this status check.'}
+        if current.get('stage') == 'PAUSED_DOCS_READ':
+            return {**current,'resume_possible':True,'new_activation_required':False,
+                    'next':'Google Docs reads are temporarily unavailable. New admissions, dispatches and config approval are paused while this supervisor retries the exact read before the signed deadline. Use Continue after recovery; no new activation or JOIN is created by this check.'}
+        if current.get('stage') == 'PREFLIGHT_UNRESOLVED':
+            return {**current,'resume_possible':False,'new_activation_required':True,
+                    'next':'The one-attempt preflight did not return a verified result. Its evidence and open queue are preserved, but the request will not be replayed and config approval is unavailable. Stop this activation before explicitly starting a new one with a new JOIN.'}
         return {**current,'resume_possible':True,'new_activation_required':False,
                 'next':'This activation is still open and supervised. Continue after its controller and preflight finish, before the signed expiry. A closed, expired, or failed activation requires a new JOIN.'}
 
@@ -346,7 +445,9 @@ class DesktopGlobal:
             'Only the displayed owned settings are changed. Proceed?')
         if not self.ui.confirm(message): raise Cancelled()
         # Recheck immediately after the potentially slow consent interaction.
-        require(self.ports.owned(active) and not (runtime / 'stop.json').exists(), 'global_supervisor_not_owned_or_stopping')
+        active = self.active()
+        require(active is not None and active['run_id'] == spec['run_id']
+                and self.ports.owned(active) and not (runtime / 'stop.json').exists(), 'global_supervisor_not_owned_or_stopping')
         check_clients(spec)
         applied = config_tx.apply(runtime / 'gateway', spec['codex_home'],
             **client_arguments(spec),
@@ -422,6 +523,7 @@ class DesktopGlobal:
             active = {**record, 'spec': spec}
         status = self._wait_stage(active, 90, {'WAITING_CONTROLLER', 'NATIVE_PREFLIGHT', 'PREFLIGHT_VERIFIED'})
         if status['stage'] in {'FAILED', 'STOPPED'}: return self.status()
+        if status['stage'] in {'PAUSED_DOCS_READ', 'PREFLIGHT_UNRESOLVED'}: return self._recovery(active,status)
         self._copy_join(active)
         return self._continue(active)
 
@@ -479,15 +581,29 @@ def post_preflight(store, plan, control=None):
                 control['socket'] = transport
         conn.request('POST', f'/activations/{store.activation()["id"]}/v1/responses',
             body=canonical(plan['body']), headers={**plan['identity'], 'Content-Type': 'application/json'})
-        response = conn.getresponse(); total = 0
+        response = conn.getresponse(); total = 0; blocks = []
+        require(response.status == 200, 'global_preflight_request_failed')
         while True:
+            if response.isclosed(): break
             remaining = deadline - time.monotonic()
             require(remaining > 0, 'global_preflight_deadline')
             transport.settimeout(remaining)
             block = response.read1(65536)
             if not block: break
             total += len(block); require(total <= MAX, 'global_preflight_response_too_large')
-        require(response.status == 200, 'global_preflight_request_failed')
+            blocks.append(block)
+        # The gateway can already have sent HTTP 200 before its bounded
+        # admission wait fails. That is not a completed native preflight.
+        raw = b''.join(blocks)
+        try:
+            events = [strict_json(line[6:]) for line in raw.splitlines() if line.startswith(b'data: ')]
+            require(all(isinstance(event, dict) for event in events), 'global_preflight_invalid_response_stream')
+        except (ProtocolError, ValueError, UnicodeError):
+            raise ProtocolError('global_preflight_invalid_response_stream') from None
+        require(not any(event.get('type') == 'response.failed' for event in events), 'global_preflight_request_failed')
+        require(events and events[-1].get('type') == 'response.completed'
+                and isinstance(events[-1].get('response'), dict)
+                and events[-1]['response'].get('status') == 'completed', 'global_preflight_request_incomplete')
         return {'http_status': response.status}
     finally:
         if control is not None:
@@ -504,10 +620,18 @@ def supervise(runtime):
     save(runtime / 'supervisor.json', {'run_id': spec['run_id'], 'facade_pid': os.getpid(),
                                       'facade_identity': router._process_identity(os.getpid())})
     cfg_path = runtime / 'router-config.json'; require(hash_bytes(read_private_file(cfg_path, 131072)) == spec['config_hash'], 'global_supervisor_config_changed')
-    cfg = router._load_config(cfg_path); bridge = None; future = None
+    cfg = router._load_config(cfg_path); bridge = None; future = None; read_port = None
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     request_control = {'lock': threading.Lock(), 'socket': None, 'cancelled': False}
-    def status(stage, **values): save(runtime / 'status.json', {'stage': stage, 'updated': time.time(), **values})
+    current_status = {'stage': 'STARTING'}
+    def status(stage, **values):
+        current_status.clear(); current_status.update(stage=stage, **values)
+        save(runtime / 'status.json', {**current_status, 'updated': time.time()})
+    def paused(**values):
+        save(runtime / 'status.json', {'stage': 'PAUSED_DOCS_READ', 'updated': time.time(),
+             'resume_stage': current_status['stage'], **values})
+    def resumed():
+        save(runtime / 'status.json', {**current_status, 'updated': time.time()})
     try:
         # Fixed-port bind precedes all credential refresh and cloud resource creation.
         with Gateway(store, admission_wait=180) as gateway:
@@ -517,14 +641,18 @@ def supervise(runtime):
             require(current_stop == spec.get('stop_intent_id'), 'global_start_cancelled_by_stop')
             router._set_google_env(cfg)
             from examples.google_clients import create_docs_client, create_drive_client
-            bridge = prepare_session(store, runtime / 'bridge', create_docs_client(), create_drive_client(), cfg['folder_id'],
+            read_port = RecoveringDocs(create_docs_client(), store=store, runtime=runtime, spec=spec,
+                                       on_pause=paused, on_resume=resumed)
+            bridge = prepare_session(store, runtime / 'bridge', read_port, create_drive_client(), cfg['folder_id'],
                 mac_writer=cfg['mac_writer_identity'], worker_writer=cfg['worker_writer_identity'])
+            read_port.reconcile(bridge)
             status('WAITING_CONTROLLER')
-            plan = None; proof = None
+            plan = None; proof = None; preflight_failure = None
             while time.time() < spec['expires'] and not (runtime / 'stop.json').exists():
                 current = bridge.step()
                 if current['state'] == 'closed': break
                 require(current.get('restart_required') is not True,'global_controller_restart_requires_new_activation')
+                read_port.reconcile(bridge)
                 refresh = None
                 refresh_path = runtime / 'refresh-request.json'
                 if proof is not None and refresh_path.exists():
@@ -532,7 +660,7 @@ def supervise(runtime):
                     require(candidate['run_id'] == spec['run_id'], 'global_refresh_run_mismatch')
                     handled = read(runtime / 'refresh-handled.json') if (runtime / 'refresh-handled.json').exists() else {}
                     if candidate['request_id'] != handled.get('request_id'): refresh = candidate
-                if (future is None or refresh is not None) and current['state'] == 'controller_active':
+                if preflight_failure is None and (future is None or refresh is not None) and current['state'] == 'controller_active':
                     check_clients(spec)
                     cli_path = spec['cli'].get('invocation_path', spec['cli']['path'])
                     if spec.get('client_evidence_profile')==pilot.CONFIG_TRIAL:
@@ -549,21 +677,38 @@ def supervise(runtime):
                     # Plan is durably one-attempt before HTTP can create a demand.
                     status('NATIVE_PREFLIGHT', preflight_state='one_attempt_running')
                     future = pool.submit(post_preflight, store, plan, request_control)
-                if future is not None and future.done() and proof is None:
-                    future.result()
-                    gateway.completion_for(plan['route_id']).wait(2)
-                    proof = pilot.verify_preflight(store, plan['plan_id'], queue_state=bridge.read().state, join_code=bridge.code)
-                    status('PREFLIGHT_VERIFIED', pilot_proof_id=proof['proof_id'])
+                if future is not None and future.done() and proof is None and preflight_failure is None:
+                    try: future.result()
+                    except Exception as exc:
+                        if isinstance(exc, ProtocolError) and str(exc) in {
+                                'global_preflight_invalid_response_stream', 'global_preflight_response_too_large'}:
+                            raise
+                        # A concurrent read pause can reject/delay the only POST.
+                        # Keep the activation supervised without replaying that
+                        # possibly dispatched request or minting another plan.
+                        preflight_failure = safe_error(exc)
+                        status('PREFLIGHT_UNRESOLVED', error=preflight_failure,
+                               preflight_state='one_attempt_failed_no_replay')
+                    else:
+                        gateway.completion_for(plan['route_id']).wait(2)
+                        queue_state = bridge.read().state
+                        queue_state = read_port.reconcile(bridge) or queue_state
+                        proof = pilot.verify_preflight(store, plan['plan_id'], queue_state=queue_state, join_code=bridge.code)
+                        status('PREFLIGHT_VERIFIED', pilot_proof_id=proof['proof_id'])
                 time.sleep(1)
             status('STOPPING')
+            read_port.stop_recovery()
             outcome = bridge.stop(); status('STOPPED', **outcome)
     except Exception as exc:
         store.disable(spec['generation'])
+        if read_port is not None: read_port.stop_recovery()
         outcome = {}
         if bridge is not None:
             try: outcome = bridge.stop()
             except Exception: outcome = {'queue_closed': False, 'native_children_stopped': False}
-        status('FAILED', error=safe_error(exc), **outcome)
+        from examples.google_clients import DocsReadError
+        details = {'read_error': exc.diagnostics} if isinstance(exc, DocsReadError) else {}
+        status('FAILED', error=safe_error(exc), **details, **outcome)
     finally:
         with request_control['lock']:
             request_control['cancelled'] = True
