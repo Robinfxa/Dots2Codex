@@ -39,17 +39,17 @@ Mac supervisor 为新线程最多等待 180 秒，让已活动的原生控制线
 
 ## 配置安全
 
-只针对显式提供的 CODEX_HOME/config.toml。默认不扫描 profile、项目、登录或凭据目录。不会读写 auth.json、Keychain、系统代理、审批策略或 sandbox。
+只针对启动器解析并在确认窗口中明确展示的准确 `CODEX_HOME/config.toml`。自动选择仅使用明确指定、已保存、环境变量和标准位置的已知安全目录；冲突时请用户选择。正常 `client-config-trial/1` 不要求任何桌面 App 安装、名称、bundle ID、签名或内部二进制。默认不扫描 profile、项目、登录或凭据目录。不会读写 auth.json、Keychain、系统代理、审批策略或 sandbox。
 
 可选格式保持依赖为 requirements-global.txt 中的 tomlkit。当前执行环境未安装；本次没有安装依赖。相应真实 TOML roundtrip/merge 测试明确跳过（包括用户在受管值旁新增注释的保留行为尚待验收），不能称配置编辑已完整验证。备份、CAS 文件替换、并发编辑保护、崩溃对账和精确原字节恢复的标准库测试可独立运行。
 
-preview 只显示改动和范围；普通 apply 的生产就绪门槛保持关闭。独立试用 apply 需要精确版本、配置前后 hash、显式确认，以及该激活的新鲜签名原生预检、真实解析器和客户端二进制绑定。每次写入保存私有原字节/hash、postimage 和先行日志，写前重新核对文件身份/hash，然后 fsync + atomic replace + 重读。文件锁只对合作进程有效；无法对任意外部编辑器承诺真正的全局 CAS。
+preview 只显示改动和范围；普通 apply 的生产就绪门槛保持关闭。独立试用 apply 需要精确 `codex-cli 0.159.2` 目录适配器证据、配置前后 hash、准确目标的脱敏差异与显式确认，以及该激活的新鲜密封原生预检、仍有效的控制器/激活、真实解析器和包文件绑定。显式 `--desktop-app` 和 `--desktop-codex` 分别保留已签名 App 与严格双二进制 profile 的额外检查，不会自动降级成默认 profile。每次写入保存私有原字节/hash、postimage 和先行日志，写前重新核对文件身份/hash，然后 fsync + atomic replace + 重读。文件锁只对合作进程有效；无法对任意外部编辑器承诺真正的全局 CAS。
 
 恢复时：精确 postimage 则恢复原字节；有无关编辑则只反向修改仍匹配的受管值；受管值被 CC Switch 或用户修改则冲突停止。原本不存在和空文件分别处理。崩溃/未知结果先 reconcile，绝不盲目覆盖。恢复保留 generation catalog，不停止已运行的客户端。
 
 ## 范围提示
 
-官方 CLI 和桌面可共享选定 CODEX_HOME/config.toml，但需分别核对版本和重启。既有/恢复的线程可能保留旧 provider。CLI overrides、profile、允许的项目层和管理策略会影响覆盖范围。监听端口健康、模型出现在菜单或模型自报名称，都不是底层模型/真实推理已经经过该路线的证据。
+只覆盖实际读取所选本地 `CODEX_HOME/config.toml` 的消费者，不宣称覆盖所有 ChatGPT Work、云端任务或桌面客户端。完全退出并重开实际消费者，包括适用的 app-server 或受管理 daemon，再创建新线程。既有/恢复的线程可能保留旧 provider；CLI overrides、profile、允许的项目层和管理策略会影响覆盖范围。配置提交后新产生的已完成路由证明流量经过网关，不证明 App 进程身份或底层模型。监听端口健康、模型出现在菜单或模型自报名称，也不是此类证据。
 
 ## 本机安全边界
 

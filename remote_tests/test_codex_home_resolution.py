@@ -63,7 +63,7 @@ class HomeResolutionTests(unittest.TestCase):
         env=self.directory('environment');default=self.directory('.codex');self.ui.pick=1
         self.assertEqual(desktop.resolve_codex_home(home=self.home,environ={'CODEX_HOME':str(env)},ui=self.ui),default)
         self.assertEqual(len(self.ui.choices),1)
-        self.assertEqual(self.ui.choices[0][1],[str(env)+' (CODEX_HOME)',str(default)+' (standard desktop location)'])
+        self.assertEqual(self.ui.choices[0][1],[str(env)+' (CODEX_HOME)',str(default)+' (standard Codex location)'])
     def test_changed_environment_conflicts_with_saved_setting(self):
         saved=self.directory('saved');env=self.directory('environment');self.ui.pick=1
         self.assertEqual(desktop.resolve_codex_home(saved=saved,home=self.home,environ={'CODEX_HOME':str(env)},ui=self.ui),env)

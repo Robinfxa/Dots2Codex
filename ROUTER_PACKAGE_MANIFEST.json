@@ -1,36 +1,39 @@
 {
   "contract": "dots2codex-desktop-global-pilot/1",
-  "base_commit": "2298d97b1617dd82bbcdc2b53bb40b6855d325ca",
-  "base_source_tree_sha256": "27ac724e38fe140b81602be39695972b6695852066da47955796bb5d7923c636",
+  "base_commit": "0741482aed6035f84bc68c1a09f63296d858755d",
+  "base_source_tree_sha256": "a11ddadca475236870d206d3638873542e9dfac3892eccdd43452a6a66cc99e7",
   "input_launcher_source_tree_sha256": "7774123803de7f12e89b8cb8be7a510f5cfc2e829572921c0fde33632d4e096e",
   "input_gateway_source_tree_sha256": "ab3026308c240f613b8be00b623cfa3eb67cd73fcac4e87556da7d1619215891",
-  "source_tree_sha256": "a11ddadca475236870d206d3638873542e9dfac3892eccdd43452a6a66cc99e7",
+  "source_tree_sha256": "71b0c597c50278995f7f958dafacd3b54dd81309375a25a21d344f5cc8df1d6e",
   "source_tree_hash_algorithm": "SHA-256 of UTF-8 canonical JSON files array (sort_keys=true,separators=comma/colon,ensure_ascii=false); array sorted by path",
-  "hashed_file_count": 217,
+  "hashed_file_count": 218,
   "manifest_self_excluded": true,
   "changed_files": [
     "GLOBAL_GATEWAY_CONTRACT.json",
+    "GLOBAL_GATEWAY_README.txt",
     "README.md",
+    "README_ROUTER.txt",
     "docs/DESKTOP_APP_DISCOVERY.md",
     "docs/DESKTOP_GLOBAL.zh-CN.md",
     "docs/DESKTOP_GLOBAL_VALIDATION.md",
-    "remote_tests/test_codex_desktop_discovery.py",
+    "docs/GLOBAL_GATEWAY.zh-CN.md",
+    "docs/GLOBAL_GATEWAY_VALIDATION.md",
+    "docs/GLOBAL_NATIVE_CONTROLLER.md",
+    "docs/UNIFIED_MAC_LAUNCHER.zh-CN.md",
+    "remote_tests/test_client_config_trial.py",
+    "remote_tests/test_codex_home_resolution.py",
     "remote_tests/test_desktop_app_trial.py",
-    "remote_transport/codex_desktop.py",
     "remote_transport/global_config.py",
     "remote_transport/global_desktop.py",
     "remote_transport/global_pilot.py",
     "remote_transport/mac_launcher.py"
   ],
   "added_files": [
-    "docs/DESKTOP_APP_DISCOVERY.md",
-    "remote_tests/test_codex_desktop_discovery.py",
-    "remote_tests/test_desktop_app_trial.py",
-    "remote_transport/codex_desktop.py"
+    "remote_tests/test_client_config_trial.py"
   ],
   "all_six_source_bindings_preserved": true,
   "existing_runtime_migration": "fresh_paired_session_required",
-  "status": "desktop-app-auto-discovery-and-explicit-config-trial",
+  "status": "config-first-local-client-trial-awaiting-live-acceptance",
   "launcher_global_menu_supported": true,
   "production_ready": false,
   "ready_for_config": false,
@@ -42,12 +45,26 @@
   "native_inference_calls": 0,
   "google_writes": 0,
   "test_results": {
-    "focused_discovered": 265,
-    "focused_passed": 256,
-    "focused_skipped": 9,
-    "new_discovery_tests": 18,
-    "new_trial_tests": 20,
-    "full_historical_suites_rerun": false
+    "historical_full_python_discovered": 796,
+    "historical_full_python_passed": 787,
+    "historical_full_python_skipped": 9,
+    "full_remote_discovered": 527,
+    "full_remote_passed": 518,
+    "full_remote_skipped": 9,
+    "full_remote_suite_precedes_final_canonicalization_fix": true,
+    "post_final_fix_focused_discovered": 129,
+    "post_final_fix_focused_passed": 120,
+    "post_final_fix_focused_skipped": 9,
+    "new_config_trial_tests": 33,
+    "node_passed": 25,
+    "sdk_offline_passed": 3,
+    "sdk_environment": "existing_authorized_sdk_environment",
+    "initial_default_interpreter_sdk_dependency_errors_resolved_by_existing_environment": 3,
+    "full_historical_suites_rerun": true,
+    "final_snapshot_full_historical_suites_rerun": false,
+    "all_affected_final_config_pilot_home_and_desktop_suites_rerun": true,
+    "real_tomlkit_parser_integration_verified": false,
+    "real_mac_native_google_acceptance": false
   },
   "files": [
     {
@@ -88,14 +105,14 @@
     },
     {
       "path": "GLOBAL_GATEWAY_CONTRACT.json",
-      "bytes": 1673,
-      "sha256": "d125e9b97d9d698757985eac0f2c5f01a62eef6dc41ca77bf44fa2c4ed12c37f",
+      "bytes": 2008,
+      "sha256": "b8b4451bbd109a8d873f35ec13998bce4e2fab2599891d9e5595f55df3058a41",
       "mode": "0644"
     },
     {
       "path": "GLOBAL_GATEWAY_README.txt",
-      "bytes": 1765,
-      "sha256": "73112e4847aead47f9690fc6e6e6d8a7515270943e047f69e59ec6c4536713ba",
+      "bytes": 2569,
+      "sha256": "8d6b6e4137302171074e0b228551a3d8a4c64545ad214b9f4781aa40e903e35f",
       "mode": "0644"
     },
     {
@@ -136,14 +153,14 @@
     },
     {
       "path": "README.md",
-      "bytes": 18412,
-      "sha256": "027c681e8b951b62d0b60fbc47fa2f17ae0995a3f23cdd4cfc674c0d3e4d1e56",
+      "bytes": 20086,
+      "sha256": "430924ef5621c93b16208862244ec678be6fe4eb600ac1cc8311dbe3f7b1aa74",
       "mode": "0644"
     },
     {
       "path": "README_ROUTER.txt",
-      "bytes": 1670,
-      "sha256": "c26866fc0853e92b491adf4b9ac37dc009a7a15efc9510f40a2e65fa98913e8c",
+      "bytes": 2309,
+      "sha256": "20e6f5fa862ab25c85afd3470335b1c8f2aa06af43b0eef7f5c0869b3109d813",
       "mode": "0644"
     },
     {
@@ -268,20 +285,20 @@
     },
     {
       "path": "docs/DESKTOP_APP_DISCOVERY.md",
-      "bytes": 7320,
-      "sha256": "2d543a174bf743c8acfb9656c37c1b77b9d296b66320dfb060b79904a99c1aa6",
+      "bytes": 9524,
+      "sha256": "c41d9cf1d342eddc13ebebb4a8f34d81f1c95027615afccd46f9079c60c8b0bb",
       "mode": "0644"
     },
     {
       "path": "docs/DESKTOP_GLOBAL.zh-CN.md",
-      "bytes": 6392,
-      "sha256": "977688f3620c26ff85f45047d6c4c3e66bf9adc10df7db12b5e32f356bc36205",
+      "bytes": 7133,
+      "sha256": "28c85d3df413c1fcfd460cc9d1a88cfa8e1818ccfc239f311eced17597608d75",
       "mode": "0644"
     },
     {
       "path": "docs/DESKTOP_GLOBAL_VALIDATION.md",
-      "bytes": 3691,
-      "sha256": "d9b42564a3f73d1e3b24c26cc492368341ca0f795f6806728dac2b5794a72013",
+      "bytes": 5340,
+      "sha256": "dbbd4c339ad1c25f5288c382a0ec8e5b33b5f6470e9686622b1b0c952feb2905",
       "mode": "0644"
     },
     {
@@ -292,20 +309,20 @@
     },
     {
       "path": "docs/GLOBAL_GATEWAY.zh-CN.md",
-      "bytes": 6488,
-      "sha256": "9b41108e06c841069d8b5cbf1e0e47abf17f34fbbe48df08d7a9e1ccee195f4c",
+      "bytes": 7243,
+      "sha256": "357d124a5b29c0f45105bcc9837fbc08df3e99fc3acf0c6350dd7306f7c376f0",
       "mode": "0644"
     },
     {
       "path": "docs/GLOBAL_GATEWAY_VALIDATION.md",
-      "bytes": 6712,
-      "sha256": "263635f139a51836eacdf45e4322387518eeac3c23240f309d4bfa4bdfa92b5e",
+      "bytes": 7276,
+      "sha256": "d345033aee0ad915c3d47db102938e7fb0c2f99951b9b0bdc46b63f02f949e9e",
       "mode": "0644"
     },
     {
       "path": "docs/GLOBAL_NATIVE_CONTROLLER.md",
-      "bytes": 12352,
-      "sha256": "30ba280b7063d02d623e07d006aa6497c6bcd2806ef14089e253f2e8791a325e",
+      "bytes": 12971,
+      "sha256": "354c8942e5c33c72e818dfa64de0a515c1de39d25c73c15a12338f558ef27bb1",
       "mode": "0644"
     },
     {
@@ -382,8 +399,8 @@
     },
     {
       "path": "docs/UNIFIED_MAC_LAUNCHER.zh-CN.md",
-      "bytes": 7593,
-      "sha256": "4a884163de589488832882ab3324255f4e7cdc1b38a7dad1866f1486720100a8",
+      "bytes": 8241,
+      "sha256": "8b1ba7acec81e8b02c6da7d05aed99cd78b4059b6be72a9cc85c4aa54d80ac72",
       "mode": "0644"
     },
     {
@@ -705,6 +722,12 @@
       "mode": "0644"
     },
     {
+      "path": "remote_tests/test_client_config_trial.py",
+      "bytes": 25341,
+      "sha256": "df914c3878a3d87a6c60f18cd9194d71644348805c6e295ba9cfd0a0a979ae43",
+      "mode": "0644"
+    },
+    {
       "path": "remote_tests/test_codex_catalog.py",
       "bytes": 3699,
       "sha256": "bff0013db902da948480ff40a1bc7a199ecf0d50e865fe35eb208633f9dea114",
@@ -718,8 +741,8 @@
     },
     {
       "path": "remote_tests/test_codex_home_resolution.py",
-      "bytes": 7731,
-      "sha256": "57d2c65ae7b180e7e9400fd246298222806e1132e9e9defc2b4447240e74be6a",
+      "bytes": 7729,
+      "sha256": "62b4b4fbdcbe1d6232ccc5a51f5d23693b05e8c725817f0b6654823cb90f66fc",
       "mode": "0644"
     },
     {
@@ -748,8 +771,8 @@
     },
     {
       "path": "remote_tests/test_desktop_app_trial.py",
-      "bytes": 14378,
-      "sha256": "f7b775b8e6c1a9af0e11dc1662757e0c03b0eb8d8b603b227f40a1db0a68b03c",
+      "bytes": 14582,
+      "sha256": "6f27292959818a2c960521de9575db0a8dece8b2f7151e65f9f729941b481be9",
       "mode": "0644"
     },
     {
@@ -970,8 +993,8 @@
     },
     {
       "path": "remote_transport/global_config.py",
-      "bytes": 23538,
-      "sha256": "2fa2537958b5804b18daac2d4bf6856d2b0ddacf18d5b2e2a9f727e7e968a71b",
+      "bytes": 26547,
+      "sha256": "e2ac5246afede66cb7eea348b5c423c9516d9956aa1526b1e7750ebcb116060b",
       "mode": "0644"
     },
     {
@@ -982,8 +1005,8 @@
     },
     {
       "path": "remote_transport/global_desktop.py",
-      "bytes": 33075,
-      "sha256": "a942c4641c7856bdfa7e21262f6424e85d4b1ab6beb3447a537844ed7bea9936",
+      "bytes": 35382,
+      "sha256": "9a55ecbc7ead608d4f285e783d4dc0de5e92b045bd5d26d7f100e326607b1694",
       "mode": "0644"
     },
     {
@@ -1012,8 +1035,8 @@
     },
     {
       "path": "remote_transport/global_pilot.py",
-      "bytes": 21635,
-      "sha256": "f2bc759fdd5fa5387f291d3981e1e1e4b61113f52861dc296aa6f43678853b1e",
+      "bytes": 24525,
+      "sha256": "8c93e58c2f7bd72b863f4ed1a3ac4091a56b8b783b8d01c2ee7da23a47367e32",
       "mode": "0644"
     },
     {
@@ -1024,8 +1047,8 @@
     },
     {
       "path": "remote_transport/mac_launcher.py",
-      "bytes": 23004,
-      "sha256": "c6bc534bc28fb2e87fd5654b1e7e1dc0dc0463b6f9f3aa9f79fe6e6327286d42",
+      "bytes": 23030,
+      "sha256": "82ef634e2cf60537eaf34dd6c85e38d2c6ab1a27d37e01994a695f169e088ea6",
       "mode": "0644"
     },
     {
@@ -1372,7 +1395,12 @@
     "native_inference_calls": 0,
     "google_writes": 0
   },
-  "normal_client_evidence_profile": "desktop-app-config-trial/1",
+  "normal_client_evidence_profile": "client-config-trial/1",
   "legacy_client_evidence_profile": "strict-client-binaries/1",
-  "desktop_compatibility_verified": false
+  "desktop_compatibility_verified": false,
+  "legacy_app_evidence_profile": "desktop-app-config-trial/1",
+  "app_identity_required_for_normal_flow": false,
+  "config_target_bound_to_proof": true,
+  "client_compatibility_verified": false,
+  "all_chatgpt_work_cloud_compatibility_verified": false
 }

@@ -37,7 +37,9 @@ WARNINGS=[
     'Only the explicit CODEX_HOME/config.toml is managed; auth.json and login are untouched.',
     'Restart each target client. Existing/resumed threads may retain their old provider.',
     'CLI -m/-c, selected profile files, permitted project model/effort and managed policy can override this file.',
-    'Terminal adapter compatibility and desktop app compatibility are separate; app identity is not a runtime test.',
+    'The catalog is pinned to codex-cli 0.159.2; other local consumers require separate compatibility testing.',
+    'Only clients reading this selected file may be affected; this does not establish ChatGPT Work or Cloud support.',
+    'Terminal adapter compatibility and client compatibility are separate; neither app identity nor traffic is attestation.',
     'Gateway fail-closed behavior covers requests reaching it, not arbitrary client startup fallback.',
     'Locks are cooperative. A noncooperating editor can race the final compare and atomic replacement.',
 ]
@@ -59,7 +61,9 @@ def known_home(value):
     info=path.stat()
     require(stat.S_ISDIR(info.st_mode) and info.st_uid==os.getuid() and not info.st_mode&0o022,
             'unsafe_codex_home')
-    return path
+    # Validate the original traversal before collapsing aliases. In particular,
+    # a symlink followed by '..' must not disappear before the safety check.
+    return Path(os.path.normpath(str(path)))
 
 
 def snapshot(path):
@@ -147,7 +151,12 @@ def readiness(state_dir,live=False):
     return info
 
 
-def versions(cli_version,desktop_version=None,desktop_app=None):
+def versions(cli_version,desktop_version=None,desktop_app=None,client_profile=None):
+    from .global_pilot import CONFIG_TRIAL
+    require(client_profile is None or (isinstance(client_profile,str) and client_profile==CONFIG_TRIAL),
+            'unsupported_client_evidence_profile')
+    if client_profile==CONFIG_TRIAL:
+        require(desktop_version is None and desktop_app is None,'config_trial_cannot_assert_app_evidence')
     require(cli_version==CODEX_VERSION,'unsupported_or_unverified_cli_version')
     require(desktop_version is None or desktop_version==CODEX_VERSION,'unsupported_or_unverified_desktop_bundled_version')
     if desktop_app is not None:
@@ -179,11 +188,15 @@ def render_patch(raw,info):
     return result
 
 
-def preview(state_dir,codex_home,*,cli_version,desktop_version=None,desktop_app=None,profile=None):
-    versions(cli_version,desktop_version,desktop_app);home=known_home(codex_home);info=readiness(state_dir)
+def preview(state_dir,codex_home,*,cli_version,desktop_version=None,desktop_app=None,profile=None,client_profile=None):
+    versions(cli_version,desktop_version,desktop_app,client_profile);home=known_home(codex_home);info=readiness(state_dir)
     before=snapshot(home/'config.toml');after=render_patch(before['raw'],info)
     warnings=list(WARNINGS)
-    if desktop_app is not None:
+    if client_profile is not None:
+        warnings.append('Config-first local client trial: no installed application is required or verified. '
+                        'Fully quit/reopen the actual consumer and its retained app-server or managed daemon when applicable; '
+                        'start a new thread and restore if unsupported.')
+    elif desktop_app is not None:
         warnings.append('Desktop config compatibility trial for '+desktop_app['path']+' (app '+desktop_app['app_version']+'). '
                         'Engine/catalog compatibility is unverified. Restart, create a new thread, and inspect its route; restore if unsupported.')
     elif desktop_version is None:warnings.append('Desktop bundled version not supplied: desktop coverage remains unverified.')
@@ -206,7 +219,8 @@ def preview(state_dir,codex_home,*,cli_version,desktop_version=None,desktop_app=
     return {'contract':CONTRACT,'config_path':str(home/'config.toml'),'generation':info['generation'],
             'before_hash':before['hash'],'before_exists':before['exists'],'after_hash':hash_bytes(after),
             'diff':diff,'diff_kind':'owned_values_redacted','warnings':warnings,'changes':bool(before['raw']!=after),
-            'ready_for_config':False,'write_performed':False}
+            'ready_for_config':False,'write_performed':False,'client_evidence_profile':client_profile,
+            'client_compatibility_verified':False}
 
 
 @contextlib.contextmanager
@@ -252,19 +266,21 @@ def commit(path,expected,raw,*,delete=False,before_commit=None,after_replace=Non
 
 
 def apply(state_dir,codex_home,*,cli_version,expected_before_hash,confirm=False,desktop_version=None,
-          pilot_proof_id=None,expected_after_hash=None,before_commit=None,after_replace=None,desktop_app=None):
+          pilot_proof_id=None,expected_after_hash=None,before_commit=None,after_replace=None,desktop_app=None,client_profile=None):
     require(confirm is True,'explicit_global_config_confirmation_required')
-    versions(cli_version,desktop_version,desktop_app);home=known_home(codex_home)
+    versions(cli_version,desktop_version,desktop_app,client_profile);home=known_home(codex_home)
     # Production readiness is unchanged. The separate, short-lived PILOT proof
     # is evidence-bound, never a caller-supplied readiness boolean.
     def gate():
         if pilot_proof_id is None:
             require(desktop_app is None,'desktop_app_trial_requires_pilot_proof')
+            require(client_profile is None,'config_trial_requires_pilot_proof')
             return readiness(state_dir,live=True)
         from .global_pilot import require_pilot
         require(isinstance(expected_after_hash,str) and len(expected_after_hash)==64,
                 'pilot_exact_preview_confirmation_required')
-        return require_pilot(state_dir,pilot_proof_id,cli_version,desktop_version,desktop_app=desktop_app)
+        return require_pilot(state_dir,pilot_proof_id,cli_version,desktop_version,desktop_app=desktop_app,
+                             client_profile=client_profile,codex_home=home)
     info=gate()  # Before any target-home mutation, including the lock.
     with home_lock(home):
         path=home/'config.toml';before=snapshot(path)
@@ -277,7 +293,9 @@ def apply(state_dir,codex_home,*,cli_version,expected_before_hash,confirm=False,
         # Outstanding transactions for this same target must be restored/reconciled first.
         for prior in directory.glob('*.json'):
             old=strict_json(read_private_file(prior,MAX_CONFIG_BYTES*3))
-            require(old.get('config_path')!=str(path) or old.get('phase') in ('restored','aborted'),
+            require(isinstance(old.get('config_path'),str),'invalid_config_transaction')
+            recorded=Path(os.path.normpath(old['config_path'])).absolute()
+            require(recorded!=path or old.get('phase') in ('restored','aborted'),
                     'existing_config_transaction_requires_reconciliation')
         tid=secrets.token_hex(16);backup=directory/(tid+'.before');postimage=directory/(tid+'.after')
         private_write(backup,before['raw']);private_write(postimage,after)
@@ -287,7 +305,8 @@ def apply(state_dir,codex_home,*,cli_version,expected_before_hash,confirm=False,
                   'before_mode':before['mode'],'backup':str(backup),'postimage':str(postimage),
                   'cli_version_evidence':cli_version,'desktop_version_evidence':desktop_version,
                   'desktop_app_evidence':desktop_app,'client_evidence_profile':info.get('client_evidence_profile'),
-                  'desktop_compatibility_verified':False,'preflight_route_id':info.get('preflight_route_id'),
+                  'desktop_compatibility_verified':False,'client_compatibility_verified':False,
+                  'config_target_evidence':info.get('config_target'),'preflight_route_id':info.get('preflight_route_id'),
                   'restart_required':True,'live_route_observed':pilot_proof_id is not None,
                   'live_route_observed_scope':'backend_preflight' if pilot_proof_id is not None else None,
                   'pilot_proof_id':pilot_proof_id,'production_ready':False}
@@ -303,7 +322,16 @@ def apply(state_dir,codex_home,*,cli_version,expected_before_hash,confirm=False,
                 'live_route_observed':pilot_proof_id is not None,'auth_file_touched':False,
                 'live_route_observed_scope':'backend_preflight' if pilot_proof_id is not None else None,
                 'pilot_proof_id':pilot_proof_id,'production_ready':False,
-                'client_evidence_profile':info.get('client_evidence_profile'),'desktop_compatibility_verified':False}
+                'client_evidence_profile':info.get('client_evidence_profile'),'desktop_compatibility_verified':False,
+                'client_compatibility_verified':False}
+
+
+def check_transaction_target(value):
+    """A config-first backup belongs to its original directory, not its name."""
+    from .global_pilot import CONFIG_TRIAL, config_target
+    if value.get('client_evidence_profile')==CONFIG_TRIAL:
+        require(config_target(value['codex_home'])==value.get('config_target_evidence'),
+                'config_transaction_target_changed')
 
 
 def load_transaction(state_dir,tid):
@@ -312,7 +340,13 @@ def load_transaction(state_dir,tid):
     directory=path.parent
     require(value.get('backup')==str(directory/(tid+'.before')) and value.get('postimage')==str(directory/(tid+'.after')),
             'transaction_file_binding_mismatch')
-    home=known_home(value['codex_home']);require(value['config_path']==str(home/'config.toml'),'transaction_target_mismatch')
+    home=known_home(value['codex_home']);recorded=Path(value['config_path'])
+    require(recorded.name=='config.toml' and known_home(recorded.parent)==home,'transaction_target_mismatch')
+    # Old journals may contain a harmless lexical alias. Reconcile and restore
+    # them using the same canonical target as new transactions, without changing
+    # their proof, backup hashes or original-directory identity requirement.
+    value.update(codex_home=str(home),config_path=str(home/'config.toml'))
+    check_transaction_target(value)
     before=read_private_file(value['backup'],MAX_CONFIG_BYTES);after=read_private_file(value['postimage'],MAX_CONFIG_BYTES)
     require(hash_bytes(before)==value['before_hash'] and hash_bytes(after)==value['after_hash'],'transaction_backup_hash_mismatch')
     return path,value,before,after
@@ -321,16 +355,20 @@ def load_transaction(state_dir,tid):
 def reconcile(state_dir,tid):
     journal,value,before,after=load_transaction(state_dir,tid)
     with home_lock(Path(value['codex_home'])):
+        check_transaction_target(value)
         current=snapshot(value['config_path'])
         if value['phase'] in ('restored','aborted'):return {'phase':value['phase'],'write_performed':False}
         require(value['phase'] in ('prepared','committed','restore_prepared'),'unknown_transaction_phase')
         if value['phase']=='restore_prepared':
             expected=value['restore_hash'];exists=value['restore_exists']
             require(current['exists']==exists and current['hash']==expected,'restore_outcome_requires_manual_reconciliation')
+            check_transaction_target(value)
             value['phase']='restored';save_manifest(journal,value)
         elif current['exists'] and current['hash']==value['after_hash']:
+            check_transaction_target(value)
             value.update(phase='committed',after_identity=current['identity']);save_manifest(journal,value)
         elif value['phase']=='prepared' and current['exists']==value['before_exists'] and current['hash']==value['before_hash']:
+            check_transaction_target(value)
             value['phase']='aborted';save_manifest(journal,value)
         else:raise ProtocolError('config_outcome_requires_manual_reconciliation')
         return {'phase':value['phase'],'write_performed':False}
@@ -390,6 +428,7 @@ def restore(state_dir,tid,*,confirm=False,before_commit=None,after_replace=None)
     require(confirm is True,'explicit_restore_confirmation_required')
     journal,value,before,after=load_transaction(state_dir,tid)
     with home_lock(Path(value['codex_home'])):
+        check_transaction_target(value)
         if value['phase']=='restored':return {'phase':'restored','write_performed':False,'restart_required':True}
         require(value['phase']=='committed','reconcile_transaction_before_restore')
         path=Path(value['config_path']);current=snapshot(path)
@@ -398,8 +437,12 @@ def restore(state_dir,tid,*,confirm=False,before_commit=None,after_replace=None)
         restored=before if exact else restore_bytes(before,after,current['raw'])
         delete=exact and not value['before_exists']
         value.update(phase='restore_prepared',restore_hash=hash_bytes(restored),restore_exists=not delete)
+        check_transaction_target(value)
         save_manifest(journal,value)
-        commit(path,current,restored,delete=delete,before_commit=before_commit,after_replace=after_replace)
+        def final_target_check():
+            if before_commit:before_commit()
+            check_transaction_target(value)
+        commit(path,current,restored,delete=delete,before_commit=final_target_check,after_replace=after_replace)
         value['phase']='restored';save_manifest(journal,value)
         return {'phase':'restored','write_performed':True,'mode':'exact' if exact else 'three_way_owned_values',
                 'restart_required':True,'running_clients_stopped':False,'catalogs_deleted':False}
@@ -410,6 +453,7 @@ def main():
     for name in ('preview','apply'):
         p=sub.add_parser(name);p.add_argument('--state-dir',required=True);p.add_argument('--codex-home',required=True)
         p.add_argument('--cli-version',required=True);p.add_argument('--desktop-version')
+        p.add_argument('--client-profile',choices=['client-config-trial/1'])
         if name=='preview':p.add_argument('--profile')
         else:
             p.add_argument('--expected-before-hash',required=True);p.add_argument('--confirm',action='store_true')

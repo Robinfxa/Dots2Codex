@@ -16,6 +16,14 @@ Global desktop mode is integrated into the START.command menu. It uses a
 separate bounded GLOBAL controller JOIN and one pinned child per desktop thread.
 Read docs/DESKTOP_GLOBAL.zh-CN.md. The exact global config diff requires fresh
 native preflight evidence and confirmation; production readiness remains false.
+Normal client-config-trial/1 selects an exact safe CODEX_HOME automatically and
+retains the codex-cli 0.159.2 catalog adapter gate. No app installation, name,
+bundle ID, signature or internal binary is required. --desktop-app explicitly
+retains the signed-app trial; --desktop-codex retains strict two-binary checking.
+Only consumers reading that local config are in scope, not all ChatGPT Work or
+cloud tasks. Fully quit/reopen the consumer and its app-server or managed daemon
+when applicable; verify a new completed post-commit route. That proves traffic,
+not app identity or the underlying model. Overrides/resumed threads may differ.
 Single-session Router actions remain separate. Auth/login/proxy are untouched.
 
 Install only after explicit approval into a private versioned environment.

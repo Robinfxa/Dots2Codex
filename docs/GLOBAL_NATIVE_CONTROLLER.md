@@ -1,6 +1,6 @@
 # Bounded global native controller, protocol v1
 
-Status: the Google queue, native helper, per-child v3 JOIN adapter and desktop Global launcher are integrated and tested with offline ports. No actual Google/native-controller/Mac acceptance has been performed. `production_ready` remains false. An explicit pilot config transaction requires a fresh authenticated native preflight and exact diff confirmation; ordinary production apply stays closed. A control Doc and a Python process do not create or wake a native agent.
+Status: the Google queue, native helper, per-child v3 JOIN adapter and desktop Global launcher are integrated and tested with offline ports. No actual Google/native-controller/Mac acceptance has been performed. `production_ready` remains false. The normal config-first `client-config-trial/1` transaction requires a fresh sealed authenticated native preflight, exact `codex-cli 0.159.2` catalog-adapter evidence, a selected safe `CODEX_HOME`, and explicit redacted exact-diff confirmation; ordinary production apply stays closed. A control Doc and a Python process do not create or wake a native agent.
 
 ## Authority and scope
 
@@ -83,7 +83,9 @@ One Google control session is bound to one activation generation. New threads ma
 - Actual connected Google resource creation, exact CAS, raw-file access in both directions and credential scope
 - Actual active native controller admission, selected per-thread child tools and finite platform capacity
 - Tool timeouts/latency versus heartbeat budget, Mac sleep/reboot and controller exit
-- Installed terminal CLI and desktop bundled CLI separately, full restart/new-thread route receipts
+- Exact terminal catalog adapter and safe selected CODEX_HOME; full consumer restart including applicable app-server/managed daemon, then a fresh post-commit new-thread route. Signed-app and second-binary checks apply only to explicitly selected advanced profiles
 - Full real function/custom-tool loops and uncertain delivery; old/resumed threads/provider retention
-- Auth/config preservation, tomlkit format-preserving integration (including newer comments beside owned scalars or inside the provider table), managed/profile/CLI override scope
+- Auth/config preservation, all nine still-skipped real tomlkit integration tests (including newer comments beside owned scalars or inside the provider table), project/managed/profile/CLI override scope
 - Signed/unsigned Mac launcher behavior and explicit global-config confirmation
+
+No normal-flow app installation/name/bundle-ID/signature/internal-binary check is required. The scope is local consumers reading the selected config, not all ChatGPT Work or cloud tasks. A completed route proves traffic through the gateway, not app-process identity or underlying-model attestation.

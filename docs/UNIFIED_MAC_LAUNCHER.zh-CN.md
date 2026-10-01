@@ -4,7 +4,9 @@
 双击根目录 `START.command`：选择 Global 桌面模式或独立单会话模式；第一次完成受控设置，以后复用健康环境和已保存设置。
 `Router.app` 是可选的原生 AppleScript applet，必须在 Mac 构建，最终也打开同一个 START 入口。
 
-Global 模式已接入稳定多线程网关、全局控制器 JOIN 和带证据门槛的配置确认，详见 [桌面全局模式](DESKTOP_GLOBAL.zh-CN.md)。下列历史单会话步骤继续适用于菜单中的 Single-session；全局模式不使用单会话 facade 作为所有线程的共享 worker。
+Global 模式已接入稳定多线程网关、全局控制器 JOIN 和带证据门槛的配置确认。正常 `client-config-trial/1` 自动解析一个安全且准确的 `CODEX_HOME`，保留精确 `codex-cli 0.159.2` 目录适配器证据，不要求桌面 App 安装、名称、bundle ID、签名或内部引擎路径。仅对读取所选本地配置的消费者试用，不保证所有 ChatGPT Work 或云端任务。提交后需完整重启客户端及适用的 app-server / 受管理 daemon，并核对新线程路由；详见 [本地配置全局模式](DESKTOP_GLOBAL.zh-CN.md)。下列历史单会话步骤继续适用于菜单中的 Single-session；全局模式不使用单会话 facade 作为所有线程的共享 worker。
+
+高级 `--desktop-app` 仍可显式选择已签名 App 试用；`--desktop-codex` 仍使用严格双二进制验证。两者不是正常流程的发现步骤，也不能用默认 profile 替代缺失的高级证据。
 
 ## 第一次双击
 

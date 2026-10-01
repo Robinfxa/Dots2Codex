@@ -15,10 +15,10 @@
 
 ## 快速开始
 
-> **本次新增功能是桌面 Global 有界试用流程。**
+> **本次新增功能是配置优先的本地 Codex Global 有界试用流程。**
 > `START.command` 菜单已接通稳定网关、独立 Global 原生控制器 JOIN、真实原生预检与精确配置差异确认。
 > `production_ready` / `ready_for_config` 仍为 `false`；独立试用门槛要求活跃控制器、
-> 新鲜原生后端预检、已安装的真实 TOML parser、单独核验的终端 CLI、自动识别的已签名桌面 App，以及用户明确确认兼容试用配置差异。桌面引擎兼容性仍需实际新线程验收。
+> 新鲜密封的原生后端预检证据、已安装的真实 TOML parser、精确 `codex-cli 0.159.2` 目录适配器证据，以及用户明确确认脱敏后的准确配置差异。正常流程不要求安装、识别或验签桌面 App，也不要求包内二进制；客户端兼容性仍需重启后实际新线程验收。
 > 发布源码不会自动启用你的 Mac。真实 Mac / Google / native 现场验收仍未完成；
 > 9 个真实 parser 测试因可选依赖未安装而跳过。
 > 详见[桌面 Global 启用步骤](docs/DESKTOP_GLOBAL.zh-CN.md)与[本次集成验证](docs/DESKTOP_GLOBAL_VALIDATION.md)。
@@ -27,7 +27,7 @@
 
 | 你的场景 | 从这里开始 |
 | --- | --- |
-| 桌面端与终端的新线程使用 Global 路由 | [桌面 Global 启用步骤](docs/DESKTOP_GLOBAL.zh-CN.md) |
+| 读取所选本地 Codex 配置的客户端新线程试用 Global 路由 | [桌面 Global 启用步骤](docs/DESKTOP_GLOBAL.zh-CN.md) |
 | 已有经批准的 Mac OAuth 文件、专用 Drive folder 和双向访问条件 | [已有环境的 Mac Router 操作手册](docs/gemini_setup/03_MAC_ROUTER_RUNBOOK.zh-CN.md) |
 | 第一次配置 Google Cloud / OAuth / Gemini 辅助设置 | [Google Cloud 与 Gemini 指南](START_HERE_GEMINI_GUIDES.md) |
 | 需要手动配置远程传输或排查 CAS | [远程安装配置](docs/REMOTE_SETUP.zh-CN.md) |
@@ -58,13 +58,15 @@ git rev-parse HEAD
 Drive folder、Codex、工作目录、model/effort 设置；以后复用健康环境与已保存设置。
 可选 `Router.app` 外壳需在 Mac 构建，实际 Mac 运行尚未验收。
 
-使用 Global 时选择 **Start Global desktop routing**：
+使用 Global 时选择菜单中的 **Global start**：
 
-1. 程序单独核验终端 CLI `codex-cli 0.159.2` 并自动识别桌面 App，不再选择包内可执行文件；程序自动使用已保存或环境变量指定的 `CODEX_HOME`，通常直接采用 `~/.codex`，只有已知目录冲突时才询问
+1. 程序核验终端 CLI `codex-cli 0.159.2` 的目录适配器证据，自动从明确指定、已保存、环境变量或标准位置中解析一个安全的 `CODEX_HOME`；通常使用 `~/.codex`，已知目录冲突时才询问。正常配置试用不检查桌面 App 名称、位置、bundle ID、签名或内部引擎
 2. 确认本轮 Google 控制流程，发送一次私有 `DOTS2CODEX_GLOBAL_JOIN_V1` 给 Dots，建立持续活跃的原生控制器
 3. 一次激活最长 **4 小时、最多 3 个原生子任务**；其中 1 个用于预检，另外 2 个供新工作线程使用，仍受平台剩余槽位限制
-4. 必须完成签名队列、独立子任务和真实原生预检，再逐项确认 `config.toml` 的准确改动；仅有监听器或布尔开关不能启用配置
-5. 完全退出并重开桌面端，再创建新线程；终端也须新启动并使用同一 `CODEX_HOME`。旧线程、恢复线程、profile 或其他覆盖可能继续使用原 provider
+4. 必须完成签名队列、独立子任务和真实原生预检，再逐项确认精确目标 `CODEX_HOME/config.toml` 的脱敏差异；提交前复核新鲜密封证据、控制器、激活、配置前后 hash 与有效期，仅有监听器或布尔开关不能启用配置
+5. 完全退出并重开实际读取该配置的客户端，包括适用的 app-server 或受管理 daemon，再创建新线程并检查提交配置后新产生的已完成路由；终端也须新启动并使用同一 `CODEX_HOME`。旧线程、恢复线程、profile、项目、CLI 或管理策略覆盖可能继续使用其他 provider
+
+默认 `client-config-trial/1` 只试用读取所选本地配置的消费者，不宣称覆盖所有 ChatGPT Work、云端任务或其他客户端。新的路由记录证明流量经过网关，不证明发起 App 身份或底层模型。高级 `--desktop-app` 保留已签名 App 试用，`--desktop-codex` 保留严格双二进制验证；两者都不是正常流程的前置要求。
 
 Global status、stop 和 restore 在同一菜单中。停止本地进程不代表原生任务已停止。
 详细配置、恢复与验收见[桌面 Global 流程](docs/DESKTOP_GLOBAL.zh-CN.md)。
@@ -237,8 +239,17 @@ The unified Mac starter now includes Global mode: a stable per-thread gateway,
 bounded native controller JOIN, native preflight, and an explicitly confirmed
 global config transaction. Read [the desktop Global flow](docs/DESKTOP_GLOBAL.zh-CN.md).
 The production flag remains false. A separate pilot gate requires authenticated
-live native evidence, the installed real TOML parser, matching client binaries,
-and the exact reviewed diff. Real Mac/Google/native acceptance and nine skipped
+live sealed native evidence, the installed real TOML parser, the exact
+`codex-cli 0.159.2` catalog adapter, a safe selected `CODEX_HOME`, and the exact
+reviewed redacted diff. The normal `client-config-trial/1` flow has no desktop
+app installation, name, bundle-ID, signature, or internal-binary gate. Explicit
+`--desktop-app` retains the signed-app trial; `--desktop-codex` retains strict
+two-binary validation. Only local consumers that read the selected config are in
+scope, not all ChatGPT Work or cloud tasks. Fully quit and reopen the consumer,
+including its app-server or managed daemon when applicable, and test a new
+thread. A fresh post-commit completed route establishes traffic, not app identity
+or underlying-model attestation. Profiles, project/CLI/managed overrides and
+resumed threads remain uncertain. Real Mac/Google/native acceptance and nine skipped
 real-TOML-parser tests remain outstanding; this source package does not activate
 the user's desktop by itself.
 
@@ -250,6 +261,6 @@ hard maximum. Native admission remains manual. No model entitlement, free quota,
 automatic wake, uptime, exactly-once external effects, or security guarantee is
 provided. Read the [disclaimer](DISCLAIMER.md) before operating it.
 
-### 桌面 App 自动识别
+### 配置优先的本地接管
 
-Global 正常启动不再要求选择 Codex 包内可执行文件。程序自动识别已安装 App，原生后端预检后展示可恢复的配置试用；App 兼容性需要重启后实际新线程验证。详情见 [App 发现与试用边界](docs/DESKTOP_APP_DISCOVERY.md)。
+Global 正常启动选择准确的安全 `CODEX_HOME`，在真实原生后端预检之后展示可恢复的配置试用，不依赖某个桌面 App 安装。该流程受 CC Switch 的配置优先设计启发，没有移植其代码或认证逻辑。三个证据 profile、固定版本参考和验证边界见 [配置试用与高级 App 检查](docs/DESKTOP_APP_DISCOVERY.md)。

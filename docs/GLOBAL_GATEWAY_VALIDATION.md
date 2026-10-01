@@ -1,5 +1,7 @@
 # Global gateway validation, 2026-10-01
 
+> Historical isolated-gateway snapshot. The Global menu and explicit trial are now integrated; the current normal path is config-first `client-config-trial/1`. See [current activation](DESKTOP_GLOBAL.zh-CN.md) and [integration validation](DESKTOP_GLOBAL_VALIDATION.md). Counts and unsupported-menu statements below describe the older snapshot, not the current source.
+
 ## Gate
 
 **Pass for an honestly labelled offline-integrated preview. Not production global takeover.**
@@ -64,7 +66,7 @@ The last two must preserve the comment or safely conflict; they must never silen
 
 - The active agent actually calling the supported native tool with the selected model/effort and real returned task identity
 - Connected Google SDK/connector resource access, creation, CAS and raw probes; live latency versus the bounded heartbeat window
-- User's terminal CLI and desktop's bundled CLI separately; full restart and new threads; old/resumed threads and managed/profile/CLI overrides
+- Current normal flow: exact terminal catalog adapter and selected safe CODEX_HOME, full consumer/app-server/managed-daemon restart and fresh post-commit routes; old/resumed threads and project/managed/profile/CLI overrides remain uncertain. The older strict profile separately checks the desktop bundled CLI only when explicitly selected
 - Real function/custom-tool effects and recovery after disconnect, Mac sleep/reboot and native-controller exit
 - Optional parser dependency approval, genuine format-preserving tests and review of the exact proposed user config diff
 - Integration with the separately delivered unified Mac launcher, Finder/app behavior and signing/quarantine

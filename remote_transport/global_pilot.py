@@ -22,13 +22,14 @@ import uuid
 from . import global_control as queue
 from . import codex_desktop as app_identity
 from .backend import read_private_file
-from .codex_catalog import CODEX_VERSION
+from .codex_catalog import CODEX_VERSION, CODEX_SOURCE_COMMIT
 from .global_gateway import (Store, PROTOCOL, endpoint, global_catalog, private_dir,
                              private_write, probe, route_key, strict_json)
 from .model import Object, ProtocolError, canonical, hash_bytes, require
 from .selection import pin_selection, validate_admission
 
 CONTRACT='dots-global-pilot/1'
+CONFIG_TRIAL='client-config-trial/1'
 PLAN_SECONDS=600
 PROOF_SECONDS=300
 VERSION_SECONDS=1800
@@ -146,10 +147,39 @@ def observe_desktop_app(store,cli_path,desktop_app):
     return _save(store,'versions',value)
 
 
+def config_target(codex_home):
+    """Bind one validated local home, without reading its contents or any app."""
+    from .global_config import known_home
+    home=Path(os.path.normpath(str(known_home(codex_home))));info=home.stat()
+    return {'codex_home':str(home),'config_path':str(home/'config.toml'),
+            'home_identity':[info.st_dev,info.st_ino,info.st_uid,info.st_mode]}
+
+
+def catalog_adapter():
+    return {'cli_version':CODEX_VERSION,'source_commit':CODEX_SOURCE_COMMIT,
+            'schema':'codex-models-response/0.159.2'}
+
+
+def observe_config_client(store,cli_path,codex_home):
+    """Config-first trial, independent of app presence, identity or naming.
+
+    The exact supported CLI remains adapter/catalog evidence only. This does
+    not certify another consumer's engine, startup catalog or config precedence.
+    """
+    store=_store(store);target=config_target(codex_home)
+    value={'id':secrets.token_hex(16),'observed_at':time.time(),'profile':CONFIG_TRIAL,
+           'binaries':{'cli':_observe_binary(cli_path)},'config_target':target,
+           'catalog_adapter':catalog_adapter(),'client_compatibility_verified':False,
+           'desktop_compatibility_verified':False,'parser':_parser_binding(),'package':_sources()}
+    require(config_target(codex_home)==target,'pilot_config_target_changed')
+    return _save(store,'versions',value)
+
+
 def _versions(store,evidence):
     value=_unseal(store,'versions',evidence)
     profile=value.get('profile','strict-client-binaries/1')
-    require(profile in ('strict-client-binaries/1',app_identity.TRIAL),'pilot_unknown_evidence_profile')
+    require(isinstance(profile,str) and profile in ('strict-client-binaries/1',app_identity.TRIAL,CONFIG_TRIAL),
+            'pilot_unknown_evidence_profile')
     now=time.time()
     require(type(value.get('observed_at')) in (int,float) and 0<=now-value['observed_at']<VERSION_SECONDS,
             'pilot_version_evidence_expired')
@@ -161,11 +191,21 @@ def _versions(store,evidence):
         record=value['binaries'][name]
         require(record['version']==CODEX_VERSION and _binary_file(record['invocation_path'])==
                 {k:record[k] for k in ('path','sha256','identity','invocation_path')},'pilot_binary_evidence_changed')
-    if profile==app_identity.TRIAL:
+    if profile==CONFIG_TRIAL:
+        require('desktop_app' not in value and 'desktop' not in value
+                and value.get('client_compatibility_verified') is False
+                and value.get('desktop_compatibility_verified') is False,'pilot_evidence_profile_mismatch')
+        target=value.get('config_target')
+        require(isinstance(target,dict) and target==config_target(target.get('codex_home')),
+                'pilot_config_target_changed')
+        require(value.get('catalog_adapter')==catalog_adapter(),'pilot_catalog_adapter_changed')
+    elif profile==app_identity.TRIAL:
+        require('config_target' not in value and 'catalog_adapter' not in value,'pilot_evidence_profile_mismatch')
         require(value.get('desktop_compatibility_verified') is False,'pilot_evidence_profile_mismatch')
         app_identity.check_application(value.get('desktop_app'))
     else:
-        require('desktop_app' not in value,'pilot_evidence_profile_mismatch')
+        require('desktop_app' not in value and 'config_target' not in value and 'catalog_adapter' not in value,
+                'pilot_evidence_profile_mismatch')
     require(_load(store,'versions',value['id'])==value,'pilot_version_evidence_changed')
     return value
 
@@ -206,7 +246,7 @@ def prepare_preflight(store,*,version_evidence,previous_plan_id=None):
         require(previous['binding']==binding,'pilot_activation_or_controller_changed')
         old_versions=_unseal(store,'versions',previous['version_evidence'])
         new_versions=_unseal(store,'versions',version_evidence)
-        require(all(old_versions.get(k)==new_versions.get(k) for k in ('profile','binaries','desktop_app','package','parser')),
+        require(all(old_versions.get(k)==new_versions.get(k) for k in ('profile','binaries','desktop_app','config_target','catalog_adapter','package','parser')),
                 'pilot_refresh_evidence_changed')
         route,_,prior=_request(store,previous,controller);cfg=store.config()
         with store.transaction() as db:
@@ -321,14 +361,21 @@ def verify_preflight(store,plan_id,*,queue_state,join_code):
             'native_task_id':route['native_task'],'request_digest':plan['request_digest'],'production_ready':False}
 
 
-def require_pilot(state_dir,proof_id,cli_version,desktop_version,*,desktop_app=None):
+def require_pilot(state_dir,proof_id,cli_version,desktop_version,*,desktop_app=None,client_profile=None,codex_home=None):
     store=_store(state_dir);proof=_load(store,'proof',proof_id);now=time.time()
     require(proof['created']<=now<proof['expires'],'pilot_proof_expired')
     plan,info,controller=_fresh_plan(store,proof['plan_id'])
     versions=_versions(store,plan['version_evidence'])
     require(cli_version==CODEX_VERSION,'pilot_verified_cli_version_required')
     profile=versions.get('profile','strict-client-binaries/1')
-    if profile==app_identity.TRIAL:
+    require(client_profile is None or (isinstance(client_profile,str) and client_profile==profile),
+            'pilot_requested_profile_mismatch')
+    if profile==CONFIG_TRIAL:
+        require(client_profile==CONFIG_TRIAL and desktop_version is None and desktop_app is None,
+                'pilot_config_trial_profile_required')
+        require(codex_home is not None and config_target(codex_home)==versions['config_target'],
+                'pilot_config_target_mismatch')
+    elif profile==app_identity.TRIAL:
         require(desktop_version is None and desktop_app is not None
                 and desktop_app==versions['desktop_app'],'pilot_trial_app_evidence_required')
     else:
@@ -343,4 +390,5 @@ def require_pilot(state_dir,proof_id,cli_version,desktop_version,*,desktop_app=N
             'pilot_completed_route_evidence_changed')
     return {**info,'pilot_proof_id':proof_id,'pilot_ready':True,'production_ready':False,'ready_for_config':False,
             'client_evidence_profile':profile,'desktop_compatibility_verified':False,
+            'client_compatibility_verified':False,'config_target':versions.get('config_target'),
             'preflight_route_id':plan['route_id']}

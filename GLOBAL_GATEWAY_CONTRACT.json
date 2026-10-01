@@ -24,9 +24,15 @@
   "production_ready": false,
   "ready_for_config": false,
   "combined_validation": "docs/DESKTOP_GLOBAL.zh-CN.md",
-  "pilot_config_gate": "fresh-authenticated-native-preflight-parser-terminal-adapter-signed-app-identity-explicit-trial-diff",
-  "normal_client_evidence_profile": "desktop-app-config-trial/1",
+  "pilot_config_gate": "fresh-authenticated-native-preflight-parser-exact-terminal-catalog-adapter-bound-config-target-explicit-diff",
+  "normal_client_evidence_profile": "client-config-trial/1",
   "legacy_client_evidence_profile": "strict-client-binaries/1",
   "desktop_engine_required_for_normal_flow": false,
-  "desktop_compatibility_verified": false
+  "desktop_compatibility_verified": false,
+  "legacy_app_evidence_profile": "desktop-app-config-trial/1",
+  "app_identity_required_for_normal_flow": false,
+  "config_target_bound_to_proof": true,
+  "client_compatibility_verified": false,
+  "all_chatgpt_work_cloud_compatibility_verified": false,
+  "config_first_reference_commit": "1bc68e293f635a065fa984d4c2ca7604fbd77854"
 }

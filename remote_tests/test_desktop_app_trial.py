@@ -83,6 +83,8 @@ class DesktopAppTrialTests(unittest.TestCase):
         self.error('trial_app_evidence_required',pilot.require_pilot,self.store.root,proof['proof_id'],config.CODEX_VERSION,config.CODEX_VERSION)
         self.error('trial_app_evidence_required',pilot.require_pilot,self.store.root,proof['proof_id'],config.CODEX_VERSION,None)
         self.error('cannot_assert_engine',config.versions,config.CODEX_VERSION,config.CODEX_VERSION,self.app_evidence)
+        self.error('requested_profile_mismatch',pilot.require_pilot,self.store.root,proof['proof_id'],
+                   config.CODEX_VERSION,None,client_profile=pilot.CONFIG_TRIAL,codex_home=self.root)
 
     def test_strict_proof_cannot_be_downgraded_into_trial(self):
         self.versions=self.strict_versions;plan,_=self.complete();proof=self.verify(plan)

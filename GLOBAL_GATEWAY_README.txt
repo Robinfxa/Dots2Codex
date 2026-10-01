@@ -1,7 +1,12 @@
-Dots2Codex Desktop Global integration
+Dots2Codex config-first local Codex Global trial
 
 Double-click START.command and choose Global start.
-Read docs/DESKTOP_GLOBAL.zh-CN.md for the actual desktop activation flow.
+Read docs/DESKTOP_GLOBAL.zh-CN.md for the local config activation flow.
+Normal client-config-trial/1 automatically resolves one exact safe CODEX_HOME.
+It has no app installation/name/bundle-ID/signature/internal-binary gate.
+The exact codex-cli 0.159.2 catalog adapter evidence is still mandatory.
+Explicit --desktop-app retains the signed-app trial; --desktop-codex retains
+strict two-binary validation. These profiles cannot substitute for one another.
 
 Global mode starts its dedicated stable-port supervisor, creates one bounded
 signed Google control queue after consent, and supplies the private
@@ -10,14 +15,20 @@ remain active and create a distinct selected child for each new desktop thread.
 It is different from the ordinary single-worker JOIN.
 
 A native nonce preflight must complete through the same gateway before the UI
-can show and confirm a global config diff. The pilot gate rechecks controller,
-activation/catalog, route/pin, native admission, request/response, exact binaries,
-installed TOML parser, package hashes, and proof expiry at replacement time.
+can show and confirm a redacted exact diff for the selected config.toml. The
+pilot gate rechecks fresh sealed evidence, controller, activation/catalog,
+route/pin, native admission, request/response, exact catalog adapter, installed
+TOML parser, package and config before/after hashes, and proof expiry at
+replacement time. Advanced profiles retain their additional app/binary checks.
 Production readiness stays false. A listening socket or boolean cannot enable it.
 
-Fully quit and reopen Codex after apply, then create a new thread. Existing or
-resumed threads may keep their previous provider. Profiles, CLI overrides and
-managed settings can take precedence. Use the actual shared CODEX_HOME.
+Only local consumers that read the selected config are in scope; this does not
+claim support for all ChatGPT Work or cloud tasks. Fully quit and reopen that
+consumer after apply, including its app-server or managed daemon when applicable,
+then create a new thread. A new completed post-commit route proves traffic, not
+app identity or underlying-model attestation. Existing/resumed threads, profiles,
+project/CLI overrides and managed settings remain uncertain. Use the actual
+shared CODEX_HOME.
 
 Global status/stop/restore are available without dependency installation.
 Restore recovers config transactions even after an interrupted success marker.
