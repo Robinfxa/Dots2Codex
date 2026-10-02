@@ -1,8 +1,8 @@
 {
   "contract": "dots-native-capabilities/1",
-  "version": "2026-10-01.codex-0.159.2.v1",
+  "version": "2026-10-01.codex-0.159.2.v2",
   "adapter": "collaboration.spawn_agent",
-  "source": "Platform tool schema observed 2026-10-01; capability snapshot, not live account entitlement",
+  "source": "Native efforts: platform tool schema observed 2026-10-01 (snapshot, not live account entitlement). Bridge efforts and default_effort: reviewed Dots2Codex selection policy; not platform defaults.",
   "codex_version": "codex-cli 0.159.2",
   "native_identity_verification": "parent_recorded_platform_admission",
   "models": {
@@ -19,10 +19,9 @@
         "low",
         "medium",
         "high",
-        "xhigh",
-        "max"
+        "xhigh"
       ],
-      "default_effort": "low"
+      "default_effort": "xhigh"
     },
     "gpt-6-astra": {
       "native_efforts": [
@@ -37,10 +36,9 @@
         "low",
         "medium",
         "high",
-        "xhigh",
-        "max"
+        "xhigh"
       ],
-      "default_effort": "medium"
+      "default_effort": "xhigh"
     },
     "gpt-6-sol": {
       "native_efforts": [
@@ -55,10 +53,9 @@
         "low",
         "medium",
         "high",
-        "xhigh",
-        "max"
+        "xhigh"
       ],
-      "default_effort": "medium"
+      "default_effort": "xhigh"
     },
     "gpt-6-luna": {
       "native_efforts": [
@@ -72,10 +69,9 @@
         "low",
         "medium",
         "high",
-        "xhigh",
-        "max"
+        "xhigh"
       ],
-      "default_effort": "low"
+      "default_effort": "xhigh"
     },
     "gpt-5.6-sol": {
       "native_efforts": [
@@ -90,14 +86,14 @@
         "low",
         "medium",
         "high",
-        "xhigh",
-        "max"
+        "xhigh"
       ],
-      "default_effort": "low"
+      "default_effort": "xhigh"
     }
   },
   "limits": [
     "Session selection is immutable; changes require a new paired session",
+    "Bridge default effort is xhigh; max is not selectable or accepted and requires explicit reselection",
     "Codex CLI rewrites ultra, so ultra is not exposed as a bridge effort",
     "Availability still requires successful actual native platform admission; no fallback"
   ]

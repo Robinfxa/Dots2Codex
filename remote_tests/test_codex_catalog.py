@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from remote_transport.codex_catalog import catalog_for_selection, write_catalog, validate_catalog
 from remote_transport.selection import load_catalog, select
+from remote_transport.global_gateway import global_catalog
 from remote_transport.model import ProtocolError
 
 
@@ -27,6 +28,23 @@ class CodexCatalogTests(unittest.TestCase):
                     self.assertFalse(item['use_responses_lite']); self.assertFalse(item['supports_reasoning_effort_updates'])
                     self.assertEqual(item['input_modalities'],['text'])
                     self.assertNotIn('approval_policy',item);self.assertNotIn('sandbox_mode',item)
+    def test_exported_global_choices_remove_max_and_preserve_explicit_defaults(self):
+        catalog = load_catalog()
+        for effort in ('low', 'medium', 'high', 'xhigh'):
+            rows = global_catalog(select(catalog, 'gpt-6-astra', effort))['models']
+            self.assertEqual(sum(len(row['supported_reasoning_levels']) for row in rows), 20)
+            for row in rows:
+                with self.subTest(default=effort, model=row['slug']):
+                    self.assertEqual(row['default_reasoning_level'], effort)
+                    self.assertEqual([entry['effort'] for entry in row['supported_reasoning_levels']],
+                                     ['low', 'medium', 'high', 'xhigh'])
+        self.assertTrue(all(entry['default_effort'] == 'xhigh' for entry in catalog['models'].values()))
+    def test_pair_and_global_exports_do_not_accept_or_remap_max(self):
+        invalid = {**self.selection, 'reasoning_effort': 'max'}
+        for export in (catalog_for_selection, global_catalog):
+            with self.assertRaisesRegex(ProtocolError, 'max_effort_removed_explicit_reselection_required'):
+                export(invalid)
+        self.assertEqual(invalid['reasoning_effort'], 'max')
     def test_original_instructions_preserved(self):
         from remote_transport.codex_catalog import INSTRUCTIONS_PATH
         self.assertEqual(catalog_for_selection(self.selection)['models'][0]['model_messages']['instructions_template'],

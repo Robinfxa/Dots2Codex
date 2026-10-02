@@ -142,7 +142,7 @@ class GlobalControlTests(unittest.TestCase):
         self.error('join_code',q.verify,state,'0'*64)
 
     def test_two_queue_children_to_real_facades_isolated_end_to_end(self):
-        first=self.demand(request('A'));second=self.demand(request('B','gpt-6-astra','max'))
+        first=self.demand(request('A'));second=self.demand(request('B','gpt-6-astra','xhigh'))
         workers=[]
         for rid,_,_ in (first,second):workers.append(self.child_admit(rid,self.native(rid)))
         self.assertNotEqual(workers[0][1].oid,workers[1][1].oid)
@@ -178,8 +178,8 @@ class GlobalControlTests(unittest.TestCase):
         self.assertIsNone(worker.start_next())
 
     def test_new_generation_requires_new_native_join_without_stalling_old_queue(self):
-        new=self.store.activate(select(load_catalog(),'gpt-6-astra','max'))
-        status,raw=post(self.store,new,identity(),request('new','gpt-6-astra','max'))
+        new=self.store.activate(select(load_catalog(),'gpt-6-astra','xhigh'))
+        status,raw=post(self.store,new,identity(),request('new','gpt-6-astra','xhigh'))
         self.assertEqual(status,409);self.assertIn(b'activation_requires_new_native_join',raw)
         self.assertEqual(self.bridge.step()['state'],'controller_active')
 

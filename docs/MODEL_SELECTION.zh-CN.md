@@ -22,13 +22,16 @@ python3 -m remote_transport.router_mac models
 这是**版本化能力快照**，不是账号可用性、额度或实时平台模型发现接口。
 
 本版本的模型为 `gpt-6.1-sol`、`gpt-6-astra`、`gpt-6-sol`、`gpt-6-luna`、`gpt-5.6-sol`。
-桥接允许的 effort 为 `low`、`medium`、`high`、`xhigh`、`max`。选择以命令的当前输出为准；
+当前 v2 桥接允许的 effort 为 `low`、`medium`、`high`、`xhigh`，新设置默认选中 `xhigh`。`max` 已从可选/可接受的桥接组合中移除；
+`native_efforts` 仅记录平台能力观察，不是可选菜单，不能据此解锁 `max`。选择以 `bridge_efforts` 的当前输出为准；
 不会把不支持的模型换成默认模型，也不会把未知 effort 归一化成别的级别。
 
 官方 Codex CLI 0.159.2 会改写 `ultra`，因此即使某 native 模型支持它，本桥接仍拒绝该值；
 `none`、`minimal`、`persistent` 也不在此桥接快照的可选组合中。不能靠手改 JSON 解锁。
 `--catalog /absolute/path/snapshot.json` 只接受与本版本内置快照完全相同的内容，不接受
 用户扩展模型列表。快照变化应通过审阅过的代码升级和新会话处理。
+
+旧 v1 设置不会被静默映射到新档位。升级代码之前，先用原匹配版本 Stop/关闭当前 Global 或单会话，并按需 Restore 已应用的 Global 配置；确认旧进程停止后再更新代码。随后打开 `START.command` → `Settings`，核对模型并重新选择 effort，确认保存后才启动新会话。旧 `max`、旧 capability hash、旧签名 JOIN/pin/runtime 都不能原地改成 `xhigh`。保留原有证据，重新生成 JOIN；退出设置或拒绝确认不会改配置。
 
 ## 2. 为新 Router 会话指定完整组合
 
@@ -166,8 +169,8 @@ python3 -B -m unittest discover -s remote_tests -v
 
 新增 launcher 测试覆盖旧配置兼容、完整选择/部分选择拒绝、篡改目录拒绝、精确 CLI 参数、
 已有 session 改组合拒绝，以及 bootstrap → native admission receipt → pin 的参数传递。
-官方 `codex-cli 0.159.2` 已用隔离的空 `CODEX_HOME` 和 `debug models` 实际加载
-全部 25 个组合的绝对路径目录；结果只含对应模型/effort，并保留标准 Responses 设置。
+历史 v1 曾用官方 `codex-cli 0.159.2`、隔离的空 `CODEX_HOME` 和 `debug models` 实际加载
+当时全部 25 个组合的绝对路径目录。当前 v2 移除 max 后为 20 个组合；旧记录不当作本轮新现场验收。
 此检查不做推理，不证明交互 `/model` 菜单或线上 native 路由；完整端到端仍待授权验收。
 
 实现依据：官方 Codex

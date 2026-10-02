@@ -1,6 +1,8 @@
 # Model/effort selection validation and limits
 
-This source change is based on published commit
+Current policy note: the reviewed v2 catalog offers 20 bridge pairs, with xhigh as the default for every model and max rejected. Native capability observations do not make max a selectable bridge choice. Old sessions must be stopped/closed with their matching package before upgrade (and Global config restored when needed), followed by explicit Settings/reselection; signed sessions are not migrated. The v1 counts and CLI parsing observations below are historical evidence, not a claim that v2 live native acceptance has passed.
+
+The historical source change is based on published commit
 `4508189d58ca641abbf5278101f65c254f67cc73`. It does not publish, deploy, sign in,
 create Google resources, or invoke a real native inference worker.
 
@@ -62,7 +64,7 @@ emitted `/responses` request, interactive `/model` menu, real Mac/Google pairing
 real native selection and multi-hour operation have **not** been verified by
 this change. Do not confuse catalog parsing with these live acceptance stages.
 
-## Supported semantics
+## Historical v1 supported semantics
 
 - Exact session-start choice: five catalog models, efforts
   `low`, `medium`, `high`, `xhigh`, `max`

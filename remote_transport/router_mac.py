@@ -31,7 +31,7 @@ from .control import (_document_text, GoogleDocsCASControlStore, SessionCoordina
                       binding_for, CASConflict)
 from .model import canonical, require, hash_bytes
 from .operator import codex_command, ready_selection, selection_status
-from .selection import load_catalog, select, validate_selection, catalog_hash
+from .selection import load_catalog, select, validate_selection, validate_settings_selection, catalog_hash
 from .router_bootstrap import (
     block_for as bootstrap_block_for,
     initial_state as bootstrap_initial_state,
@@ -101,6 +101,19 @@ def _validate_config(c):
 
 def _load_config(path):
     return _validate_config(_load_private_json(_config_path(path), 131072))
+
+
+def _validate_settings_config(c):
+    """Read a retired selection only to offer explicit Settings replacement.
+
+    Runtime configuration, signed bindings and catalog files remain subject to
+    the normal current-release validator. This never normalizes a saved value.
+    """
+    require(isinstance(c, dict), "invalid_router_config")
+    _validate_config({k: v for k, v in c.items() if k != "model_selection"})
+    if c.get("model_selection") is not None:
+        validate_settings_selection(c["model_selection"])
+    return c
 
 
 def _resolve_selection(args, config):

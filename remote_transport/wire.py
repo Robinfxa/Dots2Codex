@@ -18,6 +18,9 @@ def _structural_request(request):
         selection = select(load_catalog(), request.get('model'), reasoning.get('effort'))
         validate_request_selection(request, selection)
         return {**request, 'model': LEGACY_MODEL}
+    if isinstance(request, dict):
+        # Legacy model-unverified sessions cannot bypass the removed effort.
+        validate_request_selection(request)
     return request
 
 

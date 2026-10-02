@@ -22,7 +22,7 @@ from .mac_setup import (absolute_path, no_symlinks, private_directory, credentia
                         folder_id, validate_local, validate_google, validate_credential)
 from .mac_ui import UI, Cancelled
 from .model import require, ProtocolError
-from .selection import load_catalog, select
+from .selection import DEFAULT_REASONING_EFFORT, load_catalog, select, validate_selection
 from .session import _save
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -148,6 +148,16 @@ class Launcher:
         return not ((active.get('closed') is True and active.get('process_stopped') is True) or
                     (active.get('stage') == 'ABORTED' and active.get('process_stopped') is True))
 
+    def _settings_available(self):
+        require(not self.active_blocks(), 'launcher_active_session_stop_before_settings')
+        # The default shared config cannot be replaced while a Global runtime
+        # is active either. Absent Global state does not import optional SDKs.
+        if no_symlinks(self.state / 'global' / 'current.json').exists():
+            status = self.global_backend().status(None)
+            require(status.get('stage') == 'STOPPED' and status.get('supervisor_alive') is False
+                    and status.get('config_changed') is False,
+                    'launcher_global_stop_restore_before_settings')
+
     def _approval(self, config):
         st = no_symlinks(config['authorized_user_file']).stat()
         return {'contract':1, 'config_sha256':hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest(),
@@ -176,9 +186,14 @@ class Launcher:
         return self.ports.verify_codex(self.ui.file('Select an existing official codex executable'))
 
     def configure(self, args):
-        require(not self.active_blocks(), 'launcher_active_session_stop_before_settings')
+        self._settings_available()
         original = read_private_file(self.config, 131072) if self.config.exists() else None
-        prior = self.load() or {}
+        prior = router._validate_settings_config(json.loads(original)) if original is not None else {}
+        saved = prior.get('model_selection')
+        retired = False
+        if saved is not None:
+            try: validate_selection(saved)
+            except ProtocolError: retired = True
         pair = router._resolve_selection(args, {})  # reject incomplete/unsupported flags before prompts/mutations
         candidates = credential_candidates(prior)
         supplied = getattr(args, 'credentials', None)
@@ -195,12 +210,19 @@ class Launcher:
         codex = self._pick_codex(getattr(args, 'codex', None) or prior.get('codex'))
         if pair is None:
             catalog = load_catalog(getattr(args, 'catalog', None))
-            model = self.ui.choose('Choose the native model for NEW sessions (availability requires actual admission)', catalog['models'])
-            effort = self.ui.choose('Choose reasoning effort (fixed after pairing)', catalog['models'][model]['bridge_efforts'])
+            model = self.ui.choose('Choose the native model for NEW sessions (availability requires actual admission)',
+                catalog['models'], default=saved['model'] if saved else None)
+            preferred = saved['reasoning_effort'] if saved and not retired and saved['model'] == model else DEFAULT_REASONING_EFFORT
+            effort = self.ui.choose('Choose reasoning effort (fixed after pairing)',
+                catalog['models'][model]['bridge_efforts'], default=preferred)
             pair = select(catalog, model, effort)
         config = {**(prior or default_config(folder, credential, work, codex)),
                   'folder_id':folder, 'authorized_user_file':str(credential), 'workdir':str(work),
                   'codex':codex, 'expected_codex_version':router.EXPECTED_CODEX, 'model_selection':pair}
+        # A retired selection's override points at its old pinned snapshot.
+        # Only the confirmed draft switches to this release; do not rewrite the
+        # source file, old selection, consent record or any session evidence.
+        if retired: config.pop('catalog', None)
         if getattr(args, 'catalog', None): config['catalog'] = str(no_symlinks(args.catalog))
         validate_local(config)
         print('[launcher] Checking exact Google folder metadata (read only)...', flush=True)
@@ -208,14 +230,18 @@ class Launcher:
         summary = ('Save these routing settings and defaults for new sessions?\n'
             f'Config: {self.config}\nCredential path: {credential}\nFolder ID: {folder}\nWorkspace: {work}\n'
             f'Codex: {codex}\nModel: {pair["model"]}\nEffort: {pair["reasoning_effort"]}\n'
+            + ('The saved selection uses a retired catalog. Saving replaces it with the explicitly chosen current-release pair. '
+               'Any saved catalog override is replaced; the original snapshot file and past session evidence are unchanged.\n' if retired else '') +
             'Folder preflight passed; bidirectional pairing is still pending. '
             'These settings provide defaults for new single-session and Global desktop sessions. '
             'Global Codex config changes require a separate exact-diff confirmation.')
         if not self.ui.confirm(summary): raise Cancelled()
         private_directory(self.state, create=True)
         private_directory(self.config.parent, create=True)
-        with private_lock(Path(str(self.config) + '.settings.lock')), router._lifecycle_lock(self.active):
-            require(not self.active_blocks(), 'launcher_active_session_stop_before_settings')
+        global_state = private_directory(self.state / 'global', create=True)
+        with private_lock(Path(str(self.config) + '.settings.lock')), router._lifecycle_lock(self.active), \
+                private_lock(global_state / 'lifecycle.lock'):
+            self._settings_available()
             latest = read_private_file(self.config, 131072) if self.config.exists() else None
             require(latest == original, 'launcher_config_changed_retry_settings')
             _save(self.config, config)
@@ -358,6 +384,7 @@ def main(argv=None):
     # and leaves authoritative close unverified if Google SDK/auth is unavailable.
     python = None
     is_global = args.operation.startswith('global-')
+    if args.operation == 'settings': launcher._settings_available()
     needs_setup = args.operation == 'global-start' or (args.operation in {'single-start','settings'} and not launcher.active_blocks())
     if needs_setup:
         python = Environment(ROOT, args.state, include_global=is_global).ensure(ui)

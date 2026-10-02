@@ -90,7 +90,7 @@ def global_catalog(default):
     default = validate_selection(default); models = []
     for model, capabilities in load_catalog()['models'].items():
         efforts = capabilities['bridge_efforts']
-        preferred = default['reasoning_effort'] if default['reasoning_effort'] in efforts else efforts[0]
+        preferred = default['reasoning_effort'] if default['reasoning_effort'] in efforts else capabilities['default_effort']
         row = catalog_for_selection(select(load_catalog(), model, preferred))['models'][0]
         row['description'] = 'New threads only; first request pins an isolated native admission. No hot switching.'
         row['supported_reasoning_levels'] = [{'effort': e, 'description': 'Requires exact native admission'} for e in efforts]

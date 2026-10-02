@@ -86,6 +86,8 @@ Global status、stop 和 restore 在同一菜单中。停止本地进程不代�
 
 ### 4. 为新会话固定真实 native admission 的模型与 effort
 
+当前桥接默认推理档位为 `xhigh`，可选 `low/medium/high/xhigh`；`max` 已移除。旧配置须在升级前用原版本 Stop（必要时 Restore），更新后再通过 Settings 明确重选并生成新 JOIN，不会自动改写旧会话。
+
 > 修复说明：模型选择版的 materializer 六文件 hash 与 cell 生成器四文件名单曾不一致，
 > 导致配对后的首个请求在本地生成阶段失败。本候选已统一合约并增加跨模块回归；
 > 已有 runtime 不能原地改 hash，须新会话。见[修复与恢复边界](docs/ROUTER_SOURCE_HASH_FIX.zh-CN.md)。
@@ -146,7 +148,7 @@ Global 离线测试的线程隔离、工具续轮与恢复使用 fake Google/nat
 | 原长会话基线 | 2026-09-30 约 28 分钟、4 次真实模型请求全部 `DELIVERED`；含 Mac 工具执行与匹配的 `function_call_output` 续轮；已 CAS 关闭并停止 worker | 多小时存活、完整 128 请求现场容量 |
 | 修复版 Router 与并行执行器 | 离线覆盖签名状态历史、私有配对 ledger、双向 probe、启动/停止竞争、PID 身份与未知写入处理 | 新单消息启动的真实 Mac/Google/native 端到端验收、跨 OAuth app 实际互通、真实延迟改善 |
 | 每会话模型/effort 固定选择 | 离线覆盖完整组合、真实接纳参数/回执绑定、不可变 pin、请求拒绝及 launcher；官方 CLI 本地目录解析 | 新选择路径的真实 native 推理、Mac/Google 端到端验收；底层实际模型独立证明 |
-| 显式模型/effort 选择 | 版本化 25 组合、签名接纳绑定与工具续轮离线测试；官方 CLI 已实际解析全部 25 个目录 | 本环境阻塞实际 HTTP 抓取；真实 native 模型、Mac/Google 新路径与交互菜单仍未验收 |
+| 显式模型/effort 选择 | 当前 v2 为 20 组合，默认 xhigh、拒绝 max；签名接纳与工具续轮离线覆盖。历史 v1 的 25 组合 CLI 解析记录仅作为旧版证据 | 本环境阻塞实际 HTTP 抓取；真实 native 模型、Mac/Google 新路径与交互菜单仍未验收 |
 | Google Cloud / Gemini 指南与可选 helper | 统一 Markdown/HTML/PDF/Word，离线测试与文档版面核查 | 本次未执行真实授权、Google 创建/写入或现场安装 |
 
 此前合并基线的完整离线套件：**478 个 Python 测试 + 25 个 Node 测试**。

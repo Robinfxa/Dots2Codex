@@ -19,21 +19,23 @@ from remote_transport import mac_setup as setup
 from remote_transport import mac_ui
 from remote_transport import router_mac as router
 from remote_transport.model import ProtocolError
-from remote_transport.selection import select, load_catalog
+from remote_transport.selection import (select, load_catalog, RETIRED_CATALOG_VERSION,
+                                        RETIRED_CATALOG_SHA256)
 from remote_transport.session import _save
 
 
 class FakeUI:
     def __init__(self, confirm=None, choices=None):
         self.confirms = list(confirm or []); self.choices = list(choices or [])
-        self.messages = []; self.confirmed = []
+        self.messages = []; self.confirmed = []; self.offered = []
     def confirm(self, message):
         self.confirmed.append(message)
         answer = self.confirms.pop(0) if self.confirms else True
         if isinstance(answer, Exception): raise answer
         return answer
     def choose(self, message, choices, default=None):
-        value = self.choices.pop(0) if self.choices else list(choices)[0]
+        self.offered.append((message, list(choices), default))
+        value = self.choices.pop(0) if self.choices else (default if default is not None else list(choices)[0])
         if isinstance(value, Exception): raise value
         assert value in choices, (value, choices)
         return value
@@ -90,6 +92,27 @@ class SetupTests(LauncherFixture):
         self.configure();config=self.launcher.load();config['seconds']=600;config['max_requests']=5;config['scope']='text_only';_save(self.config,config)
         self.configure();updated=self.launcher.load()
         self.assertEqual((updated['seconds'],updated['max_requests'],updated['scope']),(600,5,'text_only'))
+    def test_new_choices_default_to_xhigh_for_every_model_and_never_offer_max(self):
+        self.args.model = self.args.effort = None
+        for model in load_catalog()['models']:
+            self.ui.choices = [model]
+            self.configure()
+            selection = self.launcher.load()['model_selection']
+            self.assertEqual((selection['model'], selection['reasoning_effort']), (model, 'xhigh'))
+            self.assertEqual(self.ui.offered[-1][2], 'xhigh')
+            self.assertNotIn('max', self.ui.offered[-1][1])
+    def test_current_explicit_saved_effort_is_preserved_as_reviewed_choice(self):
+        self.args.effort = 'medium'; self.configure()
+        self.args.model = self.args.effort = None
+        self.configure()
+        self.assertEqual(self.launcher.load()['model_selection']['reasoning_effort'], 'medium')
+        self.assertEqual(self.ui.offered[-1][2], 'medium')
+    def test_explicit_max_rejected_before_credentials_or_google(self):
+        self.args.effort = 'max'
+        with self.assertRaisesRegex(ProtocolError, 'max_effort_removed'):
+            self.configure()
+        self.assertEqual(self.ui.confirmed, []); self.assertEqual(self.ports.calls, [])
+        self.assertFalse(self.config.exists())
     def test_credential_reuse_cancel_has_no_mutations_or_network(self):
         self.ui.confirms=[False]
         with self.assertRaises(mac_ui.Cancelled):self.configure()
@@ -154,6 +177,122 @@ class SetupTests(LauncherFixture):
         destination=self.root/'destination';destination.mkdir();(self.root/'linked').symlink_to(destination)
         with self.assertRaisesRegex(ProtocolError,'symlink'):
             launch.Launcher(state=self.state,config=self.root/'linked/router.json',active=self.active)
+
+
+class RetiredSettingsTests(LauncherFixture):
+    def retired(self, effort='max'):
+        self.configure()
+        value = self.launcher.load()
+        value['model_selection'].update(catalog_version=RETIRED_CATALOG_VERSION,
+            catalog_sha256=RETIRED_CATALOG_SHA256, reasoning_effort=effort)
+        self.catalog = self.root / 'old-snapshot.json'
+        self.catalog.write_bytes(b'OLD_SNAPSHOT_SOURCE_MUST_NOT_BE_REWRITTEN')
+        value['catalog'] = str(self.catalog)
+        _save(self.config, value)
+        self.args.model = self.args.effort = None
+        self.ui.confirmed.clear(); self.ports.calls.clear()
+        return self.config.read_bytes(), self.launcher.consent.read_bytes(), self.catalog.read_bytes()
+
+    def assert_unchanged(self, before):
+        self.assertEqual(before, (self.config.read_bytes(), self.launcher.consent.read_bytes(), self.catalog.read_bytes()))
+
+    def test_explicit_settings_reselects_retired_max_with_current_catalog(self):
+        before = self.retired()
+        result = self.configure()
+        self.assertEqual(result['effort'], 'xhigh')
+        value = self.launcher.load()
+        self.assertEqual(value['model_selection'], select(load_catalog(), 'gpt-6.1-sol', 'xhigh'))
+        self.assertNotIn('catalog', value)
+        self.assertEqual(self.catalog.read_bytes(), before[2])
+        self.assertTrue(self.launcher.approved(value))
+        self.assertIn('retired catalog', self.ui.confirmed[-1])
+        self.assertEqual([c[0] for c in self.ports.calls], ['codex', 'google'])
+
+    def test_old_supported_effort_also_requires_explicit_current_catalog_reselection(self):
+        self.retired('high')
+        self.ui.choices = ['gpt-6.1-sol', 'high']
+        self.configure()
+        self.assertEqual(self.launcher.load()['model_selection'], select(load_catalog(), 'gpt-6.1-sol', 'high'))
+        self.assertEqual(self.ui.offered[-1][2], 'xhigh')
+
+    def test_retired_config_is_not_silently_upgraded_by_load_or_start(self):
+        before = self.retired()
+        for action in (self.launcher.load, lambda: self.launcher.start(self.args), lambda: self.launcher.global_start(self.args)):
+            with self.assertRaises(ProtocolError): action()
+            self.assert_unchanged(before)
+        self.assertEqual(self.ui.confirmed, []); self.assertEqual(self.ports.calls, [])
+
+    def test_retired_settings_cancel_at_either_confirmation_preserves_all_evidence(self):
+        before = self.retired()
+        for answers in ([False], [True, False]):
+            self.ui.confirms = list(answers)
+            with self.assertRaises(mac_ui.Cancelled): self.configure()
+            self.assert_unchanged(before)
+
+    def test_retired_settings_cannot_replace_running_or_incomplete_session(self):
+        before = self.retired(); self.active_write()
+        active = self.active.read_bytes()
+        with self.assertRaisesRegex(ProtocolError, 'stop_before_settings'): self.configure()
+        self.assert_unchanged(before); self.assertEqual(self.active.read_bytes(), active)
+        self.assertEqual(self.ui.confirmed, []); self.assertEqual(self.ports.calls, [])
+
+    def test_retired_settings_still_rejects_unrecognized_binding(self):
+        self.retired()
+        value = json.loads(self.config.read_bytes())
+        value['model_selection']['catalog_sha256'] = '0' * 64
+        _save(self.config, value)
+        before = self.config.read_bytes()
+        with self.assertRaises(ProtocolError): self.configure()
+        self.assertEqual(self.config.read_bytes(), before)
+        self.assertEqual(self.ui.confirmed, []); self.assertEqual(self.ports.calls, [])
+
+    def test_explicit_stale_catalog_override_fails_without_modifying_source(self):
+        before = self.retired()
+        self.args.catalog = str(self.catalog)
+        with self.assertRaises(ValueError): self.configure()
+        self.assert_unchanged(before)
+        self.assertEqual(self.ui.confirmed, []); self.assertEqual(self.ports.calls, [])
+
+    def test_runtime_that_appears_during_settings_preflight_blocks_save(self):
+        before = self.retired()
+        original_google = self.ports.google
+        def google(config):
+            original_google(config)
+            _save(self.state / 'global' / 'current.json', {'fixture': 'concurrent runtime'})
+        self.ports.google = google
+        with patch.object(self.launcher, 'global_backend') as backend:
+            backend.return_value.status.return_value = {'stage': 'READY', 'supervisor_alive': True, 'config_changed': False}
+            with self.assertRaisesRegex(ProtocolError, 'global_stop_restore_before_settings'): self.configure()
+        self.assert_unchanged(before)
+
+    def test_global_runtime_requires_stop_and_restore_before_settings(self):
+        before = self.retired()
+        _save(self.state / 'global' / 'current.json', {'fixture': 'unchanged'})
+        global_before = (self.state / 'global' / 'current.json').read_bytes()
+        for status in ({'stage': 'READY', 'supervisor_alive': True, 'config_changed': False},
+                       {'stage': 'STOPPED', 'supervisor_alive': False, 'config_changed': True},
+                       {'stage': 'STOPPED', 'supervisor_alive': True, 'config_changed': False},
+                       {'stage': 'STOPPED', 'config_changed': False}):
+            with patch.object(self.launcher, 'global_backend') as backend:
+                backend.return_value.status.return_value = status
+                with self.assertRaisesRegex(ProtocolError, 'global_stop_restore_before_settings'): self.configure()
+            self.assert_unchanged(before)
+            self.assertEqual((self.state / 'global' / 'current.json').read_bytes(), global_before)
+        self.assertEqual(self.ui.confirmed, []); self.assertEqual(self.ports.calls, [])
+        with patch.object(self.launcher, 'global_backend') as backend:
+            backend.return_value.status.return_value = {'stage': 'STOPPED', 'supervisor_alive': False, 'config_changed': False}
+            self.assertTrue(self.configure()['configured'])
+        self.assertEqual((self.state / 'global' / 'current.json').read_bytes(), global_before)
+
+    def test_main_settings_does_not_install_before_global_stop(self):
+        self.retired()
+        _save(self.state / 'global' / 'current.json', {'fixture': 'active'})
+        with patch.object(launch, 'verify_package'), patch.object(launch, 'UI', return_value=self.ui), \
+                patch.object(launch, 'desktop_global') as global_backend, patch.object(launch.Environment, 'ensure') as ensure:
+            global_backend.return_value.status.return_value = {'stage': 'READY', 'supervisor_alive': True, 'config_changed': False}
+            with self.assertRaisesRegex(ProtocolError, 'global_stop_restore_before_settings'):
+                launch.main(['settings', '--state', str(self.state), '--config', str(self.config), '--active', str(self.active)])
+            ensure.assert_not_called()
 
 
 class SessionTests(LauncherFixture):
@@ -309,6 +448,29 @@ class EnvironmentTests(unittest.TestCase):
 
 
 class UITests(unittest.TestCase):
+    def test_native_default_is_passed_as_data_and_cancel_still_cancels(self):
+        calls = []
+        def run(args, **kwargs):
+            calls.append(args); return SimpleNamespace(returncode=0, stdout='xhigh\n', stderr='')
+        ui = mac_ui.UI(run=run, tty=False, native=True)
+        self.assertEqual(ui.choose('effort?', ['low', 'medium', 'high', 'xhigh'], default='xhigh'), 'xhigh')
+        self.assertIn('default items defaultItems', calls[0][2])
+        self.assertEqual(calls[0][-6:], ['effort?', 'xhigh', 'low', 'medium', 'high', 'xhigh'])
+        ui.run = lambda *a, **k: SimpleNamespace(returncode=0, stdout='false\n', stderr='')
+        with self.assertRaises(mac_ui.Cancelled): ui.choose('effort?', ['xhigh'], default='xhigh')
+    def test_tty_default_does_not_change_confirmation_or_cancellation(self):
+        ui = mac_ui.UI(tty=True, native=False, input_fn=lambda prompt: '')
+        self.assertEqual(ui.choose('effort?', ['low', 'medium', 'high', 'xhigh'], default='xhigh'), 'xhigh')
+        self.assertFalse(ui.confirm('save?'))
+        with self.assertRaises(mac_ui.Cancelled): ui.choose('menu?', ['Settings'])
+        ui.input = lambda prompt: 'q'
+        with self.assertRaises(mac_ui.Cancelled): ui.choose('effort?', ['xhigh'], default='xhigh')
+    def test_unknown_default_fails_before_prompt(self):
+        ui = mac_ui.UI(tty=False, native=True)
+        with patch.object(ui, '_native') as native:
+            with self.assertRaisesRegex(ValueError, 'invalid_default_choice'):
+                ui.choose('effort?', ['xhigh'], default='max')
+            native.assert_not_called()
     def test_native_confirmation_cancel_and_timeout_not_approval(self):
         for result in [SimpleNamespace(returncode=1,stdout='',stderr='execution error (-128)'),SimpleNamespace(returncode=0,stdout='__TIMEOUT__\n',stderr='')]:
             ui=mac_ui.UI(run=lambda *a,**kw:result,tty=True,native=True,input_fn=lambda p:'yes')

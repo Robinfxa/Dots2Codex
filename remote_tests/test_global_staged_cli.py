@@ -346,7 +346,7 @@ class GlobalStagedCLIIntegrationTests(unittest.TestCase):
 
     def test_route_selection_or_identity_changes_reject_preflight(self):
         self.reserve()
-        for field, value in [('selection', canonical(select(load_catalog(), 'gpt-6-astra', 'max')).decode()),
+        for field, value in [('selection', canonical(select(load_catalog(), 'gpt-6-astra', 'xhigh')).decode()),
                              ('identity', canonical({'session-id': 'changed', 'thread-id': 'changed'}).decode())]:
             with self.subTest(field=field):
                 old = self.store.route(self.rid)[field]

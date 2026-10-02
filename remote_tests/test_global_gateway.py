@@ -36,9 +36,9 @@ class GlobalGatewayTests(unittest.TestCase):
     def count(self,table):
         with self.store.transaction() as db:return db.execute('SELECT COUNT(*) FROM '+table).fetchone()[0]
 
-    def test_catalog_all_25_pairs_without_hot_switch(self):
+    def test_catalog_all_20_pairs_without_hot_switch(self):
         rows=global_catalog(self.selected)['models'];self.assertEqual(len(rows),5)
-        self.assertEqual(sum(len(r['supported_reasoning_levels']) for r in rows),25)
+        self.assertEqual(sum(len(r['supported_reasoning_levels']) for r in rows),20)
         self.assertTrue(all(r['supports_reasoning_effort_updates'] is False for r in rows))
 
     def test_only_bound_authenticated_probe_and_fixture_readiness(self):
@@ -64,7 +64,7 @@ class GlobalGatewayTests(unittest.TestCase):
             with self.assertRaises(OSError):Gateway(other)
 
     def test_invalid_selection_never_binds_a_thread(self):
-        for body in [request('x',effort='ultra'),request('x',model='arbitrary'),{**request('x'),'reasoning':{}}]:
+        for body in [request('x',effort='max'),request('x',effort='ultra'),request('x',model='arbitrary'),{**request('x'),'reasoning':{}}]:
             status,raw=post(self.store,self.generation,identity(),body);self.assertEqual(status,409,raw)
         self.assertEqual(self.count('routes'),0)
 
@@ -114,21 +114,21 @@ class GlobalGatewayTests(unittest.TestCase):
     def test_admission_receipt_wrong_selection_rejected(self):
         post(self.store,self.generation,identity(),request('x'));claim=self.controller.claim()
         owned={k:claim[k] for k in ('route_id','claim','version')};begun=self.controller.call('begin',owned)
-        other=select(load_catalog(),'gpt-6-astra','max');args={**begun['spawn_arguments'],'model':other['model'],'reasoning_effort':other['reasoning_effort']}
+        other=select(load_catalog(),'gpt-6-astra','xhigh');args={**begun['spawn_arguments'],'model':other['model'],'reasoning_effort':other['reasoning_effort']}
         task='/offline_fixture/'+args['task_name'];receipt=admission_receipt(other,args,task)
         pin=deployment(claim['route_id'],task,seconds=300,scope='responses_tools',inference={'selection':other,'admission':receipt})
         self.error('route_pin_binding_mismatch',self.controller.call,'admit',{**owned,'version':begun['version'],'pin':pin.value})
         self.assertEqual(self.store.route(claim['route_id'])['state'],'spawn_intent')
 
     def test_thread_pair_immutable_and_different_session_key(self):
-        rid,body,client=self.new();status,raw=post(self.store,self.generation,client,request('change','gpt-6-astra','max'))
+        rid,body,client=self.new();status,raw=post(self.store,self.generation,client,request('change','gpt-6-astra','xhigh'))
         self.assertEqual(status,409);self.assertIn(b'thread_selection_immutable',raw);self.assertEqual(self.count('routes'),1)
         other={**client,'session-id':'other-session'}
         self.assertNotEqual(route_key(self.generation,client),route_key(self.generation,other))
         self.assertEqual(post(self.store,self.generation,other,request('new'))[0],409);self.assertEqual(self.count('routes'),2)
 
     def test_two_concurrent_clients_different_pairs_and_no_cross_history(self):
-        first=self.new(request('only A'));second=self.new(request('only B','gpt-6-astra','max'))
+        first=self.new(request('only A'));second=self.new(request('only B','gpt-6-astra','xhigh'))
         with concurrent.futures.ThreadPoolExecutor() as pool:
             futures=[pool.submit(self.controller.turn,rid,body,text) for (rid,body,_),text in [(first,'A result'),(second,'B result')]]
             out=[f.result() for f in futures]
@@ -171,8 +171,8 @@ class GlobalGatewayTests(unittest.TestCase):
         self.assertEqual(self.store.route(rid)['used'],1)
 
     def test_changed_default_new_generation_does_not_rebind_old_route(self):
-        rid,body,client=self.new();new=self.store.activate(select(load_catalog(),'gpt-6-astra','max'))
-        newrid,_,_=self.new(request('other','gpt-6-astra','max'),client,new)
+        rid,body,client=self.new();new=self.store.activate(select(load_catalog(),'gpt-6-astra','xhigh'))
+        newrid,_,_=self.new(request('other','gpt-6-astra','xhigh'),client,new)
         self.assertNotEqual(rid,newrid);self.assertEqual(self.store.route(rid)['selection'],json.dumps(self.selected))
         self.assertEqual(self.store.route(rid)['generation'],self.generation)
         self.assertIn(new,probe(self.store.root)['base_url'])

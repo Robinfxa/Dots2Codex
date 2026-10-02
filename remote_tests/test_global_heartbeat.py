@@ -153,13 +153,13 @@ class GlobalHeartbeatTests(unittest.TestCase):
             {'native_task_id':self.ledger.identity,'controller_epoch':secrets.token_hex(16),'lease_expires':2000001000,'capacity':2})
 
     def test_capacity_and_generation_remain_fenced(self):
-        self.join();one=self.demand();two=self.store.admission(self.gen,identity(),select(load_catalog(),'gpt-6-astra','max'))
+        self.join();one=self.demand();two=self.store.admission(self.gen,identity(),select(load_catalog(),'gpt-6-astra','xhigh'))
         self.bridge.prepare_child(two['id']);self.event('claim',route_id=one);self.event('claim',route_id=two['id'])
         three=self.store.admission(self.gen,identity(),select(load_catalog(),'gpt-6.1-sol','high'))
         self.bridge.prepare_child(three['id'])
         self.assertError('slots_exhausted',self.ledger.plan_event,self.source(),'claim',self.path('full'),route_id=three['id'])
-        new=self.store.activate(select(load_catalog(),'gpt-6-astra','max'))
-        self.assertError('new_native_join',self.store.admission,new,identity(),select(load_catalog(),'gpt-6-astra','max'))
+        new=self.store.activate(select(load_catalog(),'gpt-6-astra','xhigh'))
+        self.assertError('new_native_join',self.store.admission,new,identity(),select(load_catalog(),'gpt-6-astra','xhigh'))
 
     def test_unresolved_heartbeat_blocks_spawn_exposure_until_exact_reconciliation(self):
         self.join();rid=self.demand();self.event('claim',route_id=rid);self.event('begin',route_id=rid)

@@ -46,15 +46,19 @@ class UI:
     def choose(self, message, choices, default=None):
         choices = list(choices)
         if not choices: raise ValueError('launcher_empty_choices')
+        if default is not None and default not in choices: raise ValueError('launcher_invalid_default_choice')
         # Data goes in argv; quotes/newlines never become AppleScript source.
-        result = self._native('set itemsList to items 2 thru -1 of argv\nset r to choose from list itemsList with prompt (item 1 of argv) with title "Dots2Codex Router" without multiple selections allowed and empty selection allowed\nif r is false then return "false"\nreturn item 1 of r', [message, *choices])
+        result = self._native('set itemsList to items 3 thru -1 of argv\nset defaultItems to {}\nif (item 2 of argv) is not "" then set defaultItems to {item 2 of argv}\nset r to choose from list itemsList with prompt (item 1 of argv) with title "Dots2Codex Router" default items defaultItems without multiple selections allowed and empty selection allowed\nif r is false then return "false"\nreturn item 1 of r', [message, default or '', *choices])
         if result is None:
             print(message, flush=True)
-            for n, item in enumerate(choices, 1): print(f'  {n}. {item}', flush=True)
-            value = self._read('Choose a number (blank cancels): ').strip()
-            if not value: raise Cancelled()
-            if not value.isdigit() or not 1 <= int(value) <= len(choices): raise Cancelled()
-            result = choices[int(value)-1]
+            for n, item in enumerate(choices, 1):
+                print(f'  {n}. {item}' + (' (default)' if item == default else ''), flush=True)
+            prompt = f'Choose a number (blank selects {default}; q cancels): ' if default is not None else 'Choose a number (blank cancels): '
+            value = self._read(prompt).strip()
+            if not value and default is not None: result = default
+            else:
+                if not value.isdigit() or not 1 <= int(value) <= len(choices): raise Cancelled()
+                result = choices[int(value)-1]
         if result not in choices: raise Cancelled()
         return result
 

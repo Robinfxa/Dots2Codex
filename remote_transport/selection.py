@@ -3,6 +3,8 @@ not a live entitlement probe or independently observed backend model identity.
 
 The official Codex 0.159.2 CLI rewrites ``ultra`` before sending Responses, so
 that native effort is intentionally NOT a selectable bridge wire effort.
+The bridge default is xhigh. The retired max bridge choice is rejected, never
+rewritten; a new selection and paired session are required.
 """
 import copy
 import json
@@ -11,7 +13,12 @@ from pathlib import Path
 from .model import canonical, hash_bytes, require
 
 CATALOG_PATH = Path(__file__).with_name('native_capabilities.json')
-CATALOG_SHA256 = 'ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583'
+CATALOG_SHA256 = '67b816ad4cbc7a86dfd9beab767534039b02b71968b6664258f88b692ccd85c9'
+DEFAULT_REASONING_EFFORT = 'xhigh'
+RETIRED_CATALOG_VERSION = '2026-10-01.codex-0.159.2.v1'
+RETIRED_CATALOG_SHA256 = 'ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583'
+RETIRED_MODELS = frozenset(('gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna', 'gpt-5.6-sol'))
+RETIRED_EFFORTS = frozenset(('low', 'medium', 'high', 'xhigh', 'max'))
 LEGACY_MODEL = 'native-subagent-bridge'
 SELECTION_KEYS = {'contract', 'catalog_version', 'catalog_sha256', 'model', 'reasoning_effort'}
 ADMISSION_KEYS = {'contract', 'adapter', 'native_task_id', 'submitted_model',
@@ -35,6 +42,7 @@ def catalog_hash(catalog=None):
 def select(catalog, model, effort):
     require(catalog == load_catalog(), 'capability_catalog_not_supported_by_this_release')
     require(isinstance(model, str) and model in catalog['models'], 'unsupported_native_model')
+    require(effort != 'max', 'max_effort_removed_explicit_reselection_required')
     require(isinstance(effort, str) and effort in catalog['models'][model]['bridge_efforts'],
             'unsupported_model_effort_pair')
     return {'contract': 'dots-native-selection/1', 'catalog_version': catalog['version'],
@@ -45,6 +53,23 @@ def validate_selection(value, catalog=None):
     require(isinstance(value, dict) and set(value) == SELECTION_KEYS, 'invalid_native_selection')
     expected = select(load_catalog() if catalog is None else catalog, value['model'], value['reasoning_effort'])
     require(value == expected, 'native_selection_catalog_mismatch')
+    return copy.deepcopy(value)
+
+
+def validate_settings_selection(value):
+    """Read current or the exact retired v1 choice only for explicit Settings UI.
+
+    Returned values are unchanged, including retired max choices. This does not
+    authorize routing, admission, receipts or signed roots: those must continue
+    using validate_selection and require an explicit current-catalog reselection.
+    """
+    require(isinstance(value, dict) and set(value) == SELECTION_KEYS, 'invalid_native_selection')
+    if (value['catalog_version'], value['catalog_sha256']) != (RETIRED_CATALOG_VERSION, RETIRED_CATALOG_SHA256):
+        return validate_selection(value)
+    require(value['contract'] == 'dots-native-selection/1'
+            and isinstance(value['model'], str) and value['model'] in RETIRED_MODELS
+            and isinstance(value['reasoning_effort'], str) and value['reasoning_effort'] in RETIRED_EFFORTS,
+            'invalid_retired_native_selection')
     return copy.deepcopy(value)
 
 
@@ -104,12 +129,15 @@ def pin_selection(pin):
 
 def validate_request_selection(request, selection=None):
     require(isinstance(request, dict), 'invalid_request')
+    reasoning = request.get('reasoning')
+    require(not (isinstance(reasoning, dict) and reasoning.get('effort') == 'max')
+            and request.get('reasoning_effort') != 'max' and request.get('model_reasoning_effort') != 'max',
+            'max_effort_removed_explicit_reselection_required')
     if selection is None:
         require(request.get('model') == LEGACY_MODEL, 'legacy_pin_requires_native_subagent_bridge')
         return
     validate_selection(selection)
     require(request.get('model') == selection['model'], 'model_change_requires_new_paired_session')
-    reasoning = request.get('reasoning')
     require(isinstance(reasoning, dict) and isinstance(reasoning.get('effort'), str),
             'explicit_reasoning_effort_required')
     require(reasoning['effort'] == selection['reasoning_effort'], 'effort_change_requires_new_paired_session')

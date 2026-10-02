@@ -2,6 +2,11 @@ Dots2Codex config-first local Codex Global trial
 
 Double-click START.command and choose Global start.
 Read docs/DESKTOP_GLOBAL.zh-CN.md for the local config activation flow.
+New reviewed bridge settings default to xhigh; max is no longer selectable.
+Stop/close with the matching old package BEFORE upgrading; restore any applied
+Global config if required. Then use Settings to explicitly replace an old/max
+selection. Never rewrite old signed JOINs or silently map max to xhigh; create
+a fresh activation.
 Normal client-config-trial/1 automatically resolves one exact safe CODEX_HOME.
 It has no app installation/name/bundle-ID/signature/internal-binary gate.
 The exact codex-cli 0.159.2 catalog adapter evidence is still mandatory.

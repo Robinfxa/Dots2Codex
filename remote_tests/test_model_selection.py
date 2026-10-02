@@ -12,7 +12,9 @@ import uuid
 from remote_transport import deployment, Object, ProtocolError, Journal, GoogleDriveBackend
 from remote_transport.model import canonical, hash_bytes
 from remote_transport.selection import (load_catalog, select, validate_selection, spawn_arguments,
-    admission_receipt, validate_admission, validate_request_selection, pin_selection)
+    admission_receipt, validate_admission, validate_request_selection, pin_selection,
+    validate_settings_selection, DEFAULT_REASONING_EFFORT, RETIRED_CATALOG_VERSION,
+    RETIRED_CATALOG_SHA256)
 from remote_transport.wire import validate_remote_request
 from remote_transport.session import Controller, Worker, _index
 from remote_transport.control import initial_state as control_state, GoogleDocsCASControlStore, SessionCoordinator, binding_for
@@ -20,7 +22,7 @@ from remote_transport.controlled import CASController, CASWorker
 from remote_transport.facade import RemoteResponsesFacade
 from remote_transport.router_bootstrap import (initial_state, worker_admitted, bundle_ready,
     worker_polling, consume_bundle, verify_context, block_for, decode_block, root_context,
-    verify_join_code)
+    verify_join_code, proof)
 from remote_transport.router_join import main as join_main, JoinLedger
 from test_router_bootstrap import RouterBootstrapFixtures, doc, private_json
 from fakes import FakeDrive
@@ -45,6 +47,71 @@ def wire(text='hello', selection=None, history=(), tools=()):
 
 
 class SelectionTests(unittest.TestCase):
+    def test_reviewed_defaults_and_bridge_native_relationship(self):
+        catalog = load_catalog()
+        self.assertEqual(catalog['version'], '2026-10-01.codex-0.159.2.v2')
+        self.assertEqual(DEFAULT_REASONING_EFFORT, 'xhigh')
+        self.assertEqual(len(catalog['models']), 5)
+        for model, entry in catalog['models'].items():
+            with self.subTest(model=model):
+                self.assertEqual(entry['bridge_efforts'], ['low', 'medium', 'high', 'xhigh'])
+                self.assertEqual(entry['default_effort'], DEFAULT_REASONING_EFFORT)
+                self.assertLessEqual(set(entry['bridge_efforts']), set(entry['native_efforts']))
+                self.assertIn('max', entry['native_efforts'])  # Factual platform observation only.
+                self.assertEqual(select(catalog, model, entry['default_effort'])['reasoning_effort'], 'xhigh')
+
+    def test_max_rejected_for_every_model_without_rewriting(self):
+        for model in load_catalog()['models']:
+            with self.subTest(model=model):
+                with self.assertRaisesRegex(ProtocolError, 'max_effort_removed_explicit_reselection_required'):
+                    select(load_catalog(), model, 'max')
+                request = wire(selection=selected(model))
+                request['reasoning']['effort'] = 'max'
+                before = canonical(request)
+                with self.assertRaisesRegex(ProtocolError, 'max_effort_removed_explicit_reselection_required'):
+                    validate_remote_request(request, 'responses_tools')
+                self.assertEqual(canonical(request), before)
+
+    def test_legacy_alias_cannot_bypass_removed_max(self):
+        request = {**wire(), 'model': 'native-subagent-bridge', 'reasoning': {'effort': 'max'}}
+        before = canonical(request)
+        for scope in ('text_only', 'responses_tools'):
+            with self.subTest(scope=scope), self.assertRaisesRegex(ProtocolError, 'max_effort_removed'):
+                validate_remote_request(request, scope)
+        with self.assertRaisesRegex(ProtocolError, 'max_effort_removed'):
+            validate_request_selection(request)
+        self.assertEqual(canonical(request), before)
+        for effort in ('low', 'medium', 'high', 'xhigh'):
+            validate_remote_request({**request, 'reasoning': {'effort': effort}}, 'responses_tools')
+
+    def test_removed_max_top_level_effort_aliases_are_rejected(self):
+        for model in ('native-subagent-bridge', 'gpt-6-astra'):
+            for key in ('reasoning_effort', 'model_reasoning_effort'):
+                request = {**wire(), 'model': model, key: 'max'}
+                before = canonical(request)
+                for scope in ('text_only', 'responses_tools'):
+                    with self.subTest(model=model, key=key, scope=scope), self.assertRaisesRegex(ProtocolError, 'max_effort_removed'):
+                        validate_remote_request(request, scope)
+                with self.assertRaisesRegex(ProtocolError, 'max_effort_removed'):
+                    validate_request_selection(request, None if model == 'native-subagent-bridge' else selected())
+                self.assertEqual(canonical(request), before)
+
+    def test_retired_settings_read_is_not_runtime_approval_or_migration(self):
+        for effort in ('low', 'medium', 'high', 'xhigh', 'max'):
+            old = {**selected(), 'catalog_version': RETIRED_CATALOG_VERSION,
+                   'catalog_sha256': RETIRED_CATALOG_SHA256, 'reasoning_effort': effort}
+            before = canonical(old)
+            self.assertEqual(validate_settings_selection(old), old)
+            with self.assertRaises(ProtocolError): validate_selection(old)
+            with self.assertRaises(ProtocolError): spawn_arguments(old, 'worker', 'Never admitted')
+            self.assertEqual(canonical(old), before)
+        for change in ({'catalog_sha256': '0' * 64}, {'catalog_version': 'future'},
+                       {'contract': 'other'}, {'model': 'unreviewed'}, {'reasoning_effort': 'ultra'},
+                       {'reasoning_effort': None}, {'fallback': 'xhigh'}):
+            with self.subTest(change=change), self.assertRaises(ProtocolError):
+                validate_settings_selection({**old, **change})
+        self.assertEqual(validate_settings_selection(selected()), selected())
+
     def test_every_advertised_pair_has_exact_spawn_and_receipt(self):
         catalog = load_catalog()
         for model, entry in catalog['models'].items():
@@ -137,6 +204,23 @@ class SelectedBootstrapTests(RouterBootstrapFixtures, unittest.TestCase):
         self.assertEqual(decode_block(block_for(consumed)),consumed)
         self.assertTrue(block_for(consumed).startswith('DOTS2CODEX_ROUTER_BOOTSTRAP_BEGIN_V3'))
         verify_join_code(consumed,self.code)
+
+    def test_authentic_retired_catalog_roots_require_new_pairing(self):
+        for effort in ('xhigh', 'max'):
+            state = copy.deepcopy(self.state)
+            state['required_selection'] = {**state['required_selection'],
+                'catalog_version': RETIRED_CATALOG_VERSION,
+                'catalog_sha256': RETIRED_CATALOG_SHA256, 'reasoning_effort': effort}
+            # Recreate the genuine old signed root; rejection must come from
+            # catalog support, rather than merely a mismatched HMAC.
+            state['root_mac'] = proof(self.code, 'root', root_context(state))
+            before = canonical(state)
+            with self.subTest(effort=effort), self.assertRaises(ProtocolError):
+                verify_context(state, self.code, 'bootDoc', 't.0')
+            with self.assertRaises(ProtocolError):
+                worker_admitted(state, join_code=self.code, native_task_id=self.native,
+                                probe=self.probe, admission=self.admission, now=self.now+1)
+            self.assertEqual(canonical(state), before)
 
     def test_selection_tamper_and_missing_admission_fail(self):
         changed = copy.deepcopy(self.state);changed['required_selection'] = selected(effort='low')

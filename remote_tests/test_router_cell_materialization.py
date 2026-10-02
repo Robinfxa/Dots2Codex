@@ -30,7 +30,7 @@ class MaterializedRouterCellTests(unittest.TestCase):
         f = router_fixtures.RouterJoinDurabilityTests('test_materialization_reservation_blocks_second_root_and_supports_exact_resume')
         f.setUp(); self.addCleanup(f.doCleanups)
         if selected_mode:
-            old=root_context(f.state);control=old['control'];selection=selected(effort='max')
+            old=root_context(f.state);control=old['control'];selection=selected(effort='xhigh')
             f.state=initial_state(bootstrap_id=old['bootstrap_id'],session_id=old['session_id'],
                 created=old['created'],expires=old['expires'],join_code=f.code,folder_id=old['folder_id'],
                 control_document_id=control['document_id'],control_tab_id=control['tab_id'],

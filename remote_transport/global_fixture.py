@@ -111,7 +111,7 @@ def main():
         with Gateway(store):
             controller=OfflineController(store)
             try:
-                clients=[identity(),identity()];bodies=[request('fixture A'),request('fixture B','gpt-6-astra','max')]
+                clients=[identity(),identity()];bodies=[request('fixture A'),request('fixture B','gpt-6-astra','xhigh')]
                 pending=[post(store,generation,c,b)[0] for c,b in zip(clients,bodies)]
                 routes=[controller.admit_next(),controller.admit_next()]
                 with concurrent.futures.ThreadPoolExecutor() as pool:
