@@ -25,6 +25,18 @@ codex --no-daemon --sandbox read-only \
 
 本 facade 只有 HTTP `POST /v1/responses` / `POST /responses`，返回 SSE；没有 `/models`、`/responses/compact`、WebSocket 或 hosted 工具服务。支持文字及所广告的 function/custom 工具。截图、文件/音频输入、托管工具、客户端额外压缩流程及任意更长会话不在验收范围。若客户端访问其他 endpoint 或发送不支持的项目，停下核对，不应把错误当作模型响应。
 
+## 首条请求前误退出：仅限零请求的一次恢复
+
+如果旧 Codex 已经完全退出，且从未发送请求，可用 `./DIRECT.command codex-reopen-unused`。不要删除 `codex-started.json`、数据库或任何恢复记录，也不要重新 setup、init、换 route 或修改到期时间。
+
+1. 先让原生控制器暂停，确认它从未收到请求。在原隧道 Terminal 按 Ctrl-C，等隧道及 bridge 子进程完全退出；保留该 Terminal 和它的环境变量
+2. 在原 Codex Terminal 运行 `./DIRECT.command codex-reopen-unused`，阅读并输入 `REOPEN`。旧标记没有 PID，旧客户端退出及控制器暂停仍需要你明确确认；进程检查只是补充检查
+3. 程序独占空闲端口并只读核对实际 SQLite（包括 WAL）：必须完全没有任何请求、执行/结果记录或 schema 活动，且原授权、绑定、有效期全部匹配。它保留旧标记，新增一次性恢复准备记录
+4. 看到提示后，在原隧道 Terminal 用原来的 `./DIRECT.command run` 和同一个已批准的 profile 重启。不要重新 setup/init，不要启动第二个 Codex 或发测试 HTTP 请求。保持原生控制器暂停
+5. 确认原隧道/bridge 已健康后，回到恢复窗口输入 `READY`。程序再次核对零活动、原配置和授权，保存消费记录，再以相同工作目录及参数启动 Codex。之后由原生控制器继续同一试用
+
+任何 queued、claimed、completed、cancelled 请求都会拒绝恢复。缺失、损坏、更换、过期或无法确定的状态同样拒绝。准备记录建立后的取消、失败或不确定结果都会保留这次尝试，不能再通过该入口重试。暂停并完整退出旧 bridge 是隔离旧 HTTP 请求的必要步骤；最后检查是单拥有者流程中的只读快照，不是运行中服务器的原子锁或旧客户端身份认证。
+
 ## 桌面 App 仅作另行手工验收
 
 `DIRECT.command` 不修改全局 `config.toml`，不替换桌面 App 的 provider，也不重启 App。先完成 CLI 闭环。只有你明确希望另做桌面试用，才在备份和审阅准确配置差异后，由你确认写入所选客户端实际读取的配置，并完整退出/重开对应 App、app-server 或 daemon。

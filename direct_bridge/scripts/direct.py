@@ -17,6 +17,7 @@ import re
 import shlex
 import shutil
 import socket
+import stat
 import sqlite3
 import subprocess
 import sys
@@ -405,6 +406,220 @@ def codex(state):
         raise SetupError("Codex could not start. Its unexecuted admission marker was removed; check the executable.") from None
 
 
+
+def private_json_record(path):
+    """Read a small owned admission record without following links."""
+    try:
+        info = path.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077 or info.st_size > 65536:
+            raise ValueError
+        raw = path.read_bytes()
+        value = json.loads(raw)
+        if type(value) is not dict:
+            raise ValueError
+        return value, hashlib.sha256(raw).hexdigest()
+    except (OSError, ValueError, UnicodeError):
+        raise SetupError("Admission record is missing, unsafe, or unreadable. All existing state was preserved.") from None
+
+
+def write_admission_record(path, value):
+    """One-use, durable, append-only admission; never replace a prior attempt."""
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        raise SetupError("An unused-reopen attempt already reserved this route. Its history was preserved; no replacement was started.") from None
+    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+        json.dump(value, stream, sort_keys=True, allow_nan=False)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    descriptor = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def require_clients_stopped(*, include_bridge):
+    """Conservative supplementary check, not proof of a legacy client's exit.
+
+    Legacy markers have no PID. The owner's explicit exit confirmation is also
+    required. Command names can be disguised, so this is not authentication.
+    Process arguments are inspected locally and never printed or persisted.
+    """
+    try:
+        result = subprocess.run(["/bin/ps", "-ww", "-axo", "pid=,command="],
+            check=True, capture_output=True, text=True, env=safe_env(), timeout=10)
+        lines = result.stdout.splitlines()
+        if not lines:
+            raise ValueError
+        for line in lines:
+            pid, command = line.strip().split(None, 1)
+            if not pid.isdecimal():
+                raise ValueError
+            if int(pid) == os.getpid():
+                continue
+            # Match CLI executable/wrapper tokens, not the Codex desktop app.
+            cli = re.search(r"(?:^|\s)(?:\S*/)?codex(?:\.js|-[\w.-]+)?(?:\s|$)", command)
+            # The admitted trial uses --no-daemon. Explicit background service
+            # subcommands are not the legacy interactive client being replaced.
+            if cli and command[cli.end():].lstrip().split()[:1] in (["app-server"], ["daemon"]):
+                cli = None
+            bridge = re.search(r"(?:^|\s)(?:\S*/)?(?:mcp_adapter|start_mcp\.sh)(?:\s|$)", command)
+            if cli or (include_bridge and bridge):
+                raise SetupError("A Codex CLI or bridge process may still be running. Exit it normally and retry; no process was killed.")
+    except SetupError:
+        raise
+    except (OSError, ValueError, subprocess.SubprocessError):
+        raise SetupError("Could not inspect local processes safely. No unused-reopen admission was made.") from None
+
+
+@contextmanager
+def paused_ingress_guard(port):
+    """Reserve the stopped listener's address throughout the first zero audit."""
+    with socket.socket() as guard:
+        try:
+            # Do not use SO_REUSEADDR/PORT: a competing listener must fail closed.
+            guard.bind(("127.0.0.1", port))
+        except OSError:
+            raise SetupError("Stop the existing foreground tunnel/bridge first and wait for its process to exit. The loopback port must be free.") from None
+        yield
+
+
+def unused_database_snapshot(config):
+    """Read live SQLite/WAL state; never create, reset, repair, or modify it."""
+    database = Path(config["db_path"])
+    try:
+        info = database.lstat()
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+            raise ValueError
+        for suffix in ("-wal", "-shm", "-journal"):
+            sidecar = Path(str(database) + suffix)
+            if sidecar.exists() or sidecar.is_symlink():
+                side = sidecar.lstat()
+                if not stat.S_ISREG(side.st_mode) or side.st_uid != os.getuid():
+                    raise ValueError
+        # mode=ro intentionally does NOT use immutable=1, which could ignore WAL.
+        with sqlite3.connect("file:" + quote(str(database), safe="/") + "?mode=ro", uri=True, timeout=2) as db:
+            db.row_factory = sqlite3.Row
+            db.execute("PRAGMA query_only=ON")
+            db.execute("BEGIN")
+            if db.execute("PRAGMA integrity_check").fetchall()[0][0] != "ok":
+                raise ValueError
+            objects = db.execute("SELECT type,name FROM sqlite_master WHERE name NOT GLOB 'sqlite_*'").fetchall()
+            if {(row["type"], row["name"]) for row in objects} != {
+                    ("table", "routes"), ("table", "schemas"), ("table", "requests")}:
+                raise ValueError
+            expected_columns = {
+                "routes": "route_id:TEXT authorization:BLOB binding:BLOB client_actor:TEXT worker_actor:TEXT not_before:REAL expires_at:REAL last_clock:REAL revoked:INTEGER",
+                "schemas": "route_id:TEXT name:TEXT digest:TEXT body:BLOB",
+                "requests": "request_id:TEXT route_id:TEXT seq:INTEGER fingerprint:TEXT payload:BLOB schema_refs:BLOB state:TEXT cancelled:INTEGER execution_reserved:INTEGER result_id:TEXT result_hash:TEXT result:BLOB",
+            }
+            for table, columns in expected_columns.items():
+                actual = [(column["name"], column["type"].upper()) for column in db.execute("PRAGMA table_info(" + table + ")")]
+                if actual != [tuple(column.split(":")) for column in columns.split()]:
+                    raise ValueError
+            if db.execute("PRAGMA foreign_key_check").fetchone() is not None:
+                raise ValueError
+            # Every state counts, including settled/cancelled requests, schemas,
+            # execution reservations and committed results. Never filter by state.
+            if db.execute("SELECT count(*) FROM requests").fetchone()[0] or db.execute("SELECT count(*) FROM schemas").fetchone()[0]:
+                raise SetupError("This route has durable request or schema activity. Unused-only reopening is refused; reconcile the existing session instead.")
+            routes = db.execute("SELECT * FROM routes").fetchall()
+            if len(routes) != 1:
+                raise ValueError
+            row = dict(routes[0])
+            authorization = {key: config[key] for key in ("binding", "client_actor", "worker_actor", "not_before", "expires_at", "approval_ref")}
+            canonical = lambda value: json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            expected = {"route_id": config["binding"]["route_id"],
+                        "authorization": canonical(authorization), "binding": canonical(config["binding"]),
+                        **{key: config[key] for key in ("client_actor", "worker_actor", "not_before", "expires_at")},
+                        "revoked": 0}
+            if set(row) != set(expected) | {"last_clock"} or any(row[key] != value for key, value in expected.items()):
+                raise ValueError
+            now = time.time()
+            if not config["not_before"] <= now < config["expires_at"] or not isinstance(row["last_clock"], (float, int)) or not config["not_before"] <= row["last_clock"] <= now + 1:
+                raise ValueError
+            return {"device": info.st_dev, "inode": info.st_ino,
+                    "authorization_sha256": hashlib.sha256(canonical(authorization)).hexdigest(),
+                    "requests": 0, "schemas": 0}
+    except SetupError:
+        raise
+    except (OSError, sqlite3.Error, ValueError, KeyError, TypeError, OverflowError, IndexError):
+        raise SetupError("Unused route could not be verified from the actual database and authorization. Missing, changed, expired, dirty, or unreadable state was preserved.") from None
+
+
+def codex_reopen_unused(state):
+    """One narrowly bounded legacy recovery, with a fully stopped ingress phase."""
+    require_interactive()
+    config, settings = read_setup(state)
+    route = state / "route"
+    original = route / "codex-started.json"
+    prepared = route / "codex-unused-reopen-prepared.json"
+    consumed = route / "codex-unused-reopen-consumed.json"
+    if any(path.exists() or path.is_symlink() for path in (prepared, consumed)):
+        raise SetupError("An unused-reopen attempt already exists. Its records were preserved; no repeat admission is allowed.")
+    marker, marker_hash = private_json_record(original)
+    if set(marker) != {"version", "workdir", "started_at"} or marker["version"] != CODEX_VERSION or not isinstance(marker["started_at"], (int, float)) or not config["not_before"] <= marker["started_at"] < config["expires_at"]:
+        raise SetupError("The original Codex admission cannot be verified. No recovery was started.")
+    workdir = Path(marker["workdir"]) if isinstance(marker["workdir"], str) else Path(".")
+    if not workdir.is_absolute() or not workdir.is_dir():
+        raise SetupError("The original project directory is unavailable. No recovery was started.")
+    if not valid_bearer(os.environ.get(BEARER_NAME)):
+        raise SetupError("Supply the same already authorized DOTS_BRIDGE_HTTP_BEARER securely in this Terminal environment.")
+    binary = existing_codex()
+    if codex_version(binary) != "codex-cli " + CODEX_VERSION:
+        raise SetupError("Unused reopening requires codex-cli " + CODEX_VERSION + ".")
+    confirm("Unused-only recovery requires ALL of these facts:\n"
+            "- The old Codex CLI has exited completely, before any request or action.\n"
+            "- The intended native controller is paused and has never received a request.\n"
+            "- The original foreground tunnel AND its bridge child have exited completely.\n"
+            "Keep that Terminal open to retain its environment; do not create a new profile.\n"
+            "The old marker has no PID: closure is your explicit assertion, not a proven process identity.\n"
+            "This checks all durable activity, keeps the original marker, and permits only one attempt.\n"
+            "Cancellation or an uncertain launch after reservation preserves and consumes this recovery attempt.", "REOPEN")
+    initial_files = {name: hashlib.sha256((route / name).read_bytes()).hexdigest()
+                     for name in ("config.json", "launcher.json")}
+    with paused_ingress_guard(settings["http_port"]):
+        require_clients_stopped(include_bridge=True)
+        snapshot = unused_database_snapshot(config)
+        record = {"version": 1, "prepared_at": time.time(), "launcher_pid": os.getpid(),
+                  "original_marker_sha256": marker_hash, "configuration_sha256": initial_files,
+                  "database": snapshot, "owner_asserted_old_client_and_bridge_exited": True,
+                  "owner_asserted_native_paused": True}
+        write_admission_record(prepared, record)
+    say("Zero durable activity verified while the loopback port was exclusively reserved. Original state is unchanged.\n"
+        "Now restart the SAME approved tunnel profile in its original Terminal using the usual run command.\n"
+        "Keep the native controller paused. Do not start another Codex client or send a test HTTP request.")
+    confirm("Wait until that same tunnel and bridge are healthy, then continue here.\n"
+            "A listening port alone is not proof of tunnel identity or readiness.\n"
+            "No setup/init, credential change, new route, or authorization extension is needed.", "READY")
+    current_config, current_settings = read_setup(state)
+    current_files = {name: hashlib.sha256((route / name).read_bytes()).hexdigest() for name in initial_files}
+    if current_config != config or current_settings != settings or current_files != initial_files or private_json_record(original)[1] != marker_hash or private_json_record(prepared)[0] != record:
+        raise SetupError("Configuration or admission history changed. Recovery is refused; all records were preserved.")
+    require_clients_stopped(include_bridge=False)
+    if port_available(settings["http_port"]):
+        raise SetupError("The restarted loopback listener is missing. Recovery was not launched; the reserved attempt was preserved.")
+    if unused_database_snapshot(config) != snapshot:
+        raise SetupError("Durable route identity changed. Recovery was refused and all records were preserved.")
+    if not config["not_before"] <= time.time() < config["expires_at"]:
+        raise SetupError("Route authorization expired before recovery consumption. The attempt was preserved.")
+    write_admission_record(consumed, {"version": 1, "consumed_at": time.time(),
+        "launcher_pid": os.getpid(), "prepared_sha256": private_json_record(prepared)[1]})
+    env = dict(os.environ)
+    env.pop(KEY_NAME, None)
+    env.pop("OPENAI_API_KEY", None)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    if not config["not_before"] <= time.time() < config["expires_at"]:
+        raise SetupError("Route authorization expired before Codex launch. Both recovery records were preserved.")
+    say("Starting the one unused-only replacement in the original project directory. Keep this same conversation for the trial.")
+    try:
+        os.execve(binary, codex_argv(binary, settings, workdir, config["binding"]["route_id"]), env)
+    except OSError:
+        raise SetupError("Codex could not start. Both recovery records remain preserved; do not delete markers or retry by resetting state.") from None
+
+
 def check(state):
     say(f"Python: {sys.version.split()[0]}; required >= 3.10")
     say(f"MCP SDK {SDK_VERSION}: " + ("ready in current Python" if sdk_ready(sys.executable) else "not ready in current Python"))
@@ -460,6 +675,7 @@ def help_text(state):
         "  setup   Prepare a private Python environment if needed, then a new route\n"
         "  run     Review an existing dedicated tunnel profile and run it in foreground\n"
         "  codex   Start one pinned Codex CLI session in a second Terminal\n"
+        "  codex-reopen-unused  One guarded recovery after a completely unused CLI exit\n"
         "  status  Read local route/port/database status without starting the bridge\n"
         "  help    Show this help and the exact tunnel command after setup\n\n"
         "Double-click DIRECT.command for the menu, or run ./DIRECT.command COMMAND.\n"
@@ -484,12 +700,12 @@ def help_text(state):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", nargs="?", choices=("check", "setup", "run", "codex", "status", "help"))
+    parser.add_argument("command", nargs="?", choices=("check", "setup", "run", "codex", "codex-reopen-unused", "status", "help"))
     parser.add_argument("--state-dir", type=Path, default=DEFAULT_STATE)
     args = parser.parse_args(argv)
     try:
         state = check_state_path(args.state_dir)
-        actions = {"check": check, "setup": setup, "run": run, "codex": codex, "status": status, "help": help_text}
+        actions = {"check": check, "setup": setup, "run": run, "codex": codex, "codex-reopen-unused": codex_reopen_unused, "status": status, "help": help_text}
         if args.command:
             actions[args.command](state)
             return 0

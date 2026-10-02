@@ -43,9 +43,9 @@
       "sha256": "941a65e2b5a1eccf26be9816b10a76c3a26138495b461108c34021b92a54c409"
     },
     "docs/CODEX_CLIENT.zh-CN.md": {
-      "bytes": 4464,
+      "bytes": 6349,
       "mode": "0644",
-      "sha256": "bda99a9b03c9a8ed299785d35d5c593a69ea684dde40f6cafff49a9bedbdccc3"
+      "sha256": "f59a0d8b4eab0185957f129c84d18e694928e718ffa9b649d0ae4587942d9470"
     },
     "docs/MAC_QUICKSTART.zh-CN.md": {
       "bytes": 10166,
@@ -148,9 +148,9 @@
       "sha256": "0c021980bd1e0d922a248e1081cbbb2e2cb0ea5c13958b5d1ce4ba85bed74440"
     },
     "scripts/direct.py": {
-      "bytes": 27339,
+      "bytes": 41305,
       "mode": "0755",
-      "sha256": "7470447d37afd94938c90d89f73511744e1aa260285d96ed344c747ca88c7c3c"
+      "sha256": "39b15e95eb036538dbddd41a9ff2dbc84386a462d02e3f7026b223c81d56135c"
     },
     "scripts/run_focused_tests.py": {
       "bytes": 1223,
@@ -191,6 +191,11 @@
       "bytes": 8408,
       "mode": "0644",
       "sha256": "559a2980edd411fec739590c58ec849d2c524480d967005aed4b30444536cb49"
+    },
+    "tests/test_unused_reopen.py": {
+      "bytes": 14202,
+      "mode": "0644",
+      "sha256": "fec095acde1afe53410aa077a0c0031130cc4c77bc5ec531278c3c1550a01707"
     },
     "transport/README.md": {
       "bytes": 8902,
@@ -267,6 +272,7 @@
     "tests/test_direct_setup.py",
     "tests/test_mcp_config.py",
     "tests/test_mcp_stdio.py",
+    "tests/test_unused_reopen.py",
     "transport/README.md",
     "transport/__init__.py",
     "transport/benchmark-results.json",
@@ -275,6 +281,6 @@
     "transport/surface.py",
     "transport/test_queue.py"
   ],
-  "source_tree_sha256": "830e73a68c0a3fb77a0584bdd09945b208057a13077821de7e7a435aa84df720",
-  "tree_sha256": "830e73a68c0a3fb77a0584bdd09945b208057a13077821de7e7a435aa84df720"
+  "source_tree_sha256": "1a822cdd2e7778673bd0ba3af9362e07f6aea5a57a789a45e14fb3c13f303f82",
+  "tree_sha256": "1a822cdd2e7778673bd0ba3af9362e07f6aea5a57a789a45e14fb3c13f303f82"
 }
