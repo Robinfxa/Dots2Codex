@@ -243,6 +243,53 @@ class IndexedQueuePlanTests(unittest.TestCase):
     def test_single_event_uses_indexed_batch(self):
         self.planned('join', capacity=2, seconds=1200)
 
+    def test_normalized_response_nullable_target_is_accepted_without_mutation(self):
+        f = self.f; source = f.source(); path, out = f.plan('join', capacity=2, seconds=1200)
+        packet = json.loads(path.read_text())
+        raw = f.google.batch_update_document(**out['tool_arguments'])
+        # Connector response schema; identifiers and revisions are synthetic.
+        response = {'documentId': source.document_id,
+                    'document_url': 'https://docs.google.com/document/d/fixture-document/edit',
+                    'revisionId': raw['writeControl']['requiredRevisionId'], 'replies': [{}, {}],
+                    'writeControl': {'requiredRevisionId': raw['writeControl']['requiredRevisionId'],
+                                     'targetRevisionId': None}}
+        original = copy.deepcopy(response); readback = f.google.get_document(source.document_id)
+        self.assertEqual(queue.verify_update(packet, raw, readback, f.code).state, packet['expected_state'])
+        self.assertEqual(queue.verify_update(packet, response, readback, f.code).state, packet['expected_state'])
+        self.assertTrue(f.ledger.verify_plan(path, response, readback)['verified'])
+        self.assertEqual(response, original)
+        self.assertEqual(packet['tool_arguments']['write_control'], {'requiredRevisionId': source.revision_id})
+
+    def test_nullable_response_support_rejects_nonnull_target_unknown_keys_and_bad_required(self):
+        f = self.f; source = f.source(); path, out = f.plan('join', capacity=2, seconds=1200)
+        packet = json.loads(path.read_text()); response = f.google.batch_update_document(**out['tool_arguments'])
+        readback = f.google.get_document(source.document_id)
+        revision = response['writeControl']['requiredRevisionId']
+        controls = [None, [], {}, {'targetRevisionId': None},
+                    {'requiredRevisionId': revision, 'unexpected': None},
+                    {'requiredRevisionId': revision, 'targetRevisionId': None, 'unexpected': None}]
+        controls += [{'requiredRevisionId': revision, 'targetRevisionId': target}
+                     for target in (revision, '', True, False, 0, 1, [], {})]
+        controls += [{'requiredRevisionId': required, 'targetRevisionId': None}
+                     for required in (None, '', True, False, 0, 1, [], {}, source.revision_id, 'x'*1025)]
+        for control in controls:
+            bad = copy.deepcopy(response); bad['writeControl'] = control
+            with self.subTest(control=control), self.assertRaisesRegex(ProtocolError, 'global_response_revision_unverified'):
+                queue.verify_update(packet, bad, readback, f.code)
+
+    def test_nullable_response_still_requires_authenticated_changed_readback_and_exact_prefix(self):
+        f = self.f; source = f.source(); path, out = f.plan('join', capacity=2, seconds=1200)
+        packet = json.loads(path.read_text()); response = f.google.batch_update_document(**out['tool_arguments'])
+        response['writeControl']['targetRevisionId'] = None
+        readback = f.google.get_document(source.document_id)
+        same_revision = copy.deepcopy(readback); same_revision['revisionId'] = source.revision_id
+        missing_event = replace_document_text(copy.deepcopy(readback), queue.block(source.state))
+        unauthenticated_state = copy.deepcopy(packet['expected_state'])
+        unauthenticated_state['events'][-1]['mac'] = '0'*64
+        unauthenticated = replace_document_text(copy.deepcopy(readback), queue.block(unauthenticated_state))
+        for bad in (same_revision, missing_event, unauthenticated):
+            with self.assertRaises(ProtocolError): queue.verify_update(packet, response, bad, f.code)
+
     def test_join_heartbeat_group_uses_indexed_batch(self):
         f = self.f; source = f.source()
         joined = queue.transition(source.state, f.code, 'join', 'native',
@@ -306,6 +353,7 @@ class IndexedQueuePlanTests(unittest.TestCase):
                    lambda p: p['tool_arguments']['requests'][1]['insertText']['location'].update(tabId='other'),
                    lambda p: p['tool_arguments']['requests'][1]['insertText'].update(text=queue.block(p['expected_state'])),
                    lambda p: p['tool_arguments'].update(write_control={'targetRevisionId': source.revision_id}),
+                   lambda p: p['tool_arguments']['write_control'].update(targetRevisionId=None),
                    lambda p: p['tool_arguments'].update(requests=[{'replaceAllText': {
                        'containsText': {'text': source.text[:-1], 'matchCase': True, 'searchByRegex': False},
                        'replaceText': queue.block(p['expected_state'])[:-1], 'tabsCriteria': {'tabIds': ['t.0']}}}])]

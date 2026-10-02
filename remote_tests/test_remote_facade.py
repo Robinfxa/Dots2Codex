@@ -60,6 +60,11 @@ class RemoteFacadeTests(unittest.TestCase):
         with self.controller.journal.locked() as state:self.assertEqual(len(state['deliveries']),1)
         state=self.facade.read_state()
         last=[rid for rid,j in state['jobs'].items() if j['status']!='confirmed'][0]
+        # Receiving the Content-Length body does not join the handler's later
+        # delivery cleanup. Wait for that actual boundary before operator ACK.
+        self.assertTrue(self.facade.server.inflight.acquire(timeout=3),
+                        'HTTP handler did not finish delivery cleanup')
+        self.facade.server.inflight.release()
         self.facade.confirm_delivery(last,'synthetic test client parsed full SSE body')
         with self.controller.journal.locked() as state:self.assertEqual(len(state['deliveries']),2)
         self.assertEqual(len([v for v in self.api.files.values() if Object.parse(v['raw']).body['kind']=='started']),2)

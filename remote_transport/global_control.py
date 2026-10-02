@@ -564,7 +564,10 @@ def verify_update(packet,response,readback,code,*,now=None):
         require(type(replies) is list and len(replies)==2
                 and all(type(reply) is dict and not reply for reply in replies),
                 'global_exact_indexed_replies_required')
-        require(isinstance(wc,dict) and set(wc)=={'requiredRevisionId'}
+        # Connector normalization may materialize the unused response union arm
+        # as null. Accept only that absence without changing captured evidence.
+        require(isinstance(wc,dict) and set(wc) in ({'requiredRevisionId'}, {'requiredRevisionId','targetRevisionId'})
+                and wc.get('targetRevisionId') is None
                 and isinstance(wc['requiredRevisionId'],str) and 1<=len(wc['requiredRevisionId'])<=1024
                 and wc['requiredRevisionId']!=source.revision_id,'global_response_revision_unverified')
     fresh=snapshot(readback,source.document_id,source.tab_id)

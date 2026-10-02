@@ -1,45 +1,23 @@
 {
   "contract": "dots2codex-desktop-global-pilot/1",
-  "base_commit": "cf086bfe362bb11eb820baa550eb079915d895cf",
-  "base_source_tree_sha256": "461e0f1167faa950aab40ae2d66d07f222807cf4cfe599e0412decdf82b2c8a6",
+  "base_commit": "62fa6da8a5ef1629d01ddb47025eebd7ed71af8d",
+  "base_source_tree_sha256": "7af580450657ee2cb86ef4e697adfc7dba4b9f79a7bfdfd25ba71750ddf6bb14",
   "input_launcher_source_tree_sha256": "7774123803de7f12e89b8cb8be7a510f5cfc2e829572921c0fde33632d4e096e",
   "input_gateway_source_tree_sha256": "ab3026308c240f613b8be00b623cfa3eb67cd73fcac4e87556da7d1619215891",
-  "source_tree_sha256": "7af580450657ee2cb86ef4e697adfc7dba4b9f79a7bfdfd25ba71750ddf6bb14",
+  "source_tree_sha256": "28ad0f68f82af51d3a399646b6ae22fb75d8cc42a5746ecd71123e077429a2be",
   "source_tree_hash_algorithm": "SHA-256 of UTF-8 canonical JSON files array (sort_keys=true,separators=comma/colon,ensure_ascii=false); array sorted by path",
   "hashed_file_count": 273,
   "manifest_self_excluded": true,
   "changed_files": [
-    "docs/GLOBAL_NATIVE_CONTROLLER.md",
-    "native_connector/global_atomic_startup_audit.test.js",
-    "native_connector/global_controller_cell.js",
-    "native_connector/global_controller_cell.test.js",
-    "native_connector/global_controller_heartbeat_handoff.test.js",
-    "native_connector/global_controller_roundtrips.test.js",
     "native_connector/global_indexed_queue_integration.test.js",
-    "native_connector/global_native_preparation_integration.test.js",
-    "native_connector/indexed_docs_test_support.js",
-    "native_connector/indexed_docs_test_support.test.js",
-    "native_connector/router_pairing_helper_fixture.js",
-    "native_connector/startup_benchmark.js",
-    "remote_tests/startup_benchmark_fixture.py",
-    "remote_tests/test_global_atomic_startup_audit.py",
-    "remote_tests/test_global_claim_begin_group.py",
-    "remote_tests/test_global_control.py",
-    "remote_tests/test_global_fixed_startup_groups.py",
     "remote_tests/test_global_indexed_queue.py",
-    "remote_tests/test_long_sessions.py",
-    "remote_tests/test_round3_compression_audit.py",
+    "remote_tests/test_remote_facade.py",
     "remote_transport/global_control.py"
   ],
-  "added_files": [
-    "native_connector/global_indexed_queue_integration.test.js",
-    "native_connector/indexed_docs_test_support.js",
-    "native_connector/indexed_docs_test_support.test.js",
-    "remote_tests/test_global_indexed_queue.py"
-  ],
+  "added_files": [],
   "all_six_source_bindings_preserved": true,
   "existing_runtime_migration": "fresh_activation_and_v2_join_required",
-  "status": "indexed-queue-offline-validated-awaiting-live-acceptance",
+  "status": "nullable-response-offline-validated-awaiting-live-acceptance",
   "launcher_global_menu_supported": true,
   "production_ready": false,
   "ready_for_config": false,
@@ -659,8 +637,8 @@
     },
     {
       "path": "native_connector/global_indexed_queue_integration.test.js",
-      "bytes": 9338,
-      "sha256": "dab27f4dc83d2a44dac78d02644ca5936314515dfdba59b4b9b70c54880d439e",
+      "bytes": 12243,
+      "sha256": "954cdd7df8ac56f96b4ea5de106707be904cfebdc6163d55c0dc8b589469a569",
       "mode": "0644"
     },
     {
@@ -1007,8 +985,8 @@
     },
     {
       "path": "remote_tests/test_global_indexed_queue.py",
-      "bytes": 21356,
-      "sha256": "9b7f7c165a75ddfa3ed282ef5308c1a36b0feb2b9d74ecb0033e47ccfc5e21fc",
+      "bytes": 25156,
+      "sha256": "3fb1c31222423abfe1d225f756f2b7ae4c5ced11f0c3e188e77a493098737ae4",
       "mode": "0644"
     },
     {
@@ -1115,8 +1093,8 @@
     },
     {
       "path": "remote_tests/test_remote_facade.py",
-      "bytes": 4999,
-      "sha256": "c6e4fc8f753883d38e2f09977e794a3451b9b143c3f0a97e368f87a48628dc7a",
+      "bytes": 5346,
+      "sha256": "67a2151a6f426df9b9cbb4551a9b7a053825c8a76688785654897f68c69f75c7",
       "mode": "0644"
     },
     {
@@ -1289,8 +1267,8 @@
     },
     {
       "path": "remote_transport/global_control.py",
-      "bytes": 39196,
-      "sha256": "c8d8b502d7e65a0050906fb04cda75206378089734561d60ad5e031ab61e479f",
+      "bytes": 39458,
+      "sha256": "17587a8b401333010c3785645b92195123a08394a81b2cd5f5e63bcb99373348",
       "mode": "0644"
     },
     {
@@ -1690,7 +1668,7 @@
       "mode": "0644"
     }
   ],
-  "parent_commit": "cf086bfe362bb11eb820baa550eb079915d895cf",
+  "parent_commit": "62fa6da8a5ef1629d01ddb47025eebd7ed71af8d",
   "global_config_pilot_gate_implemented": true,
   "global_config_pilot_runtime_exercised": false,
   "input_desktop_global_source_tree_sha256": "7999cd2b2a5e028bc706760d7a290f44a3b5365b76c5f38f88a4d9478a89b4f3",
@@ -1743,9 +1721,9 @@
     "real_mac_native_google_acceptance": false
   },
   "test_results": {
-    "contract": "dots2codex-indexed-queue-offline-validation/1",
+    "contract": "dots2codex-nullable-response-offline-validation/1",
     "status": "passed_with_explicit_optional_skips",
-    "source_tree_sha256": "7af580450657ee2cb86ef4e697adfc7dba4b9f79a7bfdfd25ba71750ddf6bb14",
+    "source_tree_sha256": "28ad0f68f82af51d3a399646b6ae22fb75d8cc42a5746ecd71123e077429a2be",
     "final_snapshot_validated": true,
     "live_mac_google_native_verified": false,
     "google_writes": 0,
@@ -1756,8 +1734,8 @@
     "six_way_isolated_full_run": true,
     "reused_prior_run_results": false,
     "tests": {
-      "tests": 1451,
-      "passed": 1442,
+      "tests": 1462,
+      "passed": 1453,
       "failures": 0,
       "errors": 0,
       "skipped": 9,
@@ -1765,8 +1743,8 @@
       "unexpected_successes": 0
     },
     "python": {
-      "tests": 1223,
-      "passed": 1214,
+      "tests": 1226,
+      "passed": 1217,
       "failures": 0,
       "errors": 0,
       "skipped": 9,
@@ -1774,8 +1752,8 @@
       "unexpected_successes": 0
     },
     "node": {
-      "tests": 228,
-      "passed": 228,
+      "tests": 236,
+      "passed": 236,
       "failures": 0,
       "errors": 0,
       "skipped": 0,
@@ -1784,8 +1762,8 @@
     },
     "totals_by_suite": {
       "remote_tests": {
-        "tests": 954,
-        "passed": 945,
+        "tests": 957,
+        "passed": 948,
         "failures": 0,
         "errors": 0,
         "skipped": 9,
@@ -1838,8 +1816,8 @@
         "unexpected_successes": 0
       },
       "node": {
-        "tests": 228,
-        "passed": 228,
+        "tests": 236,
+        "passed": 236,
         "failures": 0,
         "errors": 0,
         "skipped": 0,
@@ -1859,19 +1837,15 @@
     "skips_by_reason": {
       "optional tomlkit unavailable; real parser integration NOT VERIFIED": 9
     },
-    "new_test_modules": [
-      "native_connector/global_indexed_queue_integration.test.js",
-      "native_connector/indexed_docs_test_support.test.js",
-      "remote_tests/test_global_indexed_queue.py"
-    ],
+    "new_test_modules": [],
     "real_sdk_modules": {
       "remote_tests/test_google_read_recovery.py": 29,
       "remote_tests/test_google_sdk_concurrency.py": 23,
       "sdk_tests/test_google_sdk_independent.py": 3
     },
     "real_sdk_modules_zero_skips": true,
-    "full_run_seconds": 190.81,
-    "full_snapshot_sha256": "e29455e1458aa8731a1a35f0547a6775dc842a4bbd7f0818482a76be70ede36a",
+    "full_run_seconds": 182.29,
+    "full_snapshot_sha256": "c7b678726f46b92f6e0b58878576a158ceabd87f61a4d93395ed8dc351737f0c",
     "tree_unchanged_during_run": true,
     "final_manifest_verified": true,
     "test_inventory_unchanged_during_run": true,
@@ -2717,7 +2691,7 @@
       "Deterministic benchmark results describe offline scheduling only, not live-service latency."
     ]
   },
-  "indexed_queue_validation": {
+  "prior_indexed_queue_validation": {
     "contract": "dots2codex-indexed-queue-offline-validation/1",
     "status": "passed_with_explicit_optional_skips",
     "source_tree_sha256": "7af580450657ee2cb86ef4e697adfc7dba4b9f79a7bfdfd25ba71750ddf6bb14",
@@ -2847,6 +2821,154 @@
     "real_sdk_modules_zero_skips": true,
     "full_run_seconds": 190.81,
     "full_snapshot_sha256": "e29455e1458aa8731a1a35f0547a6775dc842a4bbd7f0818482a76be70ede36a",
+    "tree_unchanged_during_run": true,
+    "final_manifest_verified": true,
+    "test_inventory_unchanged_during_run": true,
+    "source_cache_artifacts": [],
+    "manifest_entries": 273,
+    "syntax_checks": {
+      "python": 148,
+      "node": 25,
+      "shell": 11,
+      "json": 17
+    },
+    "network_attempts_blocked": 0,
+    "leaked_subprocesses": 0,
+    "per_job_descendant_supervision": true,
+    "network_guards": "Python audit hook, Node hooks, inherited native socket guard; local fixture loopback only",
+    "toml_parser_integration_verified": false,
+    "known_limits": [
+      "Optional real tomlkit parser integration cases, if listed in skips_by_reason, were skipped because the dependency is unavailable; no dependency installation performed.",
+      "Mac native UI, real Google writes, native admission/inference, client traffic, live queue/protocol traffic, and end-to-end activation were not run.",
+      "Deterministic benchmark results describe offline scheduling only, not live-service latency."
+    ]
+  },
+  "nullable_response_validation": {
+    "contract": "dots2codex-nullable-response-offline-validation/1",
+    "status": "passed_with_explicit_optional_skips",
+    "source_tree_sha256": "28ad0f68f82af51d3a399646b6ae22fb75d8cc42a5746ecd71123e077429a2be",
+    "final_snapshot_validated": true,
+    "live_mac_google_native_verified": false,
+    "google_writes": 0,
+    "native_inference_calls": 0,
+    "dependency_install_performed": false,
+    "full_run_jobs": 90,
+    "max_concurrent_test_jobs": 6,
+    "six_way_isolated_full_run": true,
+    "reused_prior_run_results": false,
+    "tests": {
+      "tests": 1462,
+      "passed": 1453,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "python": {
+      "tests": 1226,
+      "passed": 1217,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "node": {
+      "tests": 236,
+      "passed": 236,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "totals_by_suite": {
+      "remote_tests": {
+        "tests": 957,
+        "passed": 948,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 9,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "tests": {
+        "tests": 134,
+        "passed": 134,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "remote_audit/cas": {
+        "tests": 47,
+        "passed": 47,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "remote_audit/drive": {
+        "tests": 48,
+        "passed": 48,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "sdk_tests": {
+        "tests": 3,
+        "passed": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "docs/gemini_setup/tools": {
+        "tests": 37,
+        "passed": 37,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "node": {
+        "tests": 236,
+        "passed": 236,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "benchmark": {
+        "tests": 0,
+        "passed": 0,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      }
+    },
+    "skips_by_reason": {
+      "optional tomlkit unavailable; real parser integration NOT VERIFIED": 9
+    },
+    "new_test_modules": [],
+    "real_sdk_modules": {
+      "remote_tests/test_google_read_recovery.py": 29,
+      "remote_tests/test_google_sdk_concurrency.py": 23,
+      "sdk_tests/test_google_sdk_independent.py": 3
+    },
+    "real_sdk_modules_zero_skips": true,
+    "full_run_seconds": 182.29,
+    "full_snapshot_sha256": "c7b678726f46b92f6e0b58878576a158ceabd87f61a4d93395ed8dc351737f0c",
     "tree_unchanged_during_run": true,
     "final_manifest_verified": true,
     "test_inventory_unchanged_during_run": true,
