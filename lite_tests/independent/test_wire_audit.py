@@ -83,14 +83,15 @@ class WireAudit(unittest.TestCase):
             candidate = request(); candidate['input'] += [function_call()] + tail
             with self.subTest(tail=tail), self.assertRaises(p.ProtocolError): wire.validate_request(candidate)
 
-    def test_schema_reference_and_invalid_arguments_are_rejected(self):
+    def test_external_schema_reference_and_invalid_arguments_are_rejected(self):
         invalid = response(function_call()); invalid['output'][0]['arguments'] = '{"path":1}'
         with self.assertRaises(p.ProtocolError): wire.validate_response(invalid, request())
         invalid = response(function_call()); invalid['output'][0]['arguments'] = '{"path":"a","path":"b"}'
         with self.assertRaises(p.ProtocolError): wire.validate_response(invalid, request())
         invalid_request = request()
         invalid_request['tools'][0]['tools'][0]['parameters']['properties']['path']['$ref'] = 'https://example.invalid/schema'
-        with self.assertRaises(p.ProtocolError): wire.validate_request(invalid_request)
+        with self.assertRaisesRegex(p.ProtocolError, 'tool_schema_reference_unresolvable'):
+            wire.validate_request(invalid_request)
 
     def test_previous_response_id_is_explicitly_unsupported(self):
         candidate = request(); candidate['previous_response_id'] = 'resp_unknown'

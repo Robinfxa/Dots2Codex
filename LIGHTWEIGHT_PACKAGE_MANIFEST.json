@@ -95,7 +95,7 @@
     },
     {
       "path": "dots_lite/wire.py",
-      "sha256": "cbfbc45f71a177275ad0938b57858b7633d96c9285f6f8cb0e871a3f81e3093f"
+      "sha256": "b3abcd19b1877b504559a30c6742a50b2d97b44f6252b128da3b793634d7ce9c"
     },
     {
       "path": "dots_lite/worker.py",

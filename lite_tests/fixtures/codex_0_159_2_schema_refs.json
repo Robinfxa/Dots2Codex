@@ -1,0 +1,186 @@
+{
+  "source_repository": "openai/codex",
+  "source_commit": "ff6aec96948b70d94983af2641a6b67c94faeff5",
+  "source_version": "0.159.2",
+  "scope": "Representative public source-derived schemas, not captured user requests or live integrations. Tool names in tests are inert fixtures.",
+  "cases": [
+    {
+      "name": "slack_schedule_message",
+      "source_file": "codex-rs/tools/tests/fixtures/json_schema_policy/slack.json",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "description": "Slack channel ID."
+          },
+          "message": {
+            "type": "string",
+            "description": "Message text."
+          },
+          "post_at": {
+            "type": "integer",
+            "description": "Unix timestamp for delivery."
+          },
+          "thread_ts": {
+            "description": "Optional parent thread timestamp.",
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SlackTs"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "channel_id",
+          "message",
+          "post_at"
+        ],
+        "additionalProperties": false,
+        "$defs": {
+          "SlackTs": {
+            "type": "string",
+            "description": "Slack timestamp string."
+          }
+        }
+      },
+      "derivation": "Input schema with exactly the expected_pruned and expected_dropped_fields removed, per official conversion test and serialized JsonSchema type; the Rust compiler was not run."
+    },
+    {
+      "name": "google_calendar_create_event",
+      "source_file": "codex-rs/tools/tests/fixtures/json_schema_policy/google_calendar.json",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "$ref": "#/definitions/Event"
+          },
+          "notify_attendees": {
+            "type": "boolean",
+            "description": "Whether attendees should receive notifications."
+          }
+        },
+        "required": [
+          "event"
+        ],
+        "definitions": {
+          "Event": {
+            "type": "object",
+            "description": "Calendar event payload.",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "Event title."
+              },
+              "start": {
+                "anyOf": [
+                  {
+                    "$ref": "#/definitions/DateTime"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "DateTime": {
+            "type": "object",
+            "description": "Calendar date-time.",
+            "properties": {
+              "dateTime": {
+                "type": "string",
+                "description": "RFC3339 date-time."
+              },
+              "timeZone": {
+                "type": "string",
+                "enum": [
+                  "UTC",
+                  "America/Los_Angeles"
+                ],
+                "description": "IANA time zone."
+              }
+            }
+          }
+        }
+      },
+      "derivation": "Input schema with exactly the expected_pruned and expected_dropped_fields removed, per official conversion test and serialized JsonSchema type; the Rust compiler was not run."
+    },
+    {
+      "name": "preserves_refs_and_prunes_unreachable_defs",
+      "source_file": "codex-rs/tools/src/json_schema_tests.rs",
+      "source_test": "parse_tool_input_schema_preserves_refs_and_prunes_unreachable_defs",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/$defs/User"
+          }
+        },
+        "$defs": {
+          "User": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "derivation": "Official test input with unreachable Unused entry removed to match its exact asserted output structure; the Rust compiler was not run."
+    },
+    {
+      "name": "handles_cyclic_local_refs",
+      "source_file": "codex-rs/tools/src/json_schema_tests.rs",
+      "source_test": "parse_tool_input_schema_handles_cyclic_local_refs",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "$ref": "#/$defs/Node"
+          }
+        },
+        "$defs": {
+          "Node": {
+            "type": "object",
+            "properties": {
+              "next": {
+                "$ref": "#/$defs/Node"
+              }
+            }
+          }
+        }
+      },
+      "derivation": "Official test input with unreachable Unused entry removed to match its exact asserted output structure; the Rust compiler was not run."
+    },
+    {
+      "name": "preserves_percent_encoded_definition_refs",
+      "source_file": "codex-rs/tools/src/json_schema_tests.rs",
+      "source_test": "parse_tool_input_schema_preserves_percent_encoded_definition_refs",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/$defs/User%20Name"
+          },
+          "profile": {
+            "$ref": "#/%24defs/Profile%7E0Name"
+          }
+        },
+        "$defs": {
+          "User Name": {
+            "type": "string"
+          },
+          "Profile~Name": {
+            "type": "string"
+          }
+        }
+      },
+      "derivation": "Official test input with unreachable Unused entry removed to match its exact asserted output structure; the Rust compiler was not run."
+    }
+  ]
+}

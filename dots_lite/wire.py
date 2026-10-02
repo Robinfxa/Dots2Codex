@@ -61,28 +61,225 @@ def request_tools(request):
     return result
 
 
-def _schema(schema, value=None, *, check_value=False):
-    require(isinstance(schema, dict) and schema.get('type') == 'object', 'tool_schema_required')
-    def inspect(item, depth=0):
+# These limits bound schema traversal and recursive/combinatorial evaluation.
+# They do not expand references or change the original wire schema.
+SCHEMA_MAX_NODES = 16384
+SCHEMA_MAX_STEPS = 50000
+SCHEMA_MAX_EVALUATION_DEPTH = 64
+
+
+def _schema_shape_budget(schema):
+    pending, count = [(schema, 0)], 0
+    while pending:
+        item, depth = pending.pop()
+        count += 1
+        require(count <= SCHEMA_MAX_NODES, 'tool_schema_too_complex')
         require(depth <= 32, 'tool_schema_too_deep')
         if isinstance(item, dict):
-            require(not any(k in item for k in ('$ref', '$dynamicRef', '$recursiveRef')), 'tool_schema_reference_rejected')
-            for child in item.values(): inspect(child, depth + 1)
+            pending.extend((child, depth + 1) for child in item.values())
         elif isinstance(item, list):
-            for child in item: inspect(child, depth + 1)
-    inspect(schema)
+            pending.extend((child, depth + 1) for child in item)
+
+
+def _schema_reference(ref):
+    """Normalize URI fragments once; enforce RFC 6901 escape syntax."""
+    from urllib.parse import quote, unquote
+    import re
+    require(isinstance(ref, str), 'invalid_tool_schema')
+    base, marker, fragment = ref.partition('#')
+    if not marker:
+        return ref, None
+    fragment = unquote(fragment, errors='strict')
+    if fragment.startswith('/'):
+        require(not re.search(r'~(?:[^01]|$)', fragment), 'tool_schema_reference_invalid')
+        # referencing decodes pointer fragments itself. Quote again to avoid
+        # double decoding e.g. a property literally named "%2F".
+        return base + '#/' + quote(fragment[1:], safe='/~'), fragment
+    return base + '#' + fragment, fragment
+
+
+def _schema_lookup(resolver, ref):
+    """Resolve only against the closed registry; reject non-schema targets."""
+    normalized, fragment = _schema_reference(ref)
+    if fragment is not None and fragment.startswith('/'):
+        # referencing accepts Python sequence indexes such as -1 and 01;
+        # JSON Pointer permits neither. Check the pointer before lookup.
+        import re
+        base = normalized.partition('#')[0]
+        target = resolver.lookup(base or '#').contents
+        for token in fragment[1:].split('/'):
+            token = token.replace('~1', '/').replace('~0', '~')
+            if isinstance(target, list):
+                require(re.fullmatch(r'0|[1-9][0-9]*', token) is not None,
+                        'tool_schema_reference_invalid')
+                target = target[int(token)]
+            else:
+                require(isinstance(target, dict), 'tool_schema_reference_invalid')
+                target = target[token]
+    resolved = resolver.lookup(normalized)
+    require(isinstance(resolved.contents, (dict, bool)), 'tool_schema_reference_invalid')
+    return resolved
+
+
+def _schema_validator(schema):
+    from jsonschema import Draft201909Validator, Draft202012Validator, validators
+    from referencing import Registry
+    from referencing.exceptions import NoSuchResource
+    from referencing.jsonschema import DRAFT201909, DRAFT202012
+    from urllib.parse import urljoin
+
+    dialects = {
+        'https://json-schema.org/draft/2020-12/schema': (Draft202012Validator, DRAFT202012),
+        'https://json-schema.org/draft/2019-09/schema': (Draft201909Validator, DRAFT201909),
+    }
+    dialect = schema.get('$schema', 'https://json-schema.org/draft/2020-12/schema')
+    require(isinstance(dialect, str) and dialect.rstrip('#') in dialects,
+            'tool_schema_dialect_unsupported')
+    dialect = dialect.rstrip('#')
+    base_validator, specification = dialects[dialect]
+    base_validator.check_schema(schema)
+
+    def deny_retrieval(uri):
+        # Never add filesystem, HTTP, metaschema, or global registry fallbacks.
+        raise NoSuchResource(ref=uri)
+
+    def inspect_node(item):
+        require(isinstance(item, (dict, bool)), 'invalid_tool_schema')
+        if isinstance(item, bool):
+            return
+        declared = item.get('$schema', dialect)
+        require(isinstance(declared, str) and declared.rstrip('#') == dialect,
+                'tool_schema_dialect_unsupported')
+        for keyword in ('$ref', '$dynamicRef', '$recursiveRef'):
+            if keyword in item:
+                require(keyword in base_validator.VALIDATORS,
+                        'tool_schema_reference_unsupported')
+                _schema_reference(item[keyword])
+        if '$recursiveRef' in item:
+            require(item['$recursiveRef'] == '#', 'tool_schema_reference_unsupported')
+
+    # Only schema positions participate in resource discovery. A property named
+    # "$ref", examples, enum/const/default values, and arbitrary annotations are
+    # data, not reference instructions. Reject ambiguous IDs/anchors explicitly.
+    root = specification.create_resource(schema)
+    initial_uri = root.id() or ''
+    resources, anchors, structural = {}, set(), []
+    pending = [(root, '')]
+    while pending:
+        resource, parent_uri = pending.pop()
+        inspect_node(resource.contents)
+        uri = urljoin(parent_uri, resource.id()) if resource.id() is not None else parent_uri
+        if resource.id() is not None or resource is root:
+            require(uri not in resources, 'tool_schema_resource_duplicate')
+            resources[uri] = resource
+        for anchor in resource.anchors():
+            require((uri, anchor.name) not in anchors, 'tool_schema_anchor_duplicate')
+            anchors.add((uri, anchor.name))
+        structural.append((resource, uri))
+        pending.extend((specification.create_resource(child), uri)
+                       for child in specification.subresources_of(resource.contents))
+    registry = Registry(retrieve=deny_retrieval).with_resource('', root).crawl()
+    resolver = registry.resolver(initial_uri)
+
+    # Preflight all refs, even optional/unused branches, so a bad local pointer
+    # or an external target fails before request admission. Follow references
+    # without expansion; visited schema/base pairs terminate reference cycles.
+    pending = [(resource, registry.resolver(uri)) for resource, uri in structural]
+    seen = set()
+    checked = {id(resource.contents) for resource, _ in structural}
+    while pending:
+        resource, current = pending.pop()
+        item = resource.contents
+        key = (id(item), current._base_uri)
+        if key in seen:
+            continue
+        seen.add(key)
+        require(len(seen) <= SCHEMA_MAX_NODES, 'tool_schema_too_complex')
+        inspect_node(item)
+        if id(item) not in checked:
+            base_validator.check_schema(item)
+            checked.add(id(item))
+        if isinstance(item, bool):
+            continue
+        for keyword in ('$ref', '$dynamicRef', '$recursiveRef'):
+            if keyword in item:
+                try:
+                    resolved = _schema_lookup(current, item[keyword])
+                except ProtocolError:
+                    raise
+                except Exception:
+                    raise ProtocolError('tool_schema_reference_unresolvable') from None
+                pending.append((specification.create_resource(resolved.contents), resolved.resolver))
+        for child in specification.subresources_of(item):
+            subresource = specification.create_resource(child)
+            pending.append((subresource, current.in_subresource(subresource)))
+
+    budget = {'steps': 0, 'depth': 0}
+    class ClosedResolver:
+        # Annotation helpers (unevaluatedProperties/Items) also call lookup
+        # directly. Normalize and budget at the resolver boundary, not only
+        # inside the reference keyword handler.
+        def __init__(self, inner):
+            self.inner = inner
+
+        def lookup(self, ref):
+            budget['steps'] += 1
+            require(budget['steps'] <= SCHEMA_MAX_STEPS, 'tool_schema_validation_too_complex')
+            resolved = _schema_lookup(self.inner, ref)
+            return type(resolved)(contents=resolved.contents, resolver=ClosedResolver(resolved.resolver))
+
+        def in_subresource(self, resource):
+            return ClosedResolver(self.inner.in_subresource(resource))
+
+        def dynamic_scope(self):
+            return self.inner.dynamic_scope()
+
+    def bounded(keyword, operation):
+        def validate(validator, constraint, instance, subschema):
+            budget['steps'] += 1
+            budget['depth'] += 1
+            try:
+                require(budget['steps'] <= SCHEMA_MAX_STEPS and
+                        budget['depth'] <= SCHEMA_MAX_EVALUATION_DEPTH,
+                        'tool_schema_validation_too_complex')
+                yield from operation(validator, constraint, instance, subschema)
+            finally:
+                budget['depth'] -= 1
+        return validate
+    bounded_validator = validators.extend(base_validator, {
+        keyword: bounded(keyword, operation)
+        for keyword, operation in base_validator.VALIDATORS.items()})
+
+    def evolve(self, **changes):
+        # jsonschema's default evolve chooses an unbounded built-in validator
+        # when a child contains $schema. All dialects were checked above; retain
+        # this validator and its per-validation budget across every descent.
+        changes.setdefault('schema', self.schema)
+        changes.setdefault('registry', self._registry)
+        changes.setdefault('_resolver', self._resolver)
+        changes.setdefault('format_checker', self.format_checker)
+        return bounded_validator(**changes)
+    bounded_validator.evolve = evolve
+    # Explicit _resolver avoids jsonschema's implicit built-in metaschema
+    # registry merge. Only resources contained in this tool schema exist here.
+    return bounded_validator(schema, registry=registry, _resolver=ClosedResolver(resolver))
+
+
+def _schema(schema, value=None, *, check_value=False):
+    require(isinstance(schema, dict) and schema.get('type') == 'object', 'tool_schema_required')
+    _schema_shape_budget(schema)
     try:
-        from jsonschema import Draft202012Validator
-        Draft202012Validator.check_schema(schema)
+        validator = _schema_validator(schema)
         if check_value:
-            require(Draft202012Validator(schema).is_valid(value), 'tool_arguments_schema_mismatch')
+            require(validator.is_valid(value), 'tool_arguments_schema_mismatch')
     except ImportError:
         raise ProtocolError('tool_schema_validator_unavailable') from None
     except ProtocolError:
         raise
+    except RecursionError:
+        raise ProtocolError('tool_schema_validation_too_complex') from None
     except Exception:
         raise ProtocolError('invalid_tool_schema') from None
-
 
 def call_binding(item):
     """Exact execution-affecting fields; benign status annotations may vary."""

@@ -1,0 +1,38 @@
+{
+  "repository": "openai/codex",
+  "commit": "ff6aec96948b70d94983af2641a6b67c94faeff5",
+  "version": "0.159.2",
+  "note": "Public official source fixtures, not captured user traffic",
+  "files": [
+    {
+      "path": "codex-rs/tools/src/json_schema_tests.rs",
+      "blob_sha": "449631475dcedac1e560c34f0e0f8f08536cb368",
+      "url": "https://github.com/openai/codex/blob/ff6aec96948b70d94983af2641a6b67c94faeff5/codex-rs/tools/src/json_schema_tests.rs"
+    },
+    {
+      "path": "codex-rs/tools/src/json_schema/types.rs",
+      "blob_sha": "0792816fd31c242d3000adcea6cbe8a3ed8f7874",
+      "url": "https://github.com/openai/codex/blob/ff6aec96948b70d94983af2641a6b67c94faeff5/codex-rs/tools/src/json_schema/types.rs"
+    },
+    {
+      "path": "codex-rs/tools/src/json_schema.rs",
+      "blob_sha": "0d70b1712de0de4b3171a987b1f0f18536414032",
+      "url": "https://github.com/openai/codex/blob/ff6aec96948b70d94983af2641a6b67c94faeff5/codex-rs/tools/src/json_schema.rs"
+    },
+    {
+      "path": "codex-rs/tools/tests/json_schema_policy_fixtures.rs",
+      "blob_sha": "ab78a53f325fb5931016fc8307c91e2653684e51",
+      "url": "https://github.com/openai/codex/blob/ff6aec96948b70d94983af2641a6b67c94faeff5/codex-rs/tools/tests/json_schema_policy_fixtures.rs"
+    },
+    {
+      "path": "codex-rs/tools/tests/fixtures/json_schema_policy/slack.json",
+      "blob_sha": "7461da73ddbfe52a4b5604701cf36ac12ae57325",
+      "url": "https://github.com/openai/codex/blob/ff6aec96948b70d94983af2641a6b67c94faeff5/codex-rs/tools/tests/fixtures/json_schema_policy/slack.json"
+    },
+    {
+      "path": "codex-rs/tools/tests/fixtures/json_schema_policy/google_calendar.json",
+      "blob_sha": "9673ecf59671be00fb01d5a088873f6d3108b504",
+      "url": "https://github.com/openai/codex/blob/ff6aec96948b70d94983af2641a6b67c94faeff5/codex-rs/tools/tests/fixtures/json_schema_policy/google_calendar.json"
+    }
+  ]
+}
