@@ -1,40 +1,114 @@
 {
   "contract": "dots2codex-desktop-global-pilot/1",
-  "base_commit": "68d91537e8b026de960f5e7e7b496dc93bf333d8",
-  "base_source_tree_sha256": "28ad0f68f82af51d3a399646b6ae22fb75d8cc42a5746ecd71123e077429a2be",
+  "base_commit": "751e14ff9659e0746d439b7740ec4bc9fa863565",
+  "base_source_tree_sha256": "a6e4e1dae729aba706253f63b14fde18c4011cccdc947e6af6e024ab40c2096a",
   "input_launcher_source_tree_sha256": "7774123803de7f12e89b8cb8be7a510f5cfc2e829572921c0fde33632d4e096e",
   "input_gateway_source_tree_sha256": "ab3026308c240f613b8be00b623cfa3eb67cd73fcac4e87556da7d1619215891",
-  "source_tree_sha256": "a6e4e1dae729aba706253f63b14fde18c4011cccdc947e6af6e024ab40c2096a",
+  "source_tree_sha256": "f7555a99dc1bb5f2b997cce66bd2262d98d849d70933484a7ceb7b0e43a5eded",
   "source_tree_hash_algorithm": "SHA-256 of UTF-8 canonical JSON files array (sort_keys=true,separators=comma/colon,ensure_ascii=false); array sorted by path",
-  "hashed_file_count": 275,
+  "hashed_file_count": 322,
   "manifest_self_excluded": true,
   "changed_files": [
-    "docs/DESKTOP_GLOBAL.zh-CN.md",
-    "docs/HEARTBEAT_V2_VALIDATION.md",
-    "examples/google_clients.py",
-    "remote_tests/test_global_cold_start.py",
-    "remote_tests/test_global_pilot.py",
-    "remote_tests/test_global_prewarm.py",
-    "remote_tests/test_global_read_recovery.py",
-    "remote_tests/test_global_response_budget.py",
-    "remote_transport/backend.py",
-    "remote_transport/control.py",
-    "remote_transport/drive_http.py",
-    "remote_transport/facade.py",
-    "remote_transport/global_control.py",
-    "remote_transport/global_desktop.py",
-    "remote_transport/global_gateway.py",
-    "remote_transport/global_google.py",
-    "remote_transport/global_pilot.py",
-    "remote_transport/global_response.py"
+    "LIGHTWEIGHT.command",
+    "LIGHTWEIGHT_PACKAGE_MANIFEST.json",
+    "docs/LIGHTWEIGHT_NATIVE_CONTROLLER.md",
+    "docs/LIGHTWEIGHT_QUICKSTART.zh-CN.md",
+    "dots_lite/__init__.py",
+    "dots_lite/cli.py",
+    "dots_lite/client_catalog.py",
+    "dots_lite/codex_instructions_0_159_2.txt",
+    "dots_lite/config_transaction.py",
+    "dots_lite/docs.py",
+    "dots_lite/environment.py",
+    "dots_lite/gateway.py",
+    "dots_lite/google_ports.py",
+    "dots_lite/launcher.py",
+    "dots_lite/native_capabilities.json",
+    "dots_lite/package.py",
+    "dots_lite/package_identity.py",
+    "dots_lite/private_io.py",
+    "dots_lite/protocol.py",
+    "dots_lite/storage.py",
+    "dots_lite/ui.py",
+    "dots_lite/wire.py",
+    "dots_lite/worker.py",
+    "lite_tests/fixtures/normalized-file-metadata.json",
+    "lite_tests/fixtures/normalized-raw-fetch.json",
+    "lite_tests/gateway_fixtures.py",
+    "lite_tests/independent/README.md",
+    "lite_tests/independent/__init__.py",
+    "lite_tests/independent/fixtures/PROVENANCE.md",
+    "lite_tests/independent/fixtures/connector_tool_contracts.json",
+    "lite_tests/independent/fixtures/normalized-document.json",
+    "lite_tests/independent/fixtures/normalized-file-metadata.json",
+    "lite_tests/independent/fixtures/normalized-raw-fetch.json",
+    "lite_tests/independent/fixtures/normalized-update-ack.json",
+    "lite_tests/independent/test_docs_audit.py",
+    "lite_tests/independent/test_gateway_audit.py",
+    "lite_tests/independent/test_migration_audit.py",
+    "lite_tests/independent/test_wire_audit.py",
+    "lite_tests/independent/test_worker_audit.py",
+    "lite_tests/test_core.py",
+    "lite_tests/test_gateway.py",
+    "lite_tests/test_google_ports.py",
+    "lite_tests/test_google_ports_sdk.py",
+    "lite_tests/test_launcher.py",
+    "native_connector/lite_cell.js",
+    "native_connector/lite_cell.test.js",
+    "native_connector/lite_independent_roundtrips.test.js"
   ],
   "added_files": [
-    "remote_tests/test_global_response_budget.py",
-    "remote_transport/global_response.py"
+    "LIGHTWEIGHT.command",
+    "LIGHTWEIGHT_PACKAGE_MANIFEST.json",
+    "docs/LIGHTWEIGHT_NATIVE_CONTROLLER.md",
+    "docs/LIGHTWEIGHT_QUICKSTART.zh-CN.md",
+    "dots_lite/__init__.py",
+    "dots_lite/cli.py",
+    "dots_lite/client_catalog.py",
+    "dots_lite/codex_instructions_0_159_2.txt",
+    "dots_lite/config_transaction.py",
+    "dots_lite/docs.py",
+    "dots_lite/environment.py",
+    "dots_lite/gateway.py",
+    "dots_lite/google_ports.py",
+    "dots_lite/launcher.py",
+    "dots_lite/native_capabilities.json",
+    "dots_lite/package.py",
+    "dots_lite/package_identity.py",
+    "dots_lite/private_io.py",
+    "dots_lite/protocol.py",
+    "dots_lite/storage.py",
+    "dots_lite/ui.py",
+    "dots_lite/wire.py",
+    "dots_lite/worker.py",
+    "lite_tests/fixtures/normalized-file-metadata.json",
+    "lite_tests/fixtures/normalized-raw-fetch.json",
+    "lite_tests/gateway_fixtures.py",
+    "lite_tests/independent/README.md",
+    "lite_tests/independent/__init__.py",
+    "lite_tests/independent/fixtures/PROVENANCE.md",
+    "lite_tests/independent/fixtures/connector_tool_contracts.json",
+    "lite_tests/independent/fixtures/normalized-document.json",
+    "lite_tests/independent/fixtures/normalized-file-metadata.json",
+    "lite_tests/independent/fixtures/normalized-raw-fetch.json",
+    "lite_tests/independent/fixtures/normalized-update-ack.json",
+    "lite_tests/independent/test_docs_audit.py",
+    "lite_tests/independent/test_gateway_audit.py",
+    "lite_tests/independent/test_migration_audit.py",
+    "lite_tests/independent/test_wire_audit.py",
+    "lite_tests/independent/test_worker_audit.py",
+    "lite_tests/test_core.py",
+    "lite_tests/test_gateway.py",
+    "lite_tests/test_google_ports.py",
+    "lite_tests/test_google_ports_sdk.py",
+    "lite_tests/test_launcher.py",
+    "native_connector/lite_cell.js",
+    "native_connector/lite_cell.test.js",
+    "native_connector/lite_independent_roundtrips.test.js"
   ],
   "all_six_source_bindings_preserved": true,
   "existing_runtime_migration": "fresh_activation_and_v2_join_required",
-  "status": "response-budget-offline-validated-awaiting-live-acceptance",
+  "status": "lite-v3-offline-validated-awaiting-live-acceptance",
   "launcher_global_menu_supported": true,
   "production_ready": false,
   "ready_for_config": false,
@@ -110,6 +184,18 @@
       "path": "LICENSE",
       "bytes": 1080,
       "sha256": "9246d18641b9e8294e4ef4a06213d5d8dab43ac1685b58cafe1383c5f055def1",
+      "mode": "0644"
+    },
+    {
+      "path": "LIGHTWEIGHT.command",
+      "bytes": 1399,
+      "sha256": "59d66cbcee8ec2abb8b82fe22d62c387d2f7d849b69ac24548e286e7b168b2ee",
+      "mode": "0755"
+    },
+    {
+      "path": "LIGHTWEIGHT_PACKAGE_MANIFEST.json",
+      "bytes": 4188,
+      "sha256": "391ab9b201cbb6b0bb37f43b85eeaeb349ee2b0cf766767513c786b87a28924a",
       "mode": "0644"
     },
     {
@@ -323,6 +409,18 @@
       "mode": "0644"
     },
     {
+      "path": "docs/LIGHTWEIGHT_NATIVE_CONTROLLER.md",
+      "bytes": 15181,
+      "sha256": "8961bd28f45c228039a2252f7a894a34f01f3dd33bc9f9b5d53a319be5332f25",
+      "mode": "0644"
+    },
+    {
+      "path": "docs/LIGHTWEIGHT_QUICKSTART.zh-CN.md",
+      "bytes": 5065,
+      "sha256": "ca1f10fd13ccfa7d7dae84e7bd17611f228138c7559e1b573829417c31db7700",
+      "mode": "0644"
+    },
+    {
       "path": "docs/MODEL_SELECTION.zh-CN.md",
       "bytes": 11659,
       "sha256": "a530acf9feaae0f31a11093af187a53cfdc082572405e62a51e286ce4c1dcc45",
@@ -515,6 +613,120 @@
       "mode": "0644"
     },
     {
+      "path": "dots_lite/__init__.py",
+      "bytes": 70,
+      "sha256": "b94783fe314e0ce26ad089203f68062153cf1d88240a1d5a83bf4c2bdaff81f2",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/cli.py",
+      "bytes": 20236,
+      "sha256": "114c51061d98a0c468667bd6d7b3f217dfb9dd63717b843a01f79af8c1137631",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/client_catalog.py",
+      "bytes": 7923,
+      "sha256": "caa486ef16ff800b6e56c699c92a578f923b36aa9301caba02631066c627faa8",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/codex_instructions_0_159_2.txt",
+      "bytes": 20903,
+      "sha256": "ac8ae107a0d72fe3476b430afb161ea4e67da2e446d778aefc44828160559807",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/config_transaction.py",
+      "bytes": 20140,
+      "sha256": "9cb6ad32683006647d5bd66e26eec91ef229075821f9bc63bbed20146da9608d",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/docs.py",
+      "bytes": 13611,
+      "sha256": "8857683f5b66939a0a3179ed7670aee618d83f383f2ec82b48ffadd6facb8c84",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/environment.py",
+      "bytes": 8454,
+      "sha256": "74947013e6f046fe9f3cb90ff9e5957cbaf6fa470a426fdaedcae31020d5ae32",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/gateway.py",
+      "bytes": 30547,
+      "sha256": "97f05cffe579b4788c250058316c2aab61b0175aa80e1d32df06a7d89d3f9556",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/google_ports.py",
+      "bytes": 13716,
+      "sha256": "ff6f120700666ee373a2e2c8a5f3c66e1adde8a296c5690630fd5e827d3db2a8",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/launcher.py",
+      "bytes": 40954,
+      "sha256": "3fb5197aa12bf53d71ca796c64bc866e771f934f9e9c8432d0b96b51f0e990cd",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/native_capabilities.json",
+      "bytes": 2282,
+      "sha256": "5d154793bd49c48dff1ffac041fbd6b3d141cce7c664893f73d9559febef9bfb",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/package.py",
+      "bytes": 1647,
+      "sha256": "3179076d7cf6275ad2fd358f21048db09aedd809fcd88d9b51a75d2349934b9d",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/package_identity.py",
+      "bytes": 301,
+      "sha256": "69759a2d35baf659640adcc7c46393c3d371c11873b3f9439cd901a596f14307",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/private_io.py",
+      "bytes": 3421,
+      "sha256": "49a03d349a9a0df7c3e07e214dc9b08b260efe736831075a21f7de4044477f4d",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/protocol.py",
+      "bytes": 13493,
+      "sha256": "6a21540b8e93ab2bb4b95f89b2dd67d3ddc57ece8b0adae1c464da2d1ab387a8",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/storage.py",
+      "bytes": 6247,
+      "sha256": "bd45c705d90f7b786c7d63c041fb3f95cc577116502636323416debbd3b5f3ae",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/ui.py",
+      "bytes": 4895,
+      "sha256": "0a0b8cf447e76cbfabc3282e6be42553db7c1ab8d4d95b76bd95b939819a3e16",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/wire.py",
+      "bytes": 11691,
+      "sha256": "cbfbc45f71a177275ad0938b57858b7633d96c9285f6f8cb0e871a3f81e3093f",
+      "mode": "0644"
+    },
+    {
+      "path": "dots_lite/worker.py",
+      "bytes": 23854,
+      "sha256": "d586042cd985b03d220c302cc39b60c5077cc6997a26d40705db02ee8d2bfdab",
+      "mode": "0644"
+    },
+    {
       "path": "examples/__init__.py",
       "bytes": 87,
       "sha256": "cf5db2831b59335ba38cbe6c3e1d9770ac8eb2cf578b6b88c79431935f9416aa",
@@ -554,6 +766,132 @@
       "path": "handoff_fixture.py",
       "bytes": 3230,
       "sha256": "d995c3c264e96d8bed89b1165ecf0488731b86d9a467d56bb6e4f9776cfadb81",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/fixtures/normalized-file-metadata.json",
+      "bytes": 1050,
+      "sha256": "1b78dd274acc0945336cfd9834295d726ba65cae8c362c6e1443c7b9e8e4143f",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/fixtures/normalized-raw-fetch.json",
+      "bytes": 1905,
+      "sha256": "4f946316e99f661c6d0d0ed41c15431a7c01e3967ce04641d0fd7f0a8a7d6007",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/gateway_fixtures.py",
+      "bytes": 6857,
+      "sha256": "de5031b0502a239f72e50a4b440ea8578817217105fdc45c8bb241f54d79a61f",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/independent/README.md",
+      "bytes": 2304,
+      "sha256": "91c4f27cee75ed20b950119cd010a301b070a9f7b461b1c0fb739fa7b11c8805",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/independent/__init__.py",
+      "bytes": 60,
+      "sha256": "9e3eea9474ee365a636822b39819c6a12c4de8d18083308a7992572d6e303f23",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/independent/fixtures/PROVENANCE.md",
+      "bytes": 2038,
+      "sha256": "7eb9f28ffa5aebec6f21df721c2dacb57d2f430bb2a7e680aced9d3fa0b28912",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/independent/fixtures/connector_tool_contracts.json",
+      "bytes": 9026,
+      "sha256": "e557f233d06d8c8b2c92c4e6842d65aaec3f20bba67ae86730106717c9662abf",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/independent/fixtures/normalized-document.json",
+      "bytes": 2411,
+      "sha256": "63a24595dd5f77bc6f1c588f9dc27b04692ee2f7b89caa64d15233727b036b8f",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/independent/fixtures/normalized-file-metadata.json",
+      "bytes": 1050,
+      "sha256": "1b78dd274acc0945336cfd9834295d726ba65cae8c362c6e1443c7b9e8e4143f",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/independent/fixtures/normalized-raw-fetch.json",
+      "bytes": 1905,
+      "sha256": "4f946316e99f661c6d0d0ed41c15431a7c01e3967ce04641d0fd7f0a8a7d6007",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/independent/fixtures/normalized-update-ack.json",
+      "bytes": 391,
+      "sha256": "51493aea7a0be60c9e3802d37c2e66cfeed8f2da13eb8e9e345d1f70b9ced65b",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/independent/test_docs_audit.py",
+      "bytes": 7529,
+      "sha256": "56a4f8eaa5ce7c041960a68dfd3825b2f049d088dbb82d060f448cc8541a187c",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/independent/test_gateway_audit.py",
+      "bytes": 12763,
+      "sha256": "e45c9b2729ac6fed440c06c176e27c5326ef835cf99417370c3d96a6e92b2181",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/independent/test_migration_audit.py",
+      "bytes": 4979,
+      "sha256": "8c446d3861b6ccab9a9e9ced851980d7399fbdb433f029e3a78b8cadeae10f49",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/independent/test_wire_audit.py",
+      "bytes": 6386,
+      "sha256": "31f6fedc67b070544621373608b618f5a4628a6d06bf226ddb4efb05f2838ef7",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/independent/test_worker_audit.py",
+      "bytes": 13433,
+      "sha256": "2f7d907999f3c99dd8c124ea8d6d2f102baca8fa7655ec1b32a1ad2e0028c4fe",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/test_core.py",
+      "bytes": 11881,
+      "sha256": "dfb433a0e3ca400025445c7bdd6a4c6bbc02dc9ec8a9f247eaf35feaa2625b65",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/test_gateway.py",
+      "bytes": 10950,
+      "sha256": "8dfb50d66dd0159c7f2f48ab5dc26754390d0dfefc90404606203a166f534d84",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/test_google_ports.py",
+      "bytes": 3543,
+      "sha256": "4e5f3223760d5559bdc490d5c26476f6d9d2f1ef4c378924e2afbf1a024b01ec",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/test_google_ports_sdk.py",
+      "bytes": 3336,
+      "sha256": "6afe070a7e49d5ffee21a08499c73b038442ad7fc4a682794ca913aae1cf3a75",
+      "mode": "0644"
+    },
+    {
+      "path": "lite_tests/test_launcher.py",
+      "bytes": 22489,
+      "sha256": "7c327bf7143a8dfbf9c4887848d10f62295fa398cf0e33bf4954efc1708f9a89",
       "mode": "0644"
     },
     {
@@ -680,6 +1018,24 @@
       "path": "native_connector/indexed_docs_test_support.test.js",
       "bytes": 4628,
       "sha256": "98933341ff16b651853055a966caf8d36e78bafd9ebd0d2ddf9b1215fe9e1006",
+      "mode": "0644"
+    },
+    {
+      "path": "native_connector/lite_cell.js",
+      "bytes": 12668,
+      "sha256": "e9c8025b7c482b0191db7b360ba9dcc42217e36d45d3e1e1c87a3fac12892044",
+      "mode": "0644"
+    },
+    {
+      "path": "native_connector/lite_cell.test.js",
+      "bytes": 21281,
+      "sha256": "65856ab2faae45179c2a03974e44adb9f6a190bbcbd23ceec70b50b257ff6690",
+      "mode": "0644"
+    },
+    {
+      "path": "native_connector/lite_independent_roundtrips.test.js",
+      "bytes": 12602,
+      "sha256": "61a2dfec8b31d71fd98d3376f3a87f88a185e59b95c92759bcd47026e1a55c2b",
       "mode": "0644"
     },
     {
@@ -1697,7 +2053,7 @@
       "mode": "0644"
     }
   ],
-  "parent_commit": "68d91537e8b026de960f5e7e7b496dc93bf333d8",
+  "parent_commit": "751e14ff9659e0746d439b7740ec4bc9fa863565",
   "global_config_pilot_gate_implemented": true,
   "global_config_pilot_runtime_exercised": false,
   "input_desktop_global_source_tree_sha256": "7999cd2b2a5e028bc706760d7a290f44a3b5365b76c5f38f88a4d9478a89b4f3",
@@ -1750,19 +2106,55 @@
     "real_mac_native_google_acceptance": false
   },
   "test_results": {
-    "contract": "dots2codex-response-budget-offline-validation/1",
-    "status": "passed_with_explicit_optional_skips",
-    "source_tree_sha256": "a6e4e1dae729aba706253f63b14fde18c4011cccdc947e6af6e024ab40c2096a",
+    "contract": "dots2codex-lite-v3-offline-validation/1",
+    "status": "passed_release_matrix_with_explicit_legacy_optional_dependency_limit",
+    "source_tree_sha256": "f7555a99dc1bb5f2b997cce66bd2262d98d849d70933484a7ceb7b0e43a5eded",
+    "lightweight_package_sha256": "26014b13b52453d406396c40b1040766a11f1b14ce90973dd93363a4bf327e98",
     "final_snapshot_validated": true,
     "live_mac_google_native_verified": false,
     "google_writes": 0,
     "native_inference_calls": 0,
     "dependency_install_performed": false,
-    "full_run_jobs": 91,
+    "dependency_install_performed_during_validation": false,
+    "preinstalled_test_dependencies": {
+      "tomlkit": "0.13.3",
+      "jsonschema": "4.26.0",
+      "google-api-python-client": "2.200.0"
+    },
+    "full_run_jobs": 103,
+    "legacy_run_jobs": 91,
+    "new_run_jobs": 12,
     "max_concurrent_test_jobs": 6,
     "six_way_isolated_full_run": true,
     "reused_prior_run_results": false,
     "tests": {
+      "tests": 1624,
+      "passed": 1615,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "python": {
+      "tests": 1377,
+      "passed": 1368,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "node": {
+      "tests": 247,
+      "passed": 247,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "legacy": {
       "tests": 1503,
       "passed": 1494,
       "failures": 0,
@@ -1771,24 +2163,84 @@
       "expected_failures": 0,
       "unexpected_successes": 0
     },
-    "python": {
-      "tests": 1267,
-      "passed": 1258,
-      "failures": 0,
-      "errors": 0,
-      "skipped": 9,
-      "expected_failures": 0,
-      "unexpected_successes": 0
-    },
-    "node": {
-      "tests": 236,
-      "passed": 236,
+    "lightweight_v3": {
+      "tests": 121,
+      "passed": 121,
       "failures": 0,
       "errors": 0,
       "skipped": 0,
       "expected_failures": 0,
       "unexpected_successes": 0
     },
+    "lightweight_v3_zero_skips": true,
+    "dependency_matrix": {
+      "legacy_91_jobs": "unchanged published interpreters, optional tomlkit absent; 9 original optional integration skips",
+      "lightweight_12_jobs": "actual tomlkit 0.13.3 supplied; real SDK interpreter for test_google_ports_sdk.py; zero skips"
+    },
+    "legacy_optional_toml_diagnostic": {
+      "status": "pre_existing_legacy_optional_dependency_failures_reproduced",
+      "baseline_commit": "751e14ff9659e0746d439b7740ec4bc9fa863565",
+      "baseline_source_tree_sha256": "a6e4e1dae729aba706253f63b14fde18c4011cccdc947e6af6e024ab40c2096a",
+      "candidate_source_tree_sha256": "f7555a99dc1bb5f2b997cce66bd2262d98d849d70933484a7ceb7b0e43a5eded",
+      "tomlkit_version": "0.13.3",
+      "module": "remote_tests/test_global_config.py",
+      "candidate_module_counts": {
+        "tests": 23,
+        "passed": 20,
+        "failures": 1,
+        "errors": 1,
+        "skipped": 1
+      },
+      "baseline_module_counts": {
+        "tests": 23,
+        "passed": 20,
+        "failures": 1,
+        "errors": 1,
+        "skipped": 1
+      },
+      "identical_test_outcomes": true,
+      "byte_identical_legacy_files": {
+        "remote_tests/test_global_config.py": "84e1cdabdd82d9ae0ce0dadf6feb198d62c6f37e4b8e847d05ddcc3a9f5b0b63",
+        "remote_transport/global_config.py": "9bb84b2c69acf68a03f3effb7bb147506147055ac9233079866cdd90cb803ccd"
+      },
+      "failing_outcomes": [
+        {
+          "id": "test_global_config.ConfigParserIntegrationTests.test_existing_other_providers_profiles_and_safety_settings_preserved",
+          "status": "failed"
+        },
+        {
+          "id": "test_global_config.ConfigParserIntegrationTests.test_merge_restore_preserves_unrelated_new_value_and_comments",
+          "status": "error"
+        }
+      ],
+      "dependency_present_expected_skip": [
+        {
+          "id": "test_global_config.ConfigSafetyTests.test_dependency_missing_fails_closed",
+          "status": "skipped",
+          "reason": "tomlkit present; parser integration covered separately"
+        }
+      ],
+      "full_optional_present_run": {
+        "status": "failed",
+        "jobs": 103,
+        "counts": {
+          "tests": 1624,
+          "passed": 1621,
+          "failures": 1,
+          "errors": 1,
+          "skipped": 1,
+          "expected_failures": 0,
+          "unexpected_successes": 0
+        },
+        "unchanged_tree": true,
+        "failed_jobs": [
+          "remote_tests/test_global_config.py"
+        ]
+      },
+      "decision": "Preserve legacy sources and their previously published optional-dependency-absent environment; use real tomlkit for all new lightweight tests, report legacy dependency-present failures separately. No failed result is reused as passed.",
+      "known_limit": "Optional tomlkit-enabled legacy config path is not validated by the release regression profile and has the two separately reproduced existing failing tests."
+    },
+    "all_optional_dependency_variants_passed": false,
     "totals_by_suite": {
       "remote_tests": {
         "tests": 998,
@@ -1844,9 +2296,18 @@
         "expected_failures": 0,
         "unexpected_successes": 0
       },
+      "lite_tests": {
+        "tests": 110,
+        "passed": 110,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
       "node": {
-        "tests": 236,
-        "passed": 236,
+        "tests": 247,
+        "passed": 247,
         "failures": 0,
         "errors": 0,
         "skipped": 0,
@@ -1867,36 +2328,140 @@
       "optional tomlkit unavailable; real parser integration NOT VERIFIED": 9
     },
     "new_test_modules": [
-      "remote_tests/test_global_response_budget.py"
+      "lite_tests/independent/test_docs_audit.py",
+      "lite_tests/independent/test_gateway_audit.py",
+      "lite_tests/independent/test_migration_audit.py",
+      "lite_tests/independent/test_wire_audit.py",
+      "lite_tests/independent/test_worker_audit.py",
+      "lite_tests/test_core.py",
+      "lite_tests/test_gateway.py",
+      "lite_tests/test_google_ports.py",
+      "lite_tests/test_google_ports_sdk.py",
+      "lite_tests/test_launcher.py",
+      "native_connector/lite_cell.test.js",
+      "native_connector/lite_independent_roundtrips.test.js"
     ],
     "real_sdk_modules": {
+      "lite_tests/test_google_ports_sdk.py": 2,
       "remote_tests/test_google_read_recovery.py": 29,
       "remote_tests/test_google_sdk_concurrency.py": 23,
       "sdk_tests/test_google_sdk_independent.py": 3
     },
     "real_sdk_modules_zero_skips": true,
-    "full_run_seconds": 195.434,
-    "full_snapshot_sha256": "e48fb05e74c09b81670d48f3564d1a362ff5c4455325f9a5ec0ec058d2f23c6d",
+    "full_run_seconds": 209.692,
+    "full_snapshot_sha256": "cf38fb7c47875e1da41ce30c7c4f98123ae6012ef148e30bd893e1426013ce02",
     "tree_unchanged_during_run": true,
     "final_manifest_verified": true,
+    "lightweight_runtime_files": 30,
+    "actual_package_identity_verifier_passed": true,
+    "legacy_runtime_byte_modes_preserved": true,
     "test_inventory_unchanged_during_run": true,
     "source_cache_artifacts": [],
-    "manifest_entries": 275,
+    "manifest_entries": 322,
     "syntax_checks": {
-      "python": 150,
-      "node": 25,
-      "shell": 11,
-      "json": 17
+      "python": 179,
+      "node": 28,
+      "shell": 12,
+      "json": 26
     },
     "network_attempts_blocked": 0,
     "leaked_subprocesses": 0,
     "per_job_descendant_supervision": true,
-    "network_guards": "Python audit hook, Node hooks, inherited native socket guard; local fixture loopback only",
+    "network_guards": "Python audit hook, Node hooks, inherited native socket guard; local Python fixture loopback only",
     "toml_parser_integration_verified": false,
+    "lightweight_toml_parser_integration_verified": true,
+    "legacy_optional_toml_parser_verified": false,
+    "offline_helper_operation_ledger": {
+      "status": "passed",
+      "classification": "offline real JS+Python helpers with synthetic connector and native boundaries",
+      "cold_from_prepared_inbox": {
+        "helper": 11,
+        "source_load": 1,
+        "docs_get": 3,
+        "docs_write": 4,
+        "metadata": 1,
+        "raw_fetch": 1,
+        "materialize": 1,
+        "upload": 1,
+        "cell_emission": 5
+      },
+      "warm_second_request_same_child": {
+        "helper": 5,
+        "source_load": 0,
+        "docs_get": 1,
+        "docs_write": 2,
+        "metadata": 1,
+        "raw_fetch": 1,
+        "materialize": 1,
+        "upload": 1,
+        "cell_emission": 2
+      },
+      "actual_native_platform_calls": 0,
+      "synthetic_spawn_and_handoff_boundaries": 2,
+      "helper_operations": [
+        "parent-inspect",
+        "parent-prepare",
+        "parent-reserved",
+        "parent-admit",
+        "parent-admitted",
+        "child-takeover",
+        "child-prepare",
+        "child-expose",
+        "child-save",
+        "child-publish",
+        "child-accepted",
+        "child-prepare",
+        "child-expose",
+        "child-save",
+        "child-publish",
+        "child-accepted"
+      ],
+      "control_phases": [
+        "SPAWN_RESERVED",
+        "ADMITTED",
+        "BEGIN",
+        "RESULT",
+        "BEGIN",
+        "RESULT"
+      ],
+      "additional_accounting": {
+        "parent_initialize": 1,
+        "actual_argument_result_capture": "not measured: in-process test file write",
+        "model_input_read": "not measured: fixture validates file path only",
+        "actual_output_file_write": "not measured: in-process synthetic output",
+        "google_and_mac_latency": "not measured"
+      }
+    },
+    "legacy_offline_benchmarks": [
+      {
+        "mode": "offline_deterministic_virtual_latencies_only",
+        "sequential": {
+          "concurrency": 1,
+          "virtual_total_ms": 866,
+          "rpc_calls": 12,
+          "maximum_concurrent_rpc_calls": 1,
+          "fresh_control_reads": 2,
+          "external_writes": 4
+        },
+        "bounded_parallel": {
+          "concurrency": 3,
+          "virtual_total_ms": 444,
+          "rpc_calls": 12,
+          "maximum_concurrent_rpc_calls": 3,
+          "fresh_control_reads": 2,
+          "external_writes": 4
+        },
+        "saved_virtual_ms": 422,
+        "ratio": 1.95,
+        "claim": "Scheduling overlap only; unchanged tool/read/write counts. No live latency evidence."
+      }
+    ],
     "known_limits": [
-      "Optional real tomlkit parser integration cases, if listed in skips_by_reason, were skipped because the dependency is unavailable; no dependency installation performed.",
-      "Mac native UI, real Google writes, native admission/inference, client traffic, live queue/protocol traffic, and end-to-end activation were not run.",
-      "Deterministic benchmark results describe offline scheduling only, not live-service latency."
+      "Two legacy optional-tomlkit-present config tests fail identically on the published baseline and unchanged candidate; those diagnostic failures are preserved separately. Legacy release-profile tests retain their nine original optional TOML skips. V3 real-TOML tests all pass with zero skips.",
+      "Tomlkit 0.13.3 was already installed in a separate test dependency directory; this frozen validation run installed no dependencies.",
+      "Mac native UI, real Google writes, native admission/inference, live client traffic and end-to-end activation were not run.",
+      "The helper ledger and benchmark use synthetic native/provider boundaries; they are operation counts/offline timings, not actual native model or live-service latency measurements.",
+      "Whole private-storage rollback remains outside the documented intact-storage assumption."
     ]
   },
   "prior_heartbeat_v2_validation": {
@@ -3171,5 +3736,520 @@
       "Mac native UI, real Google writes, native admission/inference, client traffic, live queue/protocol traffic, and end-to-end activation were not run.",
       "Deterministic benchmark results describe offline scheduling only, not live-service latency."
     ]
-  }
+  },
+  "lightweight_package_sha256": "26014b13b52453d406396c40b1040766a11f1b14ce90973dd93363a4bf327e98",
+  "lightweight_manifest": "LIGHTWEIGHT_PACKAGE_MANIFEST.json",
+  "lightweight_runtime_file_count": 30,
+  "legacy_entrypoints_and_defaults_preserved": true,
+  "prior_response_budget_validation": {
+    "contract": "dots2codex-response-budget-offline-validation/1",
+    "status": "passed_with_explicit_optional_skips",
+    "source_tree_sha256": "a6e4e1dae729aba706253f63b14fde18c4011cccdc947e6af6e024ab40c2096a",
+    "final_snapshot_validated": true,
+    "live_mac_google_native_verified": false,
+    "google_writes": 0,
+    "native_inference_calls": 0,
+    "dependency_install_performed": false,
+    "full_run_jobs": 91,
+    "max_concurrent_test_jobs": 6,
+    "six_way_isolated_full_run": true,
+    "reused_prior_run_results": false,
+    "tests": {
+      "tests": 1503,
+      "passed": 1494,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "python": {
+      "tests": 1267,
+      "passed": 1258,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "node": {
+      "tests": 236,
+      "passed": 236,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "totals_by_suite": {
+      "remote_tests": {
+        "tests": 998,
+        "passed": 989,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 9,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "tests": {
+        "tests": 134,
+        "passed": 134,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "remote_audit/cas": {
+        "tests": 47,
+        "passed": 47,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "remote_audit/drive": {
+        "tests": 48,
+        "passed": 48,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "sdk_tests": {
+        "tests": 3,
+        "passed": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "docs/gemini_setup/tools": {
+        "tests": 37,
+        "passed": 37,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "node": {
+        "tests": 236,
+        "passed": 236,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "benchmark": {
+        "tests": 0,
+        "passed": 0,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      }
+    },
+    "skips_by_reason": {
+      "optional tomlkit unavailable; real parser integration NOT VERIFIED": 9
+    },
+    "new_test_modules": [
+      "remote_tests/test_global_response_budget.py"
+    ],
+    "real_sdk_modules": {
+      "remote_tests/test_google_read_recovery.py": 29,
+      "remote_tests/test_google_sdk_concurrency.py": 23,
+      "sdk_tests/test_google_sdk_independent.py": 3
+    },
+    "real_sdk_modules_zero_skips": true,
+    "full_run_seconds": 195.434,
+    "full_snapshot_sha256": "e48fb05e74c09b81670d48f3564d1a362ff5c4455325f9a5ec0ec058d2f23c6d",
+    "tree_unchanged_during_run": true,
+    "final_manifest_verified": true,
+    "test_inventory_unchanged_during_run": true,
+    "source_cache_artifacts": [],
+    "manifest_entries": 275,
+    "syntax_checks": {
+      "python": 150,
+      "node": 25,
+      "shell": 11,
+      "json": 17
+    },
+    "network_attempts_blocked": 0,
+    "leaked_subprocesses": 0,
+    "per_job_descendant_supervision": true,
+    "network_guards": "Python audit hook, Node hooks, inherited native socket guard; local fixture loopback only",
+    "toml_parser_integration_verified": false,
+    "known_limits": [
+      "Optional real tomlkit parser integration cases, if listed in skips_by_reason, were skipped because the dependency is unavailable; no dependency installation performed.",
+      "Mac native UI, real Google writes, native admission/inference, client traffic, live queue/protocol traffic, and end-to-end activation were not run.",
+      "Deterministic benchmark results describe offline scheduling only, not live-service latency."
+    ]
+  },
+  "lite_v3_validation": {
+    "contract": "dots2codex-lite-v3-offline-validation/1",
+    "status": "passed_release_matrix_with_explicit_legacy_optional_dependency_limit",
+    "source_tree_sha256": "f7555a99dc1bb5f2b997cce66bd2262d98d849d70933484a7ceb7b0e43a5eded",
+    "lightweight_package_sha256": "26014b13b52453d406396c40b1040766a11f1b14ce90973dd93363a4bf327e98",
+    "final_snapshot_validated": true,
+    "live_mac_google_native_verified": false,
+    "google_writes": 0,
+    "native_inference_calls": 0,
+    "dependency_install_performed": false,
+    "dependency_install_performed_during_validation": false,
+    "preinstalled_test_dependencies": {
+      "tomlkit": "0.13.3",
+      "jsonschema": "4.26.0",
+      "google-api-python-client": "2.200.0"
+    },
+    "full_run_jobs": 103,
+    "legacy_run_jobs": 91,
+    "new_run_jobs": 12,
+    "max_concurrent_test_jobs": 6,
+    "six_way_isolated_full_run": true,
+    "reused_prior_run_results": false,
+    "tests": {
+      "tests": 1624,
+      "passed": 1615,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "python": {
+      "tests": 1377,
+      "passed": 1368,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "node": {
+      "tests": 247,
+      "passed": 247,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "legacy": {
+      "tests": 1503,
+      "passed": 1494,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "lightweight_v3": {
+      "tests": 121,
+      "passed": 121,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "lightweight_v3_zero_skips": true,
+    "dependency_matrix": {
+      "legacy_91_jobs": "unchanged published interpreters, optional tomlkit absent; 9 original optional integration skips",
+      "lightweight_12_jobs": "actual tomlkit 0.13.3 supplied; real SDK interpreter for test_google_ports_sdk.py; zero skips"
+    },
+    "legacy_optional_toml_diagnostic": {
+      "status": "pre_existing_legacy_optional_dependency_failures_reproduced",
+      "baseline_commit": "751e14ff9659e0746d439b7740ec4bc9fa863565",
+      "baseline_source_tree_sha256": "a6e4e1dae729aba706253f63b14fde18c4011cccdc947e6af6e024ab40c2096a",
+      "candidate_source_tree_sha256": "f7555a99dc1bb5f2b997cce66bd2262d98d849d70933484a7ceb7b0e43a5eded",
+      "tomlkit_version": "0.13.3",
+      "module": "remote_tests/test_global_config.py",
+      "candidate_module_counts": {
+        "tests": 23,
+        "passed": 20,
+        "failures": 1,
+        "errors": 1,
+        "skipped": 1
+      },
+      "baseline_module_counts": {
+        "tests": 23,
+        "passed": 20,
+        "failures": 1,
+        "errors": 1,
+        "skipped": 1
+      },
+      "identical_test_outcomes": true,
+      "byte_identical_legacy_files": {
+        "remote_tests/test_global_config.py": "84e1cdabdd82d9ae0ce0dadf6feb198d62c6f37e4b8e847d05ddcc3a9f5b0b63",
+        "remote_transport/global_config.py": "9bb84b2c69acf68a03f3effb7bb147506147055ac9233079866cdd90cb803ccd"
+      },
+      "failing_outcomes": [
+        {
+          "id": "test_global_config.ConfigParserIntegrationTests.test_existing_other_providers_profiles_and_safety_settings_preserved",
+          "status": "failed"
+        },
+        {
+          "id": "test_global_config.ConfigParserIntegrationTests.test_merge_restore_preserves_unrelated_new_value_and_comments",
+          "status": "error"
+        }
+      ],
+      "dependency_present_expected_skip": [
+        {
+          "id": "test_global_config.ConfigSafetyTests.test_dependency_missing_fails_closed",
+          "status": "skipped",
+          "reason": "tomlkit present; parser integration covered separately"
+        }
+      ],
+      "full_optional_present_run": {
+        "status": "failed",
+        "jobs": 103,
+        "counts": {
+          "tests": 1624,
+          "passed": 1621,
+          "failures": 1,
+          "errors": 1,
+          "skipped": 1,
+          "expected_failures": 0,
+          "unexpected_successes": 0
+        },
+        "unchanged_tree": true,
+        "failed_jobs": [
+          "remote_tests/test_global_config.py"
+        ]
+      },
+      "decision": "Preserve legacy sources and their previously published optional-dependency-absent environment; use real tomlkit for all new lightweight tests, report legacy dependency-present failures separately. No failed result is reused as passed.",
+      "known_limit": "Optional tomlkit-enabled legacy config path is not validated by the release regression profile and has the two separately reproduced existing failing tests."
+    },
+    "all_optional_dependency_variants_passed": false,
+    "totals_by_suite": {
+      "remote_tests": {
+        "tests": 998,
+        "passed": 989,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 9,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "tests": {
+        "tests": 134,
+        "passed": 134,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "remote_audit/cas": {
+        "tests": 47,
+        "passed": 47,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "remote_audit/drive": {
+        "tests": 48,
+        "passed": 48,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "sdk_tests": {
+        "tests": 3,
+        "passed": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "docs/gemini_setup/tools": {
+        "tests": 37,
+        "passed": 37,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "lite_tests": {
+        "tests": 110,
+        "passed": 110,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "node": {
+        "tests": 247,
+        "passed": 247,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "benchmark": {
+        "tests": 0,
+        "passed": 0,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      }
+    },
+    "skips_by_reason": {
+      "optional tomlkit unavailable; real parser integration NOT VERIFIED": 9
+    },
+    "new_test_modules": [
+      "lite_tests/independent/test_docs_audit.py",
+      "lite_tests/independent/test_gateway_audit.py",
+      "lite_tests/independent/test_migration_audit.py",
+      "lite_tests/independent/test_wire_audit.py",
+      "lite_tests/independent/test_worker_audit.py",
+      "lite_tests/test_core.py",
+      "lite_tests/test_gateway.py",
+      "lite_tests/test_google_ports.py",
+      "lite_tests/test_google_ports_sdk.py",
+      "lite_tests/test_launcher.py",
+      "native_connector/lite_cell.test.js",
+      "native_connector/lite_independent_roundtrips.test.js"
+    ],
+    "real_sdk_modules": {
+      "lite_tests/test_google_ports_sdk.py": 2,
+      "remote_tests/test_google_read_recovery.py": 29,
+      "remote_tests/test_google_sdk_concurrency.py": 23,
+      "sdk_tests/test_google_sdk_independent.py": 3
+    },
+    "real_sdk_modules_zero_skips": true,
+    "full_run_seconds": 209.692,
+    "full_snapshot_sha256": "cf38fb7c47875e1da41ce30c7c4f98123ae6012ef148e30bd893e1426013ce02",
+    "tree_unchanged_during_run": true,
+    "final_manifest_verified": true,
+    "lightweight_runtime_files": 30,
+    "actual_package_identity_verifier_passed": true,
+    "legacy_runtime_byte_modes_preserved": true,
+    "test_inventory_unchanged_during_run": true,
+    "source_cache_artifacts": [],
+    "manifest_entries": 322,
+    "syntax_checks": {
+      "python": 179,
+      "node": 28,
+      "shell": 12,
+      "json": 26
+    },
+    "network_attempts_blocked": 0,
+    "leaked_subprocesses": 0,
+    "per_job_descendant_supervision": true,
+    "network_guards": "Python audit hook, Node hooks, inherited native socket guard; local Python fixture loopback only",
+    "toml_parser_integration_verified": false,
+    "lightweight_toml_parser_integration_verified": true,
+    "legacy_optional_toml_parser_verified": false,
+    "offline_helper_operation_ledger": {
+      "status": "passed",
+      "classification": "offline real JS+Python helpers with synthetic connector and native boundaries",
+      "cold_from_prepared_inbox": {
+        "helper": 11,
+        "source_load": 1,
+        "docs_get": 3,
+        "docs_write": 4,
+        "metadata": 1,
+        "raw_fetch": 1,
+        "materialize": 1,
+        "upload": 1,
+        "cell_emission": 5
+      },
+      "warm_second_request_same_child": {
+        "helper": 5,
+        "source_load": 0,
+        "docs_get": 1,
+        "docs_write": 2,
+        "metadata": 1,
+        "raw_fetch": 1,
+        "materialize": 1,
+        "upload": 1,
+        "cell_emission": 2
+      },
+      "actual_native_platform_calls": 0,
+      "synthetic_spawn_and_handoff_boundaries": 2,
+      "helper_operations": [
+        "parent-inspect",
+        "parent-prepare",
+        "parent-reserved",
+        "parent-admit",
+        "parent-admitted",
+        "child-takeover",
+        "child-prepare",
+        "child-expose",
+        "child-save",
+        "child-publish",
+        "child-accepted",
+        "child-prepare",
+        "child-expose",
+        "child-save",
+        "child-publish",
+        "child-accepted"
+      ],
+      "control_phases": [
+        "SPAWN_RESERVED",
+        "ADMITTED",
+        "BEGIN",
+        "RESULT",
+        "BEGIN",
+        "RESULT"
+      ],
+      "additional_accounting": {
+        "parent_initialize": 1,
+        "actual_argument_result_capture": "not measured: in-process test file write",
+        "model_input_read": "not measured: fixture validates file path only",
+        "actual_output_file_write": "not measured: in-process synthetic output",
+        "google_and_mac_latency": "not measured"
+      }
+    },
+    "legacy_offline_benchmarks": [
+      {
+        "mode": "offline_deterministic_virtual_latencies_only",
+        "sequential": {
+          "concurrency": 1,
+          "virtual_total_ms": 866,
+          "rpc_calls": 12,
+          "maximum_concurrent_rpc_calls": 1,
+          "fresh_control_reads": 2,
+          "external_writes": 4
+        },
+        "bounded_parallel": {
+          "concurrency": 3,
+          "virtual_total_ms": 444,
+          "rpc_calls": 12,
+          "maximum_concurrent_rpc_calls": 3,
+          "fresh_control_reads": 2,
+          "external_writes": 4
+        },
+        "saved_virtual_ms": 422,
+        "ratio": 1.95,
+        "claim": "Scheduling overlap only; unchanged tool/read/write counts. No live latency evidence."
+      }
+    ],
+    "known_limits": [
+      "Two legacy optional-tomlkit-present config tests fail identically on the published baseline and unchanged candidate; those diagnostic failures are preserved separately. Legacy release-profile tests retain their nine original optional TOML skips. V3 real-TOML tests all pass with zero skips.",
+      "Tomlkit 0.13.3 was already installed in a separate test dependency directory; this frozen validation run installed no dependencies.",
+      "Mac native UI, real Google writes, native admission/inference, live client traffic and end-to-end activation were not run.",
+      "The helper ledger and benchmark use synthetic native/provider boundaries; they are operation counts/offline timings, not actual native model or live-service latency measurements.",
+      "Whole private-storage rollback remains outside the documented intact-storage assumption."
+    ]
+  },
+  "lightweight_toml_parser_integration_verified": true,
+  "legacy_optional_toml_parser_verified": false
 }

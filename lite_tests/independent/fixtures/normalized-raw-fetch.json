@@ -1,0 +1,60 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "Synthetic raw-file metadata summary, no payload bytes"
+    }
+  ],
+  "structuredContent": {
+    "content": "",
+    "title": "fixture.json",
+    "url": "https://drive.google.com/file/d/fixture-request-file/view?usp=drivesdk",
+    "file_name": "fixture.json",
+    "mime_type": "application/json",
+    "file_ext": "json",
+    "b64_string": null,
+    "id": "fixture-request-file",
+    "parent_ids": [
+      "fixture-folder"
+    ],
+    "drive_id": null,
+    "created_time": "2026-10-02T00:00:00Z",
+    "modified_time": "2026-10-02T00:00:00Z",
+    "is_empty": null,
+    "file_uri": {
+      "download_url": "https://example.invalid/synthetic-file-download",
+      "file_id": "sediment://file_fixture_raw",
+      "mime_type": "application/json",
+      "file_name": "fixture.json"
+    },
+    "file_size_bytes": 321,
+    "display_url": "https://drive.google.com/file/d/fixture-request-file/view?usp=drivesdk",
+    "display_title": "fixture.json",
+    "structuredContent": {
+      "title": "fixture.json",
+      "content": "",
+      "id": "fixture-request-file",
+      "parent_ids": [
+        "fixture-folder"
+      ],
+      "drive_id": null,
+      "created_time": "2026-10-02T00:00:00Z",
+      "modified_time": "2026-10-02T00:00:00Z",
+      "is_empty": null,
+      "mime_type": "application/json",
+      "file_name": "fixture.json",
+      "file_size_bytes": 321,
+      "url": "https://drive.google.com/file/d/fixture-request-file/view?usp=drivesdk",
+      "file_uri": {
+        "download_url": "https://example.invalid/synthetic-file-download",
+        "file_id": "sediment://file_fixture_raw",
+        "mime_type": "application/json",
+        "file_name": "fixture.json",
+        "size": "321"
+      },
+      "download_url": "https://example.invalid/synthetic-file-download",
+      "file_id": "sediment://file_fixture_raw"
+    }
+  },
+  "isError": false
+}

@@ -1,0 +1,125 @@
+{
+  "contract": "dots-lite-package/3",
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha256": "9246d18641b9e8294e4ef4a06213d5d8dab43ac1685b58cafe1383c5f055def1"
+    },
+    {
+      "path": "LIGHTWEIGHT.command",
+      "sha256": "59d66cbcee8ec2abb8b82fe22d62c387d2f7d849b69ac24548e286e7b168b2ee"
+    },
+    {
+      "path": "OPENAI_CODEX_LICENSE",
+      "sha256": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc"
+    },
+    {
+      "path": "OPENAI_CODEX_NOTICE",
+      "sha256": "9d71575ecfd9a843fc1677b0efb08053c6ba9fd686a0de1a6f5382fd3c220915"
+    },
+    {
+      "path": "docs/LIGHTWEIGHT_NATIVE_CONTROLLER.md",
+      "sha256": "8961bd28f45c228039a2252f7a894a34f01f3dd33bc9f9b5d53a319be5332f25"
+    },
+    {
+      "path": "docs/LIGHTWEIGHT_QUICKSTART.zh-CN.md",
+      "sha256": "ca1f10fd13ccfa7d7dae84e7bd17611f228138c7559e1b573829417c31db7700"
+    },
+    {
+      "path": "dots_lite/__init__.py",
+      "sha256": "b94783fe314e0ce26ad089203f68062153cf1d88240a1d5a83bf4c2bdaff81f2"
+    },
+    {
+      "path": "dots_lite/cli.py",
+      "sha256": "114c51061d98a0c468667bd6d7b3f217dfb9dd63717b843a01f79af8c1137631"
+    },
+    {
+      "path": "dots_lite/client_catalog.py",
+      "sha256": "caa486ef16ff800b6e56c699c92a578f923b36aa9301caba02631066c627faa8"
+    },
+    {
+      "path": "dots_lite/codex_instructions_0_159_2.txt",
+      "sha256": "ac8ae107a0d72fe3476b430afb161ea4e67da2e446d778aefc44828160559807"
+    },
+    {
+      "path": "dots_lite/config_transaction.py",
+      "sha256": "9cb6ad32683006647d5bd66e26eec91ef229075821f9bc63bbed20146da9608d"
+    },
+    {
+      "path": "dots_lite/docs.py",
+      "sha256": "8857683f5b66939a0a3179ed7670aee618d83f383f2ec82b48ffadd6facb8c84"
+    },
+    {
+      "path": "dots_lite/environment.py",
+      "sha256": "74947013e6f046fe9f3cb90ff9e5957cbaf6fa470a426fdaedcae31020d5ae32"
+    },
+    {
+      "path": "dots_lite/gateway.py",
+      "sha256": "97f05cffe579b4788c250058316c2aab61b0175aa80e1d32df06a7d89d3f9556"
+    },
+    {
+      "path": "dots_lite/google_ports.py",
+      "sha256": "ff6f120700666ee373a2e2c8a5f3c66e1adde8a296c5690630fd5e827d3db2a8"
+    },
+    {
+      "path": "dots_lite/launcher.py",
+      "sha256": "3fb5197aa12bf53d71ca796c64bc866e771f934f9e9c8432d0b96b51f0e990cd"
+    },
+    {
+      "path": "dots_lite/native_capabilities.json",
+      "sha256": "5d154793bd49c48dff1ffac041fbd6b3d141cce7c664893f73d9559febef9bfb"
+    },
+    {
+      "path": "dots_lite/package.py",
+      "sha256": "3179076d7cf6275ad2fd358f21048db09aedd809fcd88d9b51a75d2349934b9d"
+    },
+    {
+      "path": "dots_lite/package_identity.py",
+      "sha256": "69759a2d35baf659640adcc7c46393c3d371c11873b3f9439cd901a596f14307"
+    },
+    {
+      "path": "dots_lite/private_io.py",
+      "sha256": "49a03d349a9a0df7c3e07e214dc9b08b260efe736831075a21f7de4044477f4d"
+    },
+    {
+      "path": "dots_lite/protocol.py",
+      "sha256": "6a21540b8e93ab2bb4b95f89b2dd67d3ddc57ece8b0adae1c464da2d1ab387a8"
+    },
+    {
+      "path": "dots_lite/storage.py",
+      "sha256": "bd45c705d90f7b786c7d63c041fb3f95cc577116502636323416debbd3b5f3ae"
+    },
+    {
+      "path": "dots_lite/ui.py",
+      "sha256": "0a0b8cf447e76cbfabc3282e6be42553db7c1ab8d4d95b76bd95b939819a3e16"
+    },
+    {
+      "path": "dots_lite/wire.py",
+      "sha256": "cbfbc45f71a177275ad0938b57858b7633d96c9285f6f8cb0e871a3f81e3093f"
+    },
+    {
+      "path": "dots_lite/worker.py",
+      "sha256": "d586042cd985b03d220c302cc39b60c5077cc6997a26d40705db02ee8d2bfdab"
+    },
+    {
+      "path": "native_connector/lite_cell.js",
+      "sha256": "e9c8025b7c482b0191db7b360ba9dcc42217e36d45d3e1e1c87a3fac12892044"
+    },
+    {
+      "path": "requirements-global.txt",
+      "sha256": "b1bd52072e01461f718b1a4d5f2b66832de5f0e51ba7c5b709d988d76842d9de"
+    },
+    {
+      "path": "requirements-google-example.txt",
+      "sha256": "e37ad0fefbd29350513abe1723819093038e2aba8768ca3b387a79a6160c4f98"
+    },
+    {
+      "path": "requirements-remote.txt",
+      "sha256": "a905acf71041742dc3307639043a8f2ebceff6e66af24bacc117d4e12da9ec14"
+    },
+    {
+      "path": "requirements-router-mac.txt",
+      "sha256": "efba5814c56839b04e749153251672d379e713da18fca1ce47be294d6b1719b7"
+    }
+  ]
+}

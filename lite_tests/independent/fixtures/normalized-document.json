@@ -1,0 +1,46 @@
+{
+  "structuredContent": {
+    "body": null,
+    "documentId": "fixture-lite-doc",
+    "document_url": "https://docs.google.com/document/d/fixture-lite-doc/edit",
+    "revisionId": "revision-before",
+    "suggestionsViewMode": "SUGGESTIONS_INLINE",
+    "title": null,
+    "url": null,
+    "tabs": [{
+      "body": {"content": [
+        {"endIndex": 1, "sectionBreak": {"sectionStyle": {"columnSeparatorStyle": "NONE", "contentDirection": "LEFT_TO_RIGHT", "sectionType": "CONTINUOUS"}}},
+        {"startIndex": 1, "endIndex": 6, "paragraph": {
+          "paragraphStyle": {"direction": "LEFT_TO_RIGHT", "namedStyleType": "NORMAL_TEXT"},
+          "elements": [
+            {"startIndex": 1, "endIndex": 3, "textRun": {"content": "開始", "textStyle": {}}},
+            {"startIndex": 3, "endIndex": 5, "textRun": {"content": "😀", "textStyle": {}}},
+            {"startIndex": 5, "endIndex": 6, "textRun": {"content": "\n", "textStyle": {}}}
+          ]
+        }},
+        {"startIndex": 6, "endIndex": 14, "paragraph": {
+          "paragraphStyle": {"direction": "LEFT_TO_RIGHT", "namedStyleType": "NORMAL_TEXT"},
+          "elements": [
+            {"startIndex": 6, "endIndex": 9, "textRun": {"content": "漢字と", "textStyle": {}}},
+            {"startIndex": 9, "endIndex": 13, "textRun": {"content": "🚀𝄞", "textStyle": {}}},
+            {"startIndex": 13, "endIndex": 14, "textRun": {"content": "\n", "textStyle": {}}}
+          ]
+        }},
+        {"startIndex": 14, "endIndex": 18, "paragraph": {
+          "paragraphStyle": {"direction": "LEFT_TO_RIGHT", "namedStyleType": "NORMAL_TEXT"},
+          "elements": [{"startIndex": 14, "endIndex": 18, "textRun": {"content": "end\n", "textStyle": {}}}]
+        }}
+      ]},
+      "documentId": "fixture-lite-doc",
+      "documentStyle": {},
+      "document_url": "https://docs.google.com/document/d/fixture-lite-doc/edit",
+      "footers": null, "footnotes": null, "headers": null, "iconEmoji": null,
+      "index": 0, "inlineObjects": null, "lists": null, "namedRanges": null,
+      "namedStyles": {}, "nestingLevel": null, "parentTabId": null,
+      "positionedObjects": null, "suggestedDocumentStyleChanges": null,
+      "suggestedNamedStylesChanges": null, "tabId": "t.fixture", "title": "Synthetic tab"
+    }]
+  },
+  "content": [{"type": "text", "text": "Synthetic connector summary, not an authoritative resource"}],
+  "isError": false
+}

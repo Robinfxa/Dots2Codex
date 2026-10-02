@@ -1,0 +1,11 @@
+{
+  "structuredContent": {
+    "documentId": "fixture-lite-doc",
+    "document_url": "https://docs.google.com/document/d/fixture-lite-doc/edit",
+    "revisionId": "revision-after",
+    "replies": [{}, {}],
+    "writeControl": {"requiredRevisionId": "revision-after", "targetRevisionId": null}
+  },
+  "content": [{"type": "text", "text": "Synthetic connector summary"}],
+  "isError": false
+}
