@@ -29,6 +29,8 @@ from urllib.parse import urlsplit
 from .backend import fsync_dir, read_private_file
 from .codex_catalog import catalog_for_selection
 from .global_timing import controller_active, TIMING
+from .global_response import (GLOBAL_RESPONSE_WAIT_SECONDS, RESPONSE_DEADLINE_HEADER,
+                              ResponseDeadline, parse_response_deadline)
 from .model import Object, ProtocolError, canonical, hash_bytes, require, MAX_WIRE_BYTES
 from .selection import (load_catalog, select, validate_selection, validate_request_selection,
                         validate_admission, spawn_arguments, pin_selection)
@@ -467,7 +469,39 @@ class Store:
             require(now<deadline,'admission_expired_no_inference_dispatched')
             return dict(route),deadline
 
-    def request_start(self, rid, digest, *, admission_deadline=None):
+    def _response_deadline_caps(self, db, rid):
+        row=db.execute('SELECT * FROM routes WHERE id=?',(rid,)).fetchone()
+        activation=(db.execute('SELECT * FROM activations WHERE id=?',(row['generation'],)).fetchone()
+                    if row is not None else db.execute('SELECT * FROM activations WHERE id=?',
+                        (json.loads(db.execute("SELECT value FROM meta WHERE key='current_generation'").fetchone()['value']),)).fetchone())
+        require(activation is not None,'unknown_activation')
+        controller=self._live_controller(db)
+        caps=[activation['expires'],controller['expires']]
+        if row is not None:
+            caps.append(row['expires'])
+            if row['admission'] is not None:
+                caps.append(json.loads(row['admission'])['body']['payload']['expires'])
+        if controller['mode']=='native_google_v2':
+            checkpoint=json.loads(db.execute("SELECT value FROM meta WHERE key='native_controller_checkpoint'").fetchone()['value'])
+            require(checkpoint.get('activation_id')==activation['id'] and
+                    checkpoint.get('activation_expires') is not None,'global_response_authority_missing')
+            caps.append(checkpoint['activation_expires'])
+            if row is not None:
+                saved=db.execute('SELECT value FROM meta WHERE key=?',('native_response_cap:'+rid,)).fetchone()
+                # Pending admission may not have an authenticated child yet.
+                require(saved is not None or row['state']=='pending','global_response_authority_missing')
+                if saved is not None:
+                    value=json.loads(saved['value'])
+                    require(value['activation_id']==activation['id'] and value['controller_epoch']==controller['epoch'],
+                            'global_response_authority_mismatch')
+                    caps.extend((value['bootstrap_expires'],value['handoff_expires']))
+        return caps
+
+    def response_deadline_caps(self, rid):
+        """Read authenticated caps only. This does not grant a new wait budget."""
+        with self.transaction() as db:return self._response_deadline_caps(db,rid)
+
+    def request_start(self, rid, digest, *, admission_deadline=None, response_deadline=None):
         cfg=self.config()
         with self.transaction() as db:
             if admission_deadline is not None:
@@ -488,9 +522,13 @@ class Store:
             require(row['used']<cfg['max_requests'],'route_request_budget_exhausted')
             pin=json.loads(row['admission'])['body']['payload']
             require(row['used']<pin['max_requests'],'pin_request_budget_exhausted')
+            budget=response_deadline or ResponseDeadline()
+            budget.tighten(*self._response_deadline_caps(db,rid))
+            budget.remaining('gateway_wait_budget_expired')
+            db.execute('INSERT INTO meta VALUES(?,?)',('response_deadline:'+rid+':'+digest,json.dumps(budget.checkpoint())))
             db.execute('INSERT INTO requests VALUES(?,?,?,?,NULL,NULL)',(rid,digest,'dispatch_intent',time.time()))
             db.execute('UPDATE routes SET used=used+1,last_used=? WHERE id=?',(time.time(),rid))
-            return {'endpoint':row['endpoint']}
+            return {'endpoint':row['endpoint'],'response_deadline':budget.expires}
 
     def record_backend_response(self,rid,digest,response_id):
         require(isinstance(response_id,str) and re.fullmatch(r'resp_[A-Za-z0-9_-]{1,128}',response_id),'invalid_backend_response_id')
@@ -538,10 +576,10 @@ class Store:
 
 
 class Gateway:
-    def __init__(self, store, *, request_deadline=180, max_connections=16, admission_wait=0):
+    def __init__(self, store, *, request_deadline=GLOBAL_RESPONSE_WAIT_SECONDS, max_connections=16, admission_wait=0):
         self.store=store; self.closed=False
         require(type(max_connections) is int and 1<=max_connections<=32,'invalid_connection_limit')
-        require(type(request_deadline) in (int,float) and .1<=request_deadline<=300,'invalid_request_deadline')
+        require(type(request_deadline) in (int,float) and .1<=request_deadline<=GLOBAL_RESPONSE_WAIT_SECONDS,'invalid_request_deadline')
         require(type(admission_wait) in (int,float) and 0<=admission_wait<=1800,'invalid_admission_wait')
         self.admission_wait=admission_wait
         self.request_deadline=request_deadline; self.route_locks={};self.route_completions={}; self.route_lock_guard=threading.Lock()
@@ -644,6 +682,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_OPTIONS(self):self.error('browser_access_not_supported',405)
     def do_POST(self):
         started=False;acquired=False;conn=None;lock=None;admission_waiting=False;response_id=None;admission_deadline=None
+        budget=None;guards=contextlib.ExitStack()
         try:
             owner=self.server.owner;store=owner.store
             control=re.fullmatch(r'/control/v1/(join|heartbeat|claim|begin|admit|attach|unknown|status|route|disable)',self.path)
@@ -664,6 +703,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.json(result)
             match=re.fullmatch(r'/activations/('+HEX+r')/v1/responses',self.path)
             require(match is not None,'unsupported_endpoint')
+            budget=ResponseDeadline(parse_response_deadline(self.headers),seconds=owner.request_deadline)
+            self.connection.settimeout(budget.remaining('gateway_wait_budget_expired'))
+            guards.enter_context(budget.watch_socket(self.connection))
             identity=self.identity();body=self.body()
             # Select and validate the complete payload BEFORE binding a thread.
             require(isinstance(body,dict) and isinstance(body.get('reasoning'),dict),'explicit_reasoning_effort_required')
@@ -672,9 +714,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             from .wire import validate_remote_request
             validate_remote_request(body,'responses_tools')
             route=store.admission(match[1],identity,selected)
-            rid=route['id'];digest=hash_bytes(canonical(body));response_id='resp_gw_'+hash_bytes(canonical({'route':rid,'request':digest}))
-            lock=owner.lock_for(rid);acquired=lock.acquire(timeout=.1)
-            if not acquired and owner.completion_for(rid).is_set():acquired=lock.acquire(timeout=5.9)
+            rid=route['id'];budget.tighten(*store.response_deadline_caps(rid))
+            digest=hash_bytes(canonical(body));response_id='resp_gw_'+hash_bytes(canonical({'route':rid,'request':digest}))
+            lock=owner.lock_for(rid);acquired=lock.acquire(timeout=min(.1,budget.remaining('gateway_wait_budget_expired')))
+            if not acquired and owner.completion_for(rid).is_set():acquired=lock.acquire(timeout=min(5.9,budget.remaining('gateway_wait_budget_expired')))
+            budget.remaining('gateway_wait_budget_expired')
             require(acquired,'thread_request_inflight')
             if route['state']!='ready' and owner.admission_wait>0 and route['state'] in ('pending','claimed','spawn_intent','admitted'):
                 self.send_response(200);self.send_header('Content-Type','text/event-stream');self.send_header('Cache-Control','no-cache')
@@ -685,6 +729,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 until=time.monotonic()+max(0,admission_deadline-time.time());heartbeat=0
                 while route['state']!='ready':
                     require(not owner.closed,'gateway_stopping')
+                    budget.remaining('gateway_wait_budget_expired')
                     require(time.monotonic()<until,'admission_wait_expired_no_inference_dispatched')
                     require(route['expires']>time.time(),'admission_expired_no_inference_dispatched')
                     require(route['state'] in ('pending','claimed','spawn_intent','admitted'),'route_'+route['state'])
@@ -707,7 +752,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             require(route['state']=='ready','admission_pending' if route['state'] in ('pending','claimed','spawn_intent','admitted') else 'route_'+route['state'])
             if socket_select.select([self.connection],[],[],0)[0] and not self.connection.recv(1,socket.MSG_PEEK):
                 raise ProtocolError('client_disconnected_before_dispatch')
-            dispatch=store.request_start(rid,digest,admission_deadline=admission_deadline)
+            budget.remaining('gateway_wait_budget_expired')
+            dispatch=store.request_start(rid,digest,admission_deadline=admission_deadline,response_deadline=budget)
             if 'replay' in dispatch:
                 already_created=started
                 if not started:
@@ -719,22 +765,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 owner.completion_for(rid).set()
                 self.wfile.write(replay);self.wfile.flush();return
             # One durable dispatch intent. No reconnect/retry even if send fails.
-            execution_until=time.monotonic()+owner.request_deadline
-            port=endpoint(dispatch['endpoint']);conn=http.client.HTTPConnection('127.0.0.1',port,timeout=owner.request_deadline)
-            conn.request('POST','/v1/responses',body=canonical(body),headers={**identity,'Content-Type':'application/json'})
-            response_socket=conn.sock  # keep the actual socket before http.client detaches it for Connection: close
-            response=conn.getresponse()
+            budget.tighten(dispatch['response_deadline'])
+            port=endpoint(dispatch['endpoint']);conn=http.client.HTTPConnection('127.0.0.1',port,
+                timeout=budget.remaining('gateway_wait_budget_expired'))
+            conn.connect();conn.auto_open=0;response_socket=conn.sock
+            guards.enter_context(budget.watch_socket(response_socket))
+            response_socket.settimeout(budget.remaining('gateway_wait_budget_expired'))
+            conn.request('POST','/v1/responses',body=canonical(body),headers={**identity,'Content-Type':'application/json',
+                RESPONSE_DEADLINE_HEADER:str(budget.expires)})
+            # Capture the socket before Connection: close detaches it from conn.
+            response_socket.settimeout(budget.remaining('gateway_wait_budget_expired'))
+            response=conn.getresponse();budget.remaining('gateway_wait_budget_expired')
             require(response.status==200 and response.getheader('Content-Type','').split(';')[0]=='text/event-stream',
                     'downstream_response_unknown')
             already_created=started
             if not started:
                 self.send_response(200);self.send_header('Content-Type','text/event-stream');self.send_header('Cache-Control','no-cache')
                 self.send_header('Connection','close');self.end_headers();started=True
-            chunks=[];size=0;buffer=b'';backend_id=None;until=execution_until
+            chunks=[];size=0;buffer=b'';backend_id=None;downstream_failed=False
             while True:
-                require(time.monotonic()<until,'gateway_wait_budget_expired')
-                if response_socket is not None:response_socket.settimeout(max(.01,until-time.monotonic()))
-                chunk=response.read1(8192)
+                response_socket.settimeout(budget.remaining('gateway_wait_budget_expired'))
+                chunk=response.read1(8192);budget.remaining('gateway_wait_budget_expired')
                 if not chunk:break
                 size+=len(chunk);require(size<=MAX_RESPONSE_BYTES,'response_too_large')
                 buffer+=chunk
@@ -747,6 +798,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         if backend_id is None:store.record_backend_response(rid,digest,seen_id);backend_id=seen_id
                     if rewritten:
                         if rewritten.startswith(b'event: response.completed\n'):owner.completion_for(rid).set()
+                        if rewritten.startswith(b'event: response.failed\n'):downstream_failed=True
+                        self.connection.settimeout(budget.remaining('gateway_wait_budget_expired'))
                         chunks.append(rewritten);self.wfile.write(rewritten);self.wfile.flush()
             require(not buffer,'truncated_downstream_sse_frame')
             # Include a normalized created event in cached output even if it was
@@ -754,12 +807,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if already_created:
                 created={'type':'response.created','response':{'id':response_id,'status':'in_progress'}}
                 chunks.insert(0,b'event: response.created\ndata: '+canonical(created)+b'\n\n')
-            store.request_finish(rid,digest,b''.join(chunks))
+            outcome=store.request_finish(rid,digest,b''.join(chunks))
+            require(outcome!='unknown' or downstream_failed,'downstream_response_incomplete')
         except ProtocolError as exc:
-            if started and admission_waiting:
+            if started:
                 try:
                     failure={'type':'response.failed','response':{'id':response_id,
-                        'error':{'code':str(exc),'message':'No inference was dispatched. The admission may still need reconciliation.'}}}
+                        'error':{'code':str(exc),'message':('No inference was dispatched. The admission may still need reconciliation.'
+                            if admission_waiting else 'Delivery remains uncertain; recover the same request ID without another dispatch.')}}}
                     self.wfile.write(b'event: response.failed\ndata: '+canonical(failure)+b'\n\n');self.wfile.flush()
                 except OSError:pass
             if not started:
@@ -770,6 +825,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 try:self.error('gateway_io_outcome_unknown',503)
                 except OSError:pass
         finally:
+            guards.close()
             if conn:conn.close()
             if acquired:owner.completion_for(rid).clear();lock.release()
             self.close_connection=True

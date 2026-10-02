@@ -25,6 +25,7 @@ from .backend import read_private_file
 from .codex_catalog import CODEX_VERSION, CODEX_SOURCE_COMMIT
 from .global_gateway import (Store, PROTOCOL, endpoint, global_catalog, private_dir,
                              private_write, probe, route_key, strict_json)
+from .global_response import GLOBAL_RESPONSE_WAIT_SECONDS, ResponseDeadline
 from .model import Object, ProtocolError, canonical, hash_bytes, require
 from .mac_environment import private_lock
 from .selection import pin_selection, validate_admission
@@ -32,7 +33,7 @@ from .selection import pin_selection, validate_admission
 CONTRACT='dots-global-pilot/1'
 CONFIG_TRIAL='client-config-trial/1'
 SETUP_SECONDS=1800
-PLAN_SECONDS=600
+PLAN_SECONDS=GLOBAL_RESPONSE_WAIT_SECONDS
 PROOF_SECONDS=300
 VERSION_SECONDS=1800
 MAX_EVIDENCE=8*1024*1024
@@ -335,6 +336,7 @@ def _prepare_preflight(store,*,version_evidence,previous_plan_id=None,prewarm=No
     """
     store=_store(store);_versions(store,version_evidence);info,binding,controller=_live(store)
     now=time.time();identifier=secrets.token_hex(16);request_nonce=secrets.token_hex(24);expected_nonce=secrets.token_hex(24)
+    budget=ResponseDeadline(binding['activation']['expires'],controller['expires'],issued_at=now)
     require(request_nonce!=expected_nonce,'pilot_nonce_collision')
     identity={'session-id':'dots-pilot-'+identifier,'thread-id':str(uuid.uuid4())};history=[];route_created=None
     if prewarm is not None:
@@ -361,7 +363,10 @@ def _prepare_preflight(store,*,version_evidence,previous_plan_id=None,prewarm=No
     body={'model':info['selection']['model'],'reasoning':{'effort':info['selection']['reasoning_effort']},
           'stream':True,'tools':[], 'input':history+[{'type':'message','role':'user','content':[{'type':'input_text',
           'text':'PILOT preflight challenge '+request_nonce+'. Reply with exactly this text and nothing else: '+expected_nonce}]}]}
-    plan={'id':identifier,'created':now,'expires':min(now+PLAN_SECONDS,binding['activation']['expires'],controller['expires']),
+    rid=route_key(info['generation'],identity)
+    budget.tighten(*store.response_deadline_caps(rid))
+    budget.remaining('pilot_preflight_expired')
+    plan={'id':identifier,'created':now,'expires':budget.expires,'response_deadline':budget.checkpoint(),
           'binding':binding,'identity':identity,'body':body,'request_nonce':request_nonce,'expected_nonce':expected_nonce,
           'route_id':route_key(info['generation'],identity),'request_digest':hash_bytes(canonical(body)),
           'version_evidence':copy.deepcopy(version_evidence),'previous_plan_id':previous_plan_id,'route_created':route_created}
@@ -369,12 +374,20 @@ def _prepare_preflight(store,*,version_evidence,previous_plan_id=None,prewarm=No
         with store.transaction() as db:
             require(db.execute('SELECT 1 FROM routes WHERE id=?',(plan['route_id'],)).fetchone() is None,'pilot_route_already_exists')
     _save(store,'plan',plan)
-    return {k:copy.deepcopy(plan[k]) for k in ('id','identity','body','request_nonce','expected_nonce','route_id','request_digest','expires')} | {'plan_id':identifier,'generation':info['generation']}
+    return {k:copy.deepcopy(plan[k]) for k in ('id','created','identity','body','request_nonce','expected_nonce','route_id','request_digest','expires','response_deadline')} | {'plan_id':identifier,'generation':info['generation']}
+
+
+def _check_plan_deadline(plan):
+    # Verification consumes the same signed issuance budget as the POST. A
+    # wall-only check could revive expired evidence after rollback or reboot.
+    require(plan['created']<=time.time()<plan['expires'],'pilot_preflight_expired')
+    if 'response_deadline' in plan:
+        ResponseDeadline.restore(plan['response_deadline']).remaining('pilot_preflight_expired')
 
 
 def _fresh_plan(store,identifier):
-    plan=_load(store,'plan',identifier);now=time.time()
-    require(plan['created']<=now<plan['expires'],'pilot_preflight_expired')
+    plan=_load(store,'plan',identifier)
+    _check_plan_deadline(plan)
     _versions(store,plan['version_evidence']);info,binding,controller=_live(store)
     require(binding==plan['binding'],'pilot_activation_or_controller_changed')
     require(plan['request_digest']==hash_bytes(canonical(plan['body']))
@@ -463,7 +476,9 @@ def verify_preflight(store,plan_id,*,queue_state,join_code):
            'request':request,'queue_root':queue.root_of(state),'queue_root_sha256':queue.root_hash(state),
            'queue_state_sha256':hash_bytes(canonical(state)),'ready':copy.deepcopy(demand['ready']),
            'ready_sha256':hash_bytes(canonical(demand['ready'])),'production_ready':False}
+    _check_plan_deadline(plan)
     _save(store,'proof',proof)
+    _check_plan_deadline(plan)
     return {'proof_id':proof['id'],'expires':proof['expires'],'route_id':route['id'],'generation':info['generation'],
             'native_task_id':route['native_task'],'request_digest':plan['request_digest'],'production_ready':False}
 
@@ -497,6 +512,7 @@ def require_pilot(state_dir,proof_id,cli_version,desktop_version,*,desktop_app=N
     route,pin,request=_request(store,plan,controller)
     require({k:route[k] for k in proof['route']}==proof['route'] and request==proof['request'],
             'pilot_completed_route_evidence_changed')
+    _check_plan_deadline(plan)
     return {**info,'pilot_proof_id':proof_id,'pilot_ready':True,'production_ready':False,'ready_for_config':False,
             'client_evidence_profile':profile,'desktop_compatibility_verified':False,
             'client_compatibility_verified':False,'config_target':versions.get('config_target'),

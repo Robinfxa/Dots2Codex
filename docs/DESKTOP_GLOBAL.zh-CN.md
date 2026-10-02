@@ -45,9 +45,9 @@ Global restore 使用私有备份撤回本次受管设置。原文件未被其�
 
 ## 新激活的预检准备顺序
 
-预检先预留唯一专用 route，等待真实子任务完成 v3 配对、WORKER_POLLING 和本地 facade 绑定；此时不发送模型 HTTP 请求。route ready 后重新核验同一客户端、配置目标和源码，再创建 600 秒 nonce plan 并只发送一次 POST。失败或未知结果不重发、不新建替代子任务。
+预检先预留唯一专用 route，等待真实子任务完成 v3 配对、WORKER_POLLING 和本地 facade 绑定；此时不发送模型 HTTP 请求。route ready 后重新核验同一客户端、配置目标和源码，再创建至多 900 秒（15 分钟）的 nonce plan 并只发送一次 POST。响应预算从 plan 签发开始，连接、发送、等待响应头及读取响应共用同一个绝对截止时间；网关和 facade 只能继续缩短它，不能逐层重置。原签名 activation、route/pin、controller lease、子任务 handoff/bootstrap 和 plan 中更早的到期时间仍优先。失败或未知结果不重发、不新建替代子任务。
 
-新桌面激活的准备和子任务 bootstrap 上限为 1800 秒（30 分钟），并受原签名 activation、controller 和 route 到期时间约束。它是安全上限，不是预计等待时间。新激活的 controller heartbeat freshness 为 900 秒（15 分钟），目标心跳间隔仍为 25 秒；600 秒 POST、600 秒 nonce plan、300 秒 proof 不变。旧的 180 秒签名根由新包拒绝，必须重新激活；不修改旧签名根、延长旧 lease 或重复旧请求。窗口到期需要保留证据、Stop 后显式新激活。Continue 的 180 秒 UI 等待结束不代表后台准备已失败，可查看当前准备阶段及 setup_expires。
+新桌面激活的准备和子任务 bootstrap 上限为 1800 秒（30 分钟），并受原签名 activation、controller 和 route 到期时间约束。它是安全上限，不是预计等待时间。新激活的 controller heartbeat freshness 为 900 秒（15 分钟），目标心跳间隔仍为 25 秒；响应等待与 nonce plan 共用独立的 900 秒上限；它不由 heartbeat 续期，300 秒 proof 不变。旧的 180 秒签名根由新包拒绝，必须重新激活；不修改旧签名根、延长旧 lease 或重复旧请求。既有 plan 的原截止时间保持不变，不会就地延长。响应窗口到期、EOF 未完成或传输失败均保留一次尝试的证据，不会自动重放；需要 Stop 后显式新激活。Continue 的 180 秒 UI 等待结束不代表后台准备或响应等待已失败，可查看当前阶段及 setup_expires。失败状态只输出固定错误码、阶段及耗时/预算数字，不输出 provider 原始异常、提示词或 JOIN/凭据。
 
 
 普通新桌面 thread 的首个请求也会等待其独立 worker 的冷启动，最多使用同一 1800 秒准备上限，并持续发送 SSE progress；模型输入只保留在有界请求内存中，ready 前不会 dispatch。等待可能持续数分钟，30 分钟不是预计延迟。每次只按首次 route 创建时间计算剩余窗口，重新连接或新 heartbeat 不会重置它；持续检查 controller freshness、activation/route/controller lease、暂停与 Stop。客户端主动断开后不延迟执行该输入，未知请求不自动重试。通用 Gateway 默认不等待，独立 global_google 命令保持其原 180 秒设置；该配置仅用于本桌面监督流程。

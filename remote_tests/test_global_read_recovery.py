@@ -344,6 +344,12 @@ class GlobalReadRecoveryFaultTests(unittest.TestCase):
         self.assertNotIn('FAILED', [value['stage'] for value in statuses])
         self.assertEqual(statuses[-1]['stage'], 'STOPPED')
 
+    def stream_only_plan(self):
+        # These fixtures isolate SSE parsing, without a native route or POST.
+        return {'body': {'input': 'fixture'}, 'identity': identity(),
+                'generation': self.generation, 'route_id': 'b'*32,
+                'created': self.now, 'expires': self.now+900}
+
     def test_http_200_preflight_rejects_failed_incomplete_and_truncated_sse_once(self):
         started = {'type': 'response.created', 'response': {'id': 'resp_fixture', 'status': 'in_progress'}}
         cases = {
@@ -362,9 +368,10 @@ class GlobalReadRecoveryFaultTests(unittest.TestCase):
                 response.read1.side_effect = [raw[:7], raw[7:31], raw[31:], b'']
                 connection = MagicMock()
                 connection.getresponse.return_value = response
-                with patch.object(desktop.http.client, 'HTTPConnection', return_value=connection) as connect:
+                with patch.object(desktop.http.client, 'HTTPConnection', return_value=connection) as connect, \
+                        patch.object(self.store, 'response_deadline_caps', return_value=[self.now+900]):
                     with self.assertRaises(ProtocolError) as raised:
-                        desktop.post_preflight(self.store, {'body': {'input': 'fixture'}, 'identity': identity()})
+                        desktop.post_preflight(self.store, self.stream_only_plan())
                 self.assertNotIn('private', str(raised.exception))
                 self.assertNotIn('secret', str(raised.exception))
                 self.assertIn('preflight', str(raised.exception))
@@ -379,8 +386,9 @@ class GlobalReadRecoveryFaultTests(unittest.TestCase):
         response.read1.side_effect = [b'data: '+json.dumps(event).encode()+b'\n\n', b'']
         connection = MagicMock()
         connection.getresponse.return_value = response
-        with patch.object(desktop.http.client, 'HTTPConnection', return_value=connection):
-            result = desktop.post_preflight(self.store, {'body': {'input': 'fixture'}, 'identity': identity()})
+        with patch.object(desktop.http.client, 'HTTPConnection', return_value=connection), \
+                patch.object(self.store, 'response_deadline_caps', return_value=[self.now+900]):
+            result = desktop.post_preflight(self.store, self.stream_only_plan())
         self.assertEqual(result['http_status'], 200)
         self.assertEqual(connection.request.call_count, 1)
         connection.close.assert_called_once()

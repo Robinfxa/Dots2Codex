@@ -158,6 +158,28 @@ class GlobalPilotTests(unittest.TestCase):
             db.execute("UPDATE requests SET state='text_complete',backend_response_id=NULL WHERE route=?",(plan['route_id'],))
         self.error('backend_response_identity_required',self.verify,plan)
 
+    def test_monotonic_expired_plan_cannot_issue_or_authorize_proof(self):
+        plan,_=self.complete();proof=self.verify(plan)
+        deadline=pilot._load(self.store,'plan',plan['plan_id'])['response_deadline']
+        with patch('time.monotonic',return_value=deadline['until']):
+            self.error('pilot_preflight_expired',self.verify,plan)
+            self.error('pilot_preflight_expired',self.require,proof)
+
+    def test_crossboot_plan_cannot_issue_or_authorize_proof(self):
+        plan,_=self.complete();proof=self.verify(plan)
+        with patch('remote_transport.global_response.clock_domain',return_value='boot:other'):
+            self.error('global_response_clock_domain_changed',self.verify,plan)
+            self.error('global_response_clock_domain_changed',self.require,proof)
+
+    def test_verification_crossing_monotonic_deadline_cannot_seal_proof(self):
+        plan,_=self.complete();deadline=pilot._load(self.store,'plan',plan['plan_id'])['response_deadline']
+        clock=[deadline['started_monotonic']];original=pilot._request
+        def read_request(*args,**kwargs):
+            value=original(*args,**kwargs);clock[0]=deadline['until'];return value
+        with patch('time.monotonic',side_effect=lambda:clock[0]), patch.object(pilot,'_request',side_effect=read_request):
+            self.error('pilot_preflight_expired',self.verify,plan)
+        self.assertEqual(list((self.store.root/'pilot').glob('proof-*.json')),[])
+
     def test_wrong_signed_queue_or_native_receipt_rejected(self):
         plan,_=self.complete();state=self.bridge.read().state
         wrong=copy.deepcopy(state);wrong['logical']['demands'][plan['route_id']]['ready']['runtime_hash']='b'*64
@@ -233,6 +255,9 @@ class GlobalPilotTests(unittest.TestCase):
                    version_evidence=self.versions,previous_plan_id=previous['plan_id'])
 
     def test_expired_plan_requires_explicit_refresh_with_current_heartbeat(self):
+        # A refresh cannot outlive the child's earlier signed bootstrap. Give
+        # this fixture the desktop setup cap so its authority still lives at 900 seconds.
+        self.bridge.bootstrap_seconds=pilot.SETUP_SECONDS
         previous,_=self.complete();now=int(time.time());future=now+pilot.PLAN_SECONDS+1
         # A real supervisor must continue heartbeats; a dead controller cannot
         # be revived by a single stale heartbeat merely to refresh its proof.

@@ -24,6 +24,7 @@ from . import global_config as config_tx, router_mac as router
 from . import codex_desktop as app_identity
 from .backend import read_private_file
 from .global_gateway import Store, Gateway, DEFAULT_PORT, private_dir, private_write, probe, strict_json
+from .global_response import GLOBAL_RESPONSE_WAIT_SECONDS, RESPONSE_DEADLINE_HEADER, ResponseDeadline
 from .mac_environment import private_lock
 from .mac_setup import no_symlinks
 from .mac_ui import Cancelled
@@ -424,7 +425,8 @@ class DesktopGlobal:
         if transaction and transaction['phase'] in {'prepared', 'restore_prepared'}:
             result['config_recovery_required'] = True
         for name in ('error', 'read_error', 'retry_round', 'retry_at', 'activation_expires',
-                     'resume_stage', 'preflight_state', 'setup_expires', 'queue_closed'):
+                     'resume_stage', 'preflight_state', 'setup_expires', 'queue_closed',
+                     'response_phase', 'response_code', 'response_elapsed_seconds', 'response_budget_seconds'):
             if name in status: result[name] = status[name]
         try:
             bound = probe(runtime / 'gateway')
@@ -667,45 +669,114 @@ class DesktopGlobal:
 
 
 def post_preflight(store, plan, control=None):
-    """One bounded HTTP attempt. Never retry a timeout or an unknown dispatch."""
-    conn = http.client.HTTPConnection('127.0.0.1', store.config()['port'], timeout=600)
-    deadline = time.monotonic() + 600
+    """One issued deadline and one POST; a failed/unknown attempt is never replayed."""
+    started = time.monotonic(); phase = 'budget'; conn = None; budget = None
     try:
+        if 'response_deadline' in plan:
+            budget = ResponseDeadline.restore(plan['response_deadline'])
+        else:
+            # Earlier sealed plans retain their exact old wall cap; reading a
+            # plan never writes or extends its original expiry.
+            budget = ResponseDeadline(plan['expires'], issued_at=plan['created'])
+        budget.tighten(plan['created']+GLOBAL_RESPONSE_WAIT_SECONDS, plan['expires'],
+                       *store.response_deadline_caps(plan['route_id']))
+        def remaining():
+            return budget.remaining('global_preflight_deadline')
+        def check_cancelled():
+            if control is not None:
+                with control['lock']:
+                    require(not control['cancelled'], 'global_preflight_cancelled_before_dispatch')
+        check_cancelled()
+        phase = 'connect'
+        conn = http.client.HTTPConnection('127.0.0.1', store.config()['port'], timeout=remaining())
         conn.connect(); transport = conn.sock
+        remaining()
+        # The explicitly connected socket is the only permitted transport. A
+        # close/cancel race cannot cause http.client to open a second connection.
+        conn.auto_open = 0
         if control is not None:
             with control['lock']:
                 require(not control['cancelled'], 'global_preflight_cancelled_before_dispatch')
                 control['socket'] = transport
-        conn.request('POST', f'/activations/{store.activation()["id"]}/v1/responses',
-            body=canonical(plan['body']), headers={**plan['identity'], 'Content-Type': 'application/json'})
-        response = conn.getresponse(); total = 0; blocks = []
-        require(response.status == 200, 'global_preflight_request_failed')
-        while True:
-            if response.isclosed(): break
-            remaining = deadline - time.monotonic()
-            require(remaining > 0, 'global_preflight_deadline')
-            transport.settimeout(remaining)
-            block = response.read1(65536)
-            if not block: break
-            total += len(block); require(total <= MAX, 'global_preflight_response_too_large')
-            blocks.append(block)
-        # The gateway can already have sent HTTP 200 before its bounded
-        # admission wait fails. That is not a completed native preflight.
-        raw = b''.join(blocks)
+        # Socket timeouts alone reset per recv/send inside http.client. The
+        # watchdog also bounds slow header/body trickles to this same deadline.
+        with budget.watch_socket(transport):
+            phase = 'request'
+            transport.settimeout(remaining()); check_cancelled()
+            conn.request('POST', f'/activations/{plan["generation"]}/v1/responses',
+                body=canonical(plan['body']), headers={**plan['identity'], 'Content-Type': 'application/json',
+                                                     RESPONSE_DEADLINE_HEADER: str(budget.expires)})
+            remaining()
+            phase = 'headers'
+            transport.settimeout(remaining())
+            response = conn.getresponse()
+            remaining()
+            require(response.status == 200, 'global_preflight_request_failed')
+            total = 0; blocks = []; phase = 'read'
+            while True:
+                remaining()
+                if response.isclosed(): break
+                transport.settimeout(remaining())
+                block = response.read1(65536)
+                remaining()
+                if not block: break
+                total += len(block); require(total <= MAX, 'global_preflight_response_too_large')
+                blocks.append(block)
+        # HTTP 200 or an EOF does not certify completion. Never copy upstream
+        # error messages into status, and never turn a late terminal frame into
+        # a new response window.
+        phase = 'validate'; remaining()
+        raw = b''.join(blocks).replace(b'\r\n', b'\n'); events = []
         try:
-            events = [strict_json(line[6:]) for line in raw.splitlines() if line.startswith(b'data: ')]
-            require(all(isinstance(event, dict) for event in events), 'global_preflight_invalid_response_stream')
+            require(not raw or raw.endswith(b'\n\n'), 'global_preflight_invalid_response_stream')
+            for frame in raw.split(b'\n\n'):
+                if not frame: continue
+                lines = [line for line in frame.split(b'\n') if line and not line.startswith(b':')]
+                if not lines: continue
+                data = [line[6:] for line in lines if line.startswith(b'data: ')]
+                names = [line[7:] for line in lines if line.startswith(b'event: ')]
+                require(len(data) == 1 and len(names) <= 1 and len(lines) == len(data)+len(names),
+                        'global_preflight_invalid_response_stream')
+                event = strict_json(data[0])
+                require(isinstance(event, dict) and isinstance(event.get('type'), str)
+                        and (not names or names[0] == event['type'].encode()),
+                        'global_preflight_invalid_response_stream')
+                events.append(event)
+            require(not any(event['type'] == 'response.completed' for event in events[:-1]),
+                    'global_preflight_invalid_response_stream')
         except (ProtocolError, ValueError, UnicodeError):
             raise ProtocolError('global_preflight_invalid_response_stream') from None
         require(not any(event.get('type') == 'response.failed' for event in events), 'global_preflight_request_failed')
         require(events and events[-1].get('type') == 'response.completed'
                 and isinstance(events[-1].get('response'), dict)
                 and events[-1]['response'].get('status') == 'completed', 'global_preflight_request_incomplete')
+        remaining()
         return {'http_status': response.status}
+    except Exception as exc:
+        # Preserve stable local classifications only. Socket/provider messages
+        # may contain request data; diagnostics deliberately contain no text.
+        if budget is not None:
+            try: budget.remaining('global_preflight_deadline')
+            except ProtocolError as expired: exc = expired
+        if isinstance(exc, ProtocolError): error = exc
+        elif isinstance(exc, (TimeoutError, socket.timeout)):
+            error = ProtocolError('global_preflight_transport_timeout')
+        elif isinstance(exc, (http.client.IncompleteRead, http.client.RemoteDisconnected)):
+            error = ProtocolError('global_preflight_request_incomplete')
+        elif isinstance(exc, http.client.HTTPException):
+            error = ProtocolError('global_preflight_invalid_http_response')
+        elif isinstance(exc, OSError): error = ProtocolError('global_preflight_transport_failed')
+        else: error = ProtocolError('global_preflight_request_failed')
+        error.preflight_diagnostics = {
+            'response_phase': phase, 'response_code': safe_error(error),
+            'response_elapsed_seconds': max(0, round(time.monotonic()-started, 3)),
+            'response_budget_seconds': (max(0, round(budget.expires-budget.issued_at, 3))
+                                        if budget is not None else GLOBAL_RESPONSE_WAIT_SECONDS)}
+        raise error from None
     finally:
         if control is not None:
             with control['lock']: control['socket'] = None
-        conn.close()
+        if conn is not None: conn.close()
 
 
 def supervise(runtime):
@@ -810,7 +881,8 @@ def supervise(runtime):
                         # possibly dispatched request or minting another plan.
                         preflight_failure = safe_error(exc)
                         status('PREFLIGHT_UNRESOLVED', error=preflight_failure,
-                               preflight_state='one_attempt_failed_no_replay')
+                               preflight_state='one_attempt_failed_no_replay',
+                               **getattr(exc, 'preflight_diagnostics', {}))
                     else:
                         gateway.completion_for(plan['route_id']).wait(2)
                         queue_state = bridge.read().state
@@ -830,6 +902,7 @@ def supervise(runtime):
             except Exception: outcome = {'queue_closed': False, 'native_children_stopped': False}
         from examples.google_clients import DocsReadError
         details = {'read_error': exc.diagnostics} if isinstance(exc, DocsReadError) else {}
+        details.update(getattr(exc, 'preflight_diagnostics', {}))
         status('FAILED', error=safe_error(exc), **details, **outcome)
     finally:
         with request_control['lock']:

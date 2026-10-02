@@ -1,4 +1,5 @@
 """Separate remote-object Responses facade. No model execution, no Drive sync."""
+import contextlib
 import json
 import math
 import fcntl
@@ -11,6 +12,7 @@ import time
 from pathlib import Path
 from .model import ProtocolError, canonical, hash_bytes, require, MAX_WIRE_BYTES
 from .backend import read_private_file
+from .global_response import ResponseDeadline, parse_response_deadline, response_operation
 from .session import Controller, _save
 from .selection import pin_selection, validate_request_selection
 from .wire import ResponsesHandler, ResponsesServer, QueueError, protocol, validate_text_request, validate_remote_request, result_item
@@ -37,10 +39,14 @@ class RemoteStore:
         # in-process observation window. read_state keeps its strict equality
         # check; status/stop readers cannot see the intermediate disk pair.
         with self.owner.lock:
-            return self._call(self._enqueue,request,session,deadline)
+            budget=getattr(self.owner.context,'response_deadline',None) or ResponseDeadline(
+                self.owner.response_expires,self.owner.controller.pin.body['payload']['expires'],seconds=deadline)
+            with response_operation(budget):
+                return self._call(self._enqueue,request,session,deadline,budget)
 
-    def _enqueue(self, request, session, deadline):
+    def _enqueue(self, request, session, deadline, budget):
         owner=self.owner
+        budget.remaining('remote_wait_budget_expired')
         scope=owner.controller.pin.body['payload']['scope']
         validate_request_selection(request,pin_selection(owner.controller.pin))
         validate_remote_request(request,scope)
@@ -56,7 +62,12 @@ class RemoteStore:
             require(old['binding']==identity and prior in old['jobs'],'session_scope_mismatch')
             # Re-emitting a tool intent after an uncertain socket outcome could
             # execute it twice on the client, so only text is automatically replayed.
+            original=owner.response_budget(prior,old['jobs'][prior])
+            if (owner.response_expires is not None or old['jobs'][prior].get('global_response',False)):
+                budget.tighten(original.expires);budget.until=min(budget.until,original.until)
+            budget.remaining('remote_wait_budget_expired')
             result=owner.controller.result(prior)
+            budget.remaining('remote_wait_budget_expired')
             if result is not None:
                 item=result_item(result.body['payload'],request,prior,scope)
                 require(item['type']=='message' or not old['jobs'][prior].get('tool_emission_started',False),'tool_emission_outcome_unknown')
@@ -84,7 +95,9 @@ class RemoteStore:
         confirmations=[]
         for rid,job in old['jobs'].items():
             if job['status']=='confirmed':continue
+            budget.remaining('remote_wait_budget_expired')
             obj=owner.controller.result(rid)
+            budget.remaining('remote_wait_budget_expired')
             require(obj is not None,'previous_delivery_unconfirmed')
             expected=result_item(obj.body['payload'],originals[rid],rid,scope)
             require(expected in request['input'],'previous_delivery_unconfirmed')
@@ -94,12 +107,29 @@ class RemoteStore:
                         'tool_outcome_unknown')
             confirmations.append((rid,obj))
         for rid,obj in confirmations:
+            budget.remaining('remote_wait_budget_expired')
             owner.controller.record_delivery(rid,obj.oid,'canonical-client-full-history:'+hash_bytes(canonical(request)))
             old['jobs'][rid].update(status='confirmed',result=obj.oid)
         old['binding']=identity
         owner.save_state(old)
-        rid=owner.controller.submit_request(request,key)
-        old['jobs'][rid]={'status':'accepted','deadline':time.time()+deadline,'result':None,'tool_emission_started':False}
+        # Publication latency consumes this same frozen budget. Persist the job
+        # even if submit returns late; recovery must retain its exact request ID.
+        budget.remaining('remote_wait_budget_expired')
+        global_response=owner.response_expires is not None or getattr(owner.context,'global_response',False)
+        try:rid=owner.controller.submit_request(request,key)
+        except BaseException:
+            # A provider may time out after the request index became durable.
+            # Preserve that same job for exact recovery, never submit it again.
+            with owner.controller.journal.locked() as saved:rid=saved['requests'].get(key)
+            if rid is not None:
+                owner.response_budgets[rid]=budget
+                old['jobs'][rid]={'status':'uncertain','deadline':budget.expires,'result':None,
+                    'tool_emission_started':False,'response_budget':budget.checkpoint(),'global_response':global_response}
+                owner.save_state(old)
+            raise
+        owner.response_budgets[rid]=budget
+        old['jobs'][rid]={'status':'accepted','deadline':budget.expires,'result':None,'tool_emission_started':False,
+                         'response_budget':budget.checkpoint(),'global_response':global_response}
         owner.save_state(old)
         return {'job_id':rid}
 
@@ -108,13 +138,24 @@ class RemoteStore:
 
     def _response_state(self,rid):
         state=self.owner.read_state();job=state['jobs'][rid]
-        result=self.owner.controller.result(rid)
+        strict=(self.owner.response_expires is not None or job.get('global_response',False))
+        if strict:
+            try:self.owner.response_budget(rid,job).remaining('remote_wait_budget_expired')
+            except ProtocolError as exc:return {'state':'expired','error':{'code':str(exc)}}
+        with response_operation(self.owner.response_budget(rid,job)) if strict else contextlib.nullcontext():
+            result=self.owner.controller.result(rid)
+        if strict:
+            try:self.owner.response_budget(rid,job).remaining('remote_wait_budget_expired')
+            except ProtocolError as exc:return {'state':'expired','error':{'code':str(exc)}}
         if result is not None:
             request=result.body['links']['request']
             with self.owner.controller.journal.locked() as s:
                 wire_request=s['objects'][request]['body']['payload']['responses_request']
             item=result_item(result.body['payload'],wire_request,rid,self.owner.controller.pin.body['payload']['scope'])
             job['result']=result.oid;self.owner.save_state(state)
+            if strict:
+                try:self.owner.response_budget(rid,job).remaining('remote_wait_budget_expired')
+                except ProtocolError as exc:return {'state':'expired','error':{'code':str(exc)}}
             return {'state':'completed','wire_item':item}
         if self.owner.closed_for_admission():
             return {'state':'cancelled','error':{'code':'session_closed'}}
@@ -163,7 +204,7 @@ class RemoteHandler(ResponsesHandler):
 
 class RemoteResponsesFacade:
     def __init__(self, controller, *, port=0, request_deadline=60, long_session=False,
-                 poll_interval=5, heartbeat_interval=15):
+                 poll_interval=5, heartbeat_interval=15, response_expires=None):
         require(isinstance(controller,Controller),'controller_required')
         require(not long_session or hasattr(controller,'coordinator'),'long_session_requires_docs_cas')
         require(controller.pin.body['payload']['scope']=='text_only' or long_session,'tools_require_long_session_handler')
@@ -174,6 +215,8 @@ class RemoteResponsesFacade:
                 .05 <= poll_interval <= 60 and type(heartbeat_interval) in (int,float) and
                 .05 <= heartbeat_interval <= 60,'invalid_stream_limits')
         self.long_session=long_session;self.poll_interval=poll_interval;self.heartbeat_interval=heartbeat_interval
+        if response_expires is not None:ResponseDeadline(response_expires)
+        self.response_expires=response_expires;self.response_budgets={}
         self.controller=controller;self.context=threading.local();self.stop=threading.Event()
         self.path=controller.journal.root/'remote-facade-state.json'
         self.lock=threading.RLock();self.closed=False
@@ -211,11 +254,15 @@ class RemoteResponsesFacade:
                     require(self.controller.pin.body['payload']['scope']!='responses_tools' or
                             (isinstance(job,dict) and 'tool_emission_started' in job),
                             'tool_emission_marker_missing')
-                    require(isinstance(job,dict) and set(job)=={'status','deadline','result'} | ({'tool_emission_started'} if 'tool_emission_started' in job else set()) and
+                    require(isinstance(job,dict) and set(job)=={'status','deadline','result'} | ({'tool_emission_started'} if 'tool_emission_started' in job else set()) | ({'response_budget'} if 'response_budget' in job else set()) | ({'global_response'} if 'global_response' in job else set()) and
+                            type(job.get('global_response',False)) is bool and
                             type(job.get('tool_emission_started',False)) is bool and
                             job['status'] in {'accepted','socket_flushed','confirmed','uncertain','emission_reserved'} and
                             type(job['deadline']) in (int,float) and math.isfinite(job['deadline']) and
                             0 < job['deadline'] < 1e12,'invalid_facade_job')
+                    if 'response_budget' in job:
+                        require(job['response_budget'].get('expires')==job['deadline'],'facade_response_deadline_mismatch')
+                        self.response_budget(rid,job)
                     request=state['objects'][rid]['body']
                     require('responses_request' in request['payload'],'invalid_facade_request')
                     key=hash_bytes(canonical({'client':binding,'request':request['payload']['responses_request']}))
@@ -231,6 +278,25 @@ class RemoteResponsesFacade:
                                 state['objects'][receipt]['body']['links']=={'request':rid,'result':job['result']},
                                 'facade_receipt_missing')
             return s
+
+    def response_budget(self,rid,job):
+        with self.lock:
+            if rid not in self.response_budgets:
+                # Legacy generic facade jobs retain their absolute expiry. New
+                # jobs also retain the same-host monotonic cap across reattach.
+                try:
+                    budget=(ResponseDeadline.restore(job['response_budget'])
+                        if 'response_budget' in job else ResponseDeadline(job['deadline'],seconds=28800))
+                except ProtocolError as exc:
+                    if str(exc) not in {'global_response_clock_domain_changed','global_response_clock_rollback'}:raise
+                    # A reboot/rollback forbids resuming the original wait, but
+                    # must not hide a committed result from read-only recovery.
+                    budget=ResponseDeadline(job['deadline'],seconds=28800)
+                    budget.expires=job['deadline'];budget.until=time.monotonic();budget.failure=str(exc)
+                self.response_budgets[rid]=budget
+            budget=self.response_budgets[rid]
+            require(budget.expires==job['deadline'],'facade_response_deadline_mismatch')
+            return budget
 
     def save_state(self,state):
         with self.lock:_save(self.path,state)
@@ -276,9 +342,11 @@ class RemoteResponsesFacade:
         state=self.read_state();require(rid in state['jobs'],'unknown_facade_request')
         result=self.controller.result(rid)
         job=state['jobs'][rid]
+        try:self.response_budget(rid,job).remaining('remote_wait_budget_expired');expired=False
+        except ProtocolError:expired=True
         value={'request_id':rid,'delivery':job['status'],'result_id':result.oid if result else None,
                'status':'result_available' if result else 'pending_or_execution_unknown',
-               'wait_expired':time.time()>=job['deadline'],'native_retry':False}
+               'wait_expired':expired,'native_retry':False}
         if result:
             with self.controller.journal.locked() as journal:
                 request=journal['objects'][rid]['body']['payload']['responses_request']
@@ -338,6 +406,12 @@ class LongSessionHandler(RemoteHandler):
         self.end_headers();self.wfile.write(raw);self.close_connection=True
 
     def _event(self,value):
+        budget=getattr(self,'response_deadline',None)
+        if budget is not None:
+            # sendall has an aggregate timeout. Only a terminal error gets this
+            # short diagnostic allowance; no result/tool can outlive the budget.
+            self.connection.settimeout(.1 if value['type']=='response.failed' else
+                budget.remaining('remote_wait_budget_expired'))
         self.wfile.write(b'event: '+value['type'].encode()+b'\ndata: '+protocol.encode(value)+b'\n\n')
         self.wfile.flush()
 
@@ -364,8 +438,17 @@ class LongSessionHandler(RemoteHandler):
 
     def do_POST(self):
         job=None;sent=False;acquired=False;owner=self.server.remote_owner
+        guards=contextlib.ExitStack();budget=None
         try:
-            identity=self._identity();body=self._body()
+            identity=self._identity()
+            if self.path=='/v1/responses':
+                header_deadline=parse_response_deadline(self.headers)
+                budget=ResponseDeadline(header_deadline,owner.response_expires,
+                    owner.controller.pin.body['payload']['expires'],seconds=self.server.deadline)
+                self.connection.settimeout(budget.remaining('remote_wait_budget_expired'))
+                guards.enter_context(budget.watch_socket(self.connection))
+                self.response_deadline=budget
+            body=self._body();guards.close()
             if self.path=='/v1/bridge/close':
                 require(body=={'confirm':True},'explicit_close_required')
                 return self._json(owner.close_session())
@@ -376,14 +459,21 @@ class LongSessionHandler(RemoteHandler):
                 require(result is not None and result.oid==body['result_id'],'unverified_result')
                 return self._json({'receipt':owner.confirm_delivery(match[1],body['evidence'])})
             require(self.path=='/v1/responses','unsupported_endpoint')
-            acquired=self.server.inflight.acquire(timeout=.1)
+            acquired=self.server.inflight.acquire(timeout=min(.1,budget.remaining('remote_wait_budget_expired')))
             if not acquired and self.server.delivery_started.is_set():
-                acquired=self.server.inflight.acquire(timeout=5.9)
+                acquired=self.server.inflight.acquire(timeout=min(5.9,budget.remaining('remote_wait_budget_expired')))
+            budget.remaining('remote_wait_budget_expired')
             require(acquired,'request_inflight')
             require(not self.server.stop_event.is_set(),'service_stopping')
-            owner.context.identity=identity
+            owner.context.identity=identity;owner.context.response_deadline=budget
+            owner.context.global_response=owner.response_expires is not None or header_deadline is not None
             try:job=self.server.store.enqueue(body,owner.controller.pin.body['identity']['session_id'],self.server.deadline)['job_id']
-            finally:del owner.context.identity
+            finally:del owner.context.identity;del owner.context.response_deadline;del owner.context.global_response
+            saved_job=owner.read_state()['jobs'][job];original=owner.response_budget(job,saved_job)
+            if (owner.response_expires is not None or saved_job.get('global_response',False)):
+                budget.tighten(original.expires)
+                budget.until=min(budget.until,original.until)
+            budget.remaining('remote_wait_budget_expired')
             self.send_response(200);self.send_header('Content-Type','text/event-stream')
             self.send_header('Cache-Control','no-cache');self.send_header('X-Request-ID',job)
             self.send_header('Connection','close');self.end_headers();sent=True
@@ -391,6 +481,7 @@ class LongSessionHandler(RemoteHandler):
             heartbeat=time.monotonic()+owner.heartbeat_interval
             poll=0;state=None
             while True:
+                self.connection.settimeout(budget.remaining('remote_wait_budget_expired'))
                 now=time.monotonic()
                 if now>=poll:
                     state=self.server.store.response_state(job);poll=now+owner.poll_interval
@@ -400,6 +491,7 @@ class LongSessionHandler(RemoteHandler):
                         saved=owner.read_state()
                         require(not saved['jobs'][job].get('tool_emission_started',False),'tool_emission_outcome_unknown')
                         saved['jobs'][job].update(status='emission_reserved',tool_emission_started=True);owner.save_state(saved)
+                    budget.remaining('remote_wait_budget_expired')
                     self.server.delivery_started.set()
                     self._event({'type':'response.output_item.done','output_index':0,'item':item})
                     self._event({'type':'response.completed','response':{'id':'resp_'+job,'end_turn':item['type']=='message',
@@ -416,7 +508,7 @@ class LongSessionHandler(RemoteHandler):
                     # JSON events, not SSE comments: Codex times parsed stream.next().
                     self._event({'type':'response.in_progress','response':{'id':'resp_'+job,'status':'in_progress'}})
                     heartbeat=now+owner.heartbeat_interval
-                self.server.stop_event.wait(min(.25,max(.01,min(poll,heartbeat)-time.monotonic())))
+                self.server.stop_event.wait(min(budget.remaining('remote_wait_budget_expired'),.25,max(.01,min(poll,heartbeat)-time.monotonic())))
         except (ProtocolError,QueueError) as exc:
             if job:
                 try:self.server.store.disconnect(job)
@@ -430,5 +522,6 @@ class LongSessionHandler(RemoteHandler):
                 try:self.server.store.disconnect(job)
                 except Exception:pass
         finally:
+            guards.close()
             if acquired:self.server.delivery_started.clear();self.server.inflight.release()
             self.close_connection=True

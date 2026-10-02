@@ -70,7 +70,8 @@ class GlobalPrewarmTests(unittest.TestCase):
             self.assertEqual(list((self.store.root/'pilot').glob('plan-*.json')),[])
             worker,pin=self.child_admit(reservation['route_id'],self.native(reservation['route_id']))
             versions=self.fresh_versions();plan=self.finalize(reservation,versions)
-            self.assertEqual(self.counts(),(1,0));self.assertEqual(plan['expires'],target+pilot.PLAN_SECONDS)
+            self.assertEqual(self.counts(),(1,0));self.assertEqual(plan['expires'],
+                min(target+pilot.PLAN_SECONDS,*self.store.response_deadline_caps(plan['route_id'])))
             self.error('attempt_already_consumed',self.finalize,reservation,versions)
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 future=pool.submit(desktop.post_preflight,self.store,plan)
@@ -88,9 +89,42 @@ class GlobalPrewarmTests(unittest.TestCase):
                 if row['state']=='text_complete':break
                 time.sleep(.01)
             proof=pilot.verify_preflight(self.store,plan['plan_id'],queue_state=self.bridge.read().state,join_code=self.code)
-            self.assertEqual(proof['expires'],target+pilot.PROOF_SECONDS)
+            self.assertEqual(proof['expires'],min(target+pilot.PROOF_SECONDS,plan['expires']))
             self.assertEqual(self.counts(),(1,1))
             self.assertEqual(self.store.route(plan['route_id'])['native_task'],pin.body['identity']['native_task_id'])
+
+    def test_full_900_plan_requires_all_original_authorities_to_outlive_it(self):
+        self.bridge.bootstrap_seconds=pilot.SETUP_SECONDS
+        reservation=self.reserve();self.ready(reservation);plan=self.finalize(reservation)
+        self.assertEqual(plan['expires'],plan['created']+900)
+        self.assertEqual(plan['response_deadline']['expires'],plan['expires'])
+
+    def test_plan_budget_is_900_and_bounded_by_existing_route_authority(self):
+        reservation=self.reserve();self.ready(reservation)
+        now=time.time();earlier=now+220
+        # A shorter authority remains authoritative when issuing a fresh plan.
+        with patch.object(self.store,'response_deadline_caps',return_value=[earlier]):
+            plan=self.finalize(reservation)
+        self.assertEqual(pilot.PLAN_SECONDS,900)
+        self.assertEqual(plan['expires'],earlier)
+        saved=pilot._load(self.store,'plan',plan['plan_id'])
+        self.assertEqual(plan['created'],saved['created'])
+        self.assertEqual(plan['response_deadline'],saved['response_deadline'])
+        self.assertEqual(plan['response_deadline']['expires'],plan['expires'])
+        self.assertLessEqual(plan['expires'],plan['created']+900)
+
+    def test_existing_short_plan_is_not_extended_when_read_again(self):
+        reservation=self.reserve();self.ready(reservation);plan=self.finalize(reservation)
+        saved=pilot._load(self.store,'plan',plan['plan_id'])
+        # Model an already-issued old 600-second plan, with a valid local seal.
+        saved['expires']=saved['created']+600;saved.pop('response_deadline')
+        pilot._save(self.store,'plan',saved)
+        prior=pilot._path(self.store,'plan',plan['plan_id']).read_bytes()
+        observed,_,_=pilot._fresh_plan(self.store,plan['plan_id'])
+        self.assertEqual(observed['expires'],saved['created']+600)
+        self.assertEqual(pilot._path(self.store,'plan',plan['plan_id']).read_bytes(),prior)
+        self.error('attempt_already_consumed',self.finalize,reservation)
+        self.assertEqual(self.counts(),(1,0))
 
     def test_changed_reobserved_client_evidence_cannot_finalize(self):
         reservation=self.reserve();self.ready(reservation)

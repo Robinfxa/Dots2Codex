@@ -1,23 +1,40 @@
 {
   "contract": "dots2codex-desktop-global-pilot/1",
-  "base_commit": "62fa6da8a5ef1629d01ddb47025eebd7ed71af8d",
-  "base_source_tree_sha256": "7af580450657ee2cb86ef4e697adfc7dba4b9f79a7bfdfd25ba71750ddf6bb14",
+  "base_commit": "68d91537e8b026de960f5e7e7b496dc93bf333d8",
+  "base_source_tree_sha256": "28ad0f68f82af51d3a399646b6ae22fb75d8cc42a5746ecd71123e077429a2be",
   "input_launcher_source_tree_sha256": "7774123803de7f12e89b8cb8be7a510f5cfc2e829572921c0fde33632d4e096e",
   "input_gateway_source_tree_sha256": "ab3026308c240f613b8be00b623cfa3eb67cd73fcac4e87556da7d1619215891",
-  "source_tree_sha256": "28ad0f68f82af51d3a399646b6ae22fb75d8cc42a5746ecd71123e077429a2be",
+  "source_tree_sha256": "a6e4e1dae729aba706253f63b14fde18c4011cccdc947e6af6e024ab40c2096a",
   "source_tree_hash_algorithm": "SHA-256 of UTF-8 canonical JSON files array (sort_keys=true,separators=comma/colon,ensure_ascii=false); array sorted by path",
-  "hashed_file_count": 273,
+  "hashed_file_count": 275,
   "manifest_self_excluded": true,
   "changed_files": [
-    "native_connector/global_indexed_queue_integration.test.js",
-    "remote_tests/test_global_indexed_queue.py",
-    "remote_tests/test_remote_facade.py",
-    "remote_transport/global_control.py"
+    "docs/DESKTOP_GLOBAL.zh-CN.md",
+    "docs/HEARTBEAT_V2_VALIDATION.md",
+    "examples/google_clients.py",
+    "remote_tests/test_global_cold_start.py",
+    "remote_tests/test_global_pilot.py",
+    "remote_tests/test_global_prewarm.py",
+    "remote_tests/test_global_read_recovery.py",
+    "remote_tests/test_global_response_budget.py",
+    "remote_transport/backend.py",
+    "remote_transport/control.py",
+    "remote_transport/drive_http.py",
+    "remote_transport/facade.py",
+    "remote_transport/global_control.py",
+    "remote_transport/global_desktop.py",
+    "remote_transport/global_gateway.py",
+    "remote_transport/global_google.py",
+    "remote_transport/global_pilot.py",
+    "remote_transport/global_response.py"
   ],
-  "added_files": [],
+  "added_files": [
+    "remote_tests/test_global_response_budget.py",
+    "remote_transport/global_response.py"
+  ],
   "all_six_source_bindings_preserved": true,
   "existing_runtime_migration": "fresh_activation_and_v2_join_required",
-  "status": "nullable-response-offline-validated-awaiting-live-acceptance",
+  "status": "response-budget-offline-validated-awaiting-live-acceptance",
   "launcher_global_menu_supported": true,
   "production_ready": false,
   "ready_for_config": false,
@@ -253,8 +270,8 @@
     },
     {
       "path": "docs/DESKTOP_GLOBAL.zh-CN.md",
-      "bytes": 9194,
-      "sha256": "e1cdfa9a7d7c2f04556c64436dab1ffc13df3c60ad438c0fe0a3fbdff16c1612",
+      "bytes": 9862,
+      "sha256": "0ed740c294fe389fdd8504c2af8d9a8aa6c14507c8474c1eaa9c832f7c904dad",
       "mode": "0644"
     },
     {
@@ -295,8 +312,8 @@
     },
     {
       "path": "docs/HEARTBEAT_V2_VALIDATION.md",
-      "bytes": 4838,
-      "sha256": "e5f86e1c1f985bf126b4c9029ab2c72a369868cff91463cef2bd2b75c7ab9e9d",
+      "bytes": 5145,
+      "sha256": "b6b974d7008b9873046a9a6eaece3b7a269ac2eef92ad7dde815adc3e018b551",
       "mode": "0644"
     },
     {
@@ -505,8 +522,8 @@
     },
     {
       "path": "examples/google_clients.py",
-      "bytes": 16312,
-      "sha256": "cb21948daef6245500ea0a61ad4041130aac8f89edb1213823493073b2f0e0c5",
+      "bytes": 19451,
+      "sha256": "edad563dad02c37b92ac9d14f0578a06ef9ed6fa356e251669fcf2c396f20df9",
       "mode": "0644"
     },
     {
@@ -925,8 +942,8 @@
     },
     {
       "path": "remote_tests/test_global_cold_start.py",
-      "bytes": 7480,
-      "sha256": "bf3a8f878d43115900192a4ce8518e31b14f8650cb861f70c76d22f9176d2998",
+      "bytes": 7522,
+      "sha256": "7818d764176785310fbba203015559db74215a0cf862aacd7ce5d293f100d2cd",
       "mode": "0644"
     },
     {
@@ -997,8 +1014,8 @@
     },
     {
       "path": "remote_tests/test_global_pilot.py",
-      "bytes": 17060,
-      "sha256": "2b3704ac05f1cbda0bfc0991e22a686d1decd899a62a77943987c80c1c5484e5",
+      "bytes": 18742,
+      "sha256": "8e146dac33ead68574b9037a3bc5bf0a8b338083f5a14a81c91e220814358111",
       "mode": "0644"
     },
     {
@@ -1015,14 +1032,20 @@
     },
     {
       "path": "remote_tests/test_global_prewarm.py",
-      "bytes": 8275,
-      "sha256": "913da3dc844a8aeda850ef4e3cc4a37694d021ebef8a93393a9fd62e67e09b01",
+      "bytes": 10422,
+      "sha256": "0a183f9682b92d8bc30ac7aacb144c4093d682df953602cf931756cee97792fd",
       "mode": "0644"
     },
     {
       "path": "remote_tests/test_global_read_recovery.py",
-      "bytes": 31928,
-      "sha256": "b76ca09d77f13c04bfd74bf278e456c591165ce4209ba79f98bbef467af7eeac",
+      "bytes": 32382,
+      "sha256": "b5593ab85fe1a9c9f3f21f6d2252c62cd957e0b62fb44fd21ec5bfebb1eeed32",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_tests/test_global_response_budget.py",
+      "bytes": 36307,
+      "sha256": "a287cc605931a2ca8ead0ad6e3f39876d6ef8d139540e9bab3de9f6bece95a9c",
       "mode": "0644"
     },
     {
@@ -1171,8 +1194,8 @@
     },
     {
       "path": "remote_transport/backend.py",
-      "bytes": 10477,
-      "sha256": "d5591061d0dad03105d2f6a8c8e529be427a3aa7c3dffa239123039397ccb067",
+      "bytes": 10617,
+      "sha256": "a8e04a01ae48cf75b0b606d26b2c152d7168c480c12f2075f666a4c6df448aa2",
       "mode": "0644"
     },
     {
@@ -1231,8 +1254,8 @@
     },
     {
       "path": "remote_transport/control.py",
-      "bytes": 27837,
-      "sha256": "08c7037f42326a762bc8e37c44fb6cb704c152cc3bbce23c57af8ae5c0ad96d1",
+      "bytes": 28296,
+      "sha256": "b8fad6cf2f7ed2c17ab93188e8d84cef49583c43e68eb7946270cd9f78441c2c",
       "mode": "0644"
     },
     {
@@ -1249,14 +1272,14 @@
     },
     {
       "path": "remote_transport/drive_http.py",
-      "bytes": 5076,
-      "sha256": "cc1112e74386329c7bdb2e9630934f43fbb5f5d60ece8c7c6e731660cefa743d",
+      "bytes": 7126,
+      "sha256": "34ab2e2ed4e9e244899a66542d211a02198b001a4680bc54b53fb5ec3d970145",
       "mode": "0644"
     },
     {
       "path": "remote_transport/facade.py",
-      "bytes": 25845,
-      "sha256": "89f39e5aef0bee9e23186f97a65af76ca19e36c3540f4298906b071d57519fdb",
+      "bytes": 32637,
+      "sha256": "f453bff0725e196225dde5e4341357a0068cd114112b684b496f845342c6f7db",
       "mode": "0644"
     },
     {
@@ -1267,14 +1290,14 @@
     },
     {
       "path": "remote_transport/global_control.py",
-      "bytes": 39458,
-      "sha256": "17587a8b401333010c3785645b92195123a08394a81b2cd5f5e63bcb99373348",
+      "bytes": 39600,
+      "sha256": "4691737d2c4edc515be6737b6bda93925e76d1c0213af39be1f93eb027e1adb9",
       "mode": "0644"
     },
     {
       "path": "remote_transport/global_desktop.py",
-      "bytes": 52541,
-      "sha256": "80230ac6845665a0bfb66499f6ece218f198516fb6c9cad10d773f2412f28749",
+      "bytes": 57024,
+      "sha256": "f6adbd7288144c5b47d1cc106e94583f1698e990c309a0737c399bafc61f8011",
       "mode": "0644"
     },
     {
@@ -1285,14 +1308,14 @@
     },
     {
       "path": "remote_transport/global_gateway.py",
-      "bytes": 52574,
-      "sha256": "c536a74c59a47443faf5205e8b510c2e1bc1c8a5b747bd3ca0fb3794be284fef",
+      "bytes": 56848,
+      "sha256": "6671381c78423f33af61ed0b535ad8d549a301f098a5e5802a9ca7ba2858c175",
       "mode": "0644"
     },
     {
       "path": "remote_transport/global_google.py",
-      "bytes": 44634,
-      "sha256": "77750a6aec4f7f6397b1cd091343af0f8de04f61dd7eb9d7033a4adf36e318c4",
+      "bytes": 45732,
+      "sha256": "b1883f6e784f94f05b6d2e1ef813a953aa6f6d097659f59de10cc662f10d87bd",
       "mode": "0644"
     },
     {
@@ -1309,8 +1332,14 @@
     },
     {
       "path": "remote_transport/global_pilot.py",
-      "bytes": 31887,
-      "sha256": "222db131f66fc551d9c0fe7f47ff9d586c6c6349a053f4913ce74fc80b7cd3c3",
+      "bytes": 32680,
+      "sha256": "de6965bfd9839c251272ea8d1cb02a970d1d0257c462552910bcf14421ae1ecb",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/global_response.py",
+      "bytes": 6995,
+      "sha256": "872988005611daebda0e0edc5fd6deffc95c57aafe680da728c5e6894983f9b9",
       "mode": "0644"
     },
     {
@@ -1668,7 +1697,7 @@
       "mode": "0644"
     }
   ],
-  "parent_commit": "62fa6da8a5ef1629d01ddb47025eebd7ed71af8d",
+  "parent_commit": "68d91537e8b026de960f5e7e7b496dc93bf333d8",
   "global_config_pilot_gate_implemented": true,
   "global_config_pilot_runtime_exercised": false,
   "input_desktop_global_source_tree_sha256": "7999cd2b2a5e028bc706760d7a290f44a3b5365b76c5f38f88a4d9478a89b4f3",
@@ -1721,21 +1750,21 @@
     "real_mac_native_google_acceptance": false
   },
   "test_results": {
-    "contract": "dots2codex-nullable-response-offline-validation/1",
+    "contract": "dots2codex-response-budget-offline-validation/1",
     "status": "passed_with_explicit_optional_skips",
-    "source_tree_sha256": "28ad0f68f82af51d3a399646b6ae22fb75d8cc42a5746ecd71123e077429a2be",
+    "source_tree_sha256": "a6e4e1dae729aba706253f63b14fde18c4011cccdc947e6af6e024ab40c2096a",
     "final_snapshot_validated": true,
     "live_mac_google_native_verified": false,
     "google_writes": 0,
     "native_inference_calls": 0,
     "dependency_install_performed": false,
-    "full_run_jobs": 90,
+    "full_run_jobs": 91,
     "max_concurrent_test_jobs": 6,
     "six_way_isolated_full_run": true,
     "reused_prior_run_results": false,
     "tests": {
-      "tests": 1462,
-      "passed": 1453,
+      "tests": 1503,
+      "passed": 1494,
       "failures": 0,
       "errors": 0,
       "skipped": 9,
@@ -1743,8 +1772,8 @@
       "unexpected_successes": 0
     },
     "python": {
-      "tests": 1226,
-      "passed": 1217,
+      "tests": 1267,
+      "passed": 1258,
       "failures": 0,
       "errors": 0,
       "skipped": 9,
@@ -1762,8 +1791,8 @@
     },
     "totals_by_suite": {
       "remote_tests": {
-        "tests": 957,
-        "passed": 948,
+        "tests": 998,
+        "passed": 989,
         "failures": 0,
         "errors": 0,
         "skipped": 9,
@@ -1837,22 +1866,24 @@
     "skips_by_reason": {
       "optional tomlkit unavailable; real parser integration NOT VERIFIED": 9
     },
-    "new_test_modules": [],
+    "new_test_modules": [
+      "remote_tests/test_global_response_budget.py"
+    ],
     "real_sdk_modules": {
       "remote_tests/test_google_read_recovery.py": 29,
       "remote_tests/test_google_sdk_concurrency.py": 23,
       "sdk_tests/test_google_sdk_independent.py": 3
     },
     "real_sdk_modules_zero_skips": true,
-    "full_run_seconds": 182.29,
-    "full_snapshot_sha256": "c7b678726f46b92f6e0b58878576a158ceabd87f61a4d93395ed8dc351737f0c",
+    "full_run_seconds": 195.434,
+    "full_snapshot_sha256": "e48fb05e74c09b81670d48f3564d1a362ff5c4455325f9a5ec0ec058d2f23c6d",
     "tree_unchanged_during_run": true,
     "final_manifest_verified": true,
     "test_inventory_unchanged_during_run": true,
     "source_cache_artifacts": [],
-    "manifest_entries": 273,
+    "manifest_entries": 275,
     "syntax_checks": {
-      "python": 148,
+      "python": 150,
       "node": 25,
       "shell": 11,
       "json": 17
@@ -2843,7 +2874,7 @@
       "Deterministic benchmark results describe offline scheduling only, not live-service latency."
     ]
   },
-  "nullable_response_validation": {
+  "prior_nullable_response_validation": {
     "contract": "dots2codex-nullable-response-offline-validation/1",
     "status": "passed_with_explicit_optional_skips",
     "source_tree_sha256": "28ad0f68f82af51d3a399646b6ae22fb75d8cc42a5746ecd71123e077429a2be",
@@ -2976,6 +3007,156 @@
     "manifest_entries": 273,
     "syntax_checks": {
       "python": 148,
+      "node": 25,
+      "shell": 11,
+      "json": 17
+    },
+    "network_attempts_blocked": 0,
+    "leaked_subprocesses": 0,
+    "per_job_descendant_supervision": true,
+    "network_guards": "Python audit hook, Node hooks, inherited native socket guard; local fixture loopback only",
+    "toml_parser_integration_verified": false,
+    "known_limits": [
+      "Optional real tomlkit parser integration cases, if listed in skips_by_reason, were skipped because the dependency is unavailable; no dependency installation performed.",
+      "Mac native UI, real Google writes, native admission/inference, client traffic, live queue/protocol traffic, and end-to-end activation were not run.",
+      "Deterministic benchmark results describe offline scheduling only, not live-service latency."
+    ]
+  },
+  "response_budget_validation": {
+    "contract": "dots2codex-response-budget-offline-validation/1",
+    "status": "passed_with_explicit_optional_skips",
+    "source_tree_sha256": "a6e4e1dae729aba706253f63b14fde18c4011cccdc947e6af6e024ab40c2096a",
+    "final_snapshot_validated": true,
+    "live_mac_google_native_verified": false,
+    "google_writes": 0,
+    "native_inference_calls": 0,
+    "dependency_install_performed": false,
+    "full_run_jobs": 91,
+    "max_concurrent_test_jobs": 6,
+    "six_way_isolated_full_run": true,
+    "reused_prior_run_results": false,
+    "tests": {
+      "tests": 1503,
+      "passed": 1494,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "python": {
+      "tests": 1267,
+      "passed": 1258,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "node": {
+      "tests": 236,
+      "passed": 236,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "totals_by_suite": {
+      "remote_tests": {
+        "tests": 998,
+        "passed": 989,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 9,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "tests": {
+        "tests": 134,
+        "passed": 134,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "remote_audit/cas": {
+        "tests": 47,
+        "passed": 47,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "remote_audit/drive": {
+        "tests": 48,
+        "passed": 48,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "sdk_tests": {
+        "tests": 3,
+        "passed": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "docs/gemini_setup/tools": {
+        "tests": 37,
+        "passed": 37,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "node": {
+        "tests": 236,
+        "passed": 236,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "benchmark": {
+        "tests": 0,
+        "passed": 0,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      }
+    },
+    "skips_by_reason": {
+      "optional tomlkit unavailable; real parser integration NOT VERIFIED": 9
+    },
+    "new_test_modules": [
+      "remote_tests/test_global_response_budget.py"
+    ],
+    "real_sdk_modules": {
+      "remote_tests/test_google_read_recovery.py": 29,
+      "remote_tests/test_google_sdk_concurrency.py": 23,
+      "sdk_tests/test_google_sdk_independent.py": 3
+    },
+    "real_sdk_modules_zero_skips": true,
+    "full_run_seconds": 195.434,
+    "full_snapshot_sha256": "e48fb05e74c09b81670d48f3564d1a362ff5c4455325f9a5ec0ec058d2f23c6d",
+    "tree_unchanged_during_run": true,
+    "final_manifest_verified": true,
+    "test_inventory_unchanged_during_run": true,
+    "source_cache_artifacts": [],
+    "manifest_entries": 275,
+    "syntax_checks": {
+      "python": 150,
       "node": 25,
       "shell": 11,
       "json": 17

@@ -22,7 +22,8 @@ class GlobalColdStartTests(unittest.TestCase):
         self.assertEqual(self.count('routes'),1)
 
     def test_new_thread_waits_over_180_seconds_then_dispatches_only_once(self):
-        self.gateway.admission_wait=1800;client=identity();body=request('ordinary cold thread')
+        self.gateway.admission_wait=1800;self.gateway.request_deadline=900
+        client=identity();body=request('ordinary cold thread')
         real_time=time.time;real_monotonic=time.monotonic;offset={'value':0}
         with patch('time.time',side_effect=lambda:real_time()+offset['value']), \
              patch('time.monotonic',side_effect=lambda:real_monotonic()+offset['value']), \
@@ -111,10 +112,10 @@ class GlobalColdStartTests(unittest.TestCase):
         lock=self.gateway.lock_for(route_key(self.generation,client));self.assertTrue(lock.acquire(timeout=2));lock.release()
         self.controller.admit_next();self.assertEqual(self.count('requests'),0)
 
-    def test_invalid_wait_limit_and_generic_default_unchanged(self):
+    def test_invalid_wait_limit_and_global_900_second_default(self):
         with self.assertRaisesRegex(ProtocolError,'invalid_admission_wait'):Gateway(self.store,admission_wait=1801)
         self.gateway.close();self.gateway=Gateway(self.store)
-        self.assertEqual(self.gateway.admission_wait,0);self.assertEqual(self.gateway.request_deadline,180)
+        self.assertEqual(self.gateway.admission_wait,0);self.assertEqual(self.gateway.request_deadline,900)
 
 
 if __name__=='__main__':unittest.main()

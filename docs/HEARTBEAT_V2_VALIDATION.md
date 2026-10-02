@@ -30,6 +30,8 @@ An independent runtime harness exercised the complete emitted cell source, the r
 5. Keep the active agent supervising with one-shot heartbeat cells; schedule relative to signed heartbeat time, not the end of a slow cell. Dispatch native children only from verified begin and current one-use plans. Pre-emit the next one-shot heartbeat before the final dispatch sequence and execute it after successful spawn, before lengthy capture/record; never bypass unresolved CAS or replay spawn
 6. Verify the real Mac preflight, then obtain the separate exact-diff confirmation for any global configuration write. A production-ready claim remains prohibited
 
-## Remaining live limits
+## Historical live limits of the heartbeat-only repair
 
-The first-request admission wait remains 180 seconds; so does the desktop preflight UI wait. Initial supervisor-stage wait remains 90 seconds, child bootstrap normally 600 seconds, preflight plan 600 seconds and sealed proof 300 seconds. Native JOIN/preflight taking several minutes may still time out. This heartbeat repair does not extend those deadlines, activation life or leases, certify real Mac/client compatibility, prove native children stopped, or prove underlying model identity. Real acceptance is still required.
+The limits below describe that earlier heartbeat-only candidate. The current response-budget change is documented in `DESKTOP_GLOBAL.zh-CN.md`; it does not extend any already-issued plan or signed authority.
+
+In that heartbeat-only candidate, first-request admission and desktop preflight UI waits were 180 seconds. Initial supervisor-stage wait was 90 seconds, child bootstrap normally 600 seconds, preflight plan 600 seconds and sealed proof 300 seconds. Native JOIN/preflight taking several minutes could still time out. That heartbeat repair did not extend response deadlines, activation life or leases. Neither it nor the current response-budget change certifies real Mac/client compatibility, proves native children stopped, or proves underlying model identity. Real acceptance is still required.

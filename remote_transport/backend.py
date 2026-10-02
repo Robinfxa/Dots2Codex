@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 from .model import Object, ProtocolError, MAX_BYTES, require
+from .global_response import response_call
 
 MAX_OBJECTS = 128
 MAX_PAGES = 8
@@ -139,7 +140,7 @@ class GoogleDriveBackend:
 
     def reserve(self):
         if self.mode == 'strict_ids':
-            value = self.client.generate_id()
+            value = response_call(self.client.generate_id)
             require(isinstance(value, str) and re.fullmatch('[A-Za-z0-9_-]{1,256}', value),
                     'invalid_generated_id')
             return value
@@ -149,7 +150,7 @@ class GoogleDriveBackend:
         obj.validate()
         require((self.mode == 'strict_ids') == (reservation is not None), 'reservation_mismatch')
         try:
-            remote_id = self.client.create_bytes(self.folder_id, filename(obj), obj.raw, reservation)
+            remote_id = response_call(self.client.create_bytes,self.folder_id, filename(obj), obj.raw, reservation)
         except AlreadyExists:
             require(reservation is not None, 'unexpected_duplicate_response')
             remote_id = reservation
@@ -157,7 +158,7 @@ class GoogleDriveBackend:
         if reservation is not None:
             require(remote_id == reservation, 'create_returned_wrong_id')
         # A successful HTTP create alone is not verified immutable publication.
-        require(self.client.get_bytes(remote_id, MAX_BYTES) == obj.raw, 'readback_mismatch')
+        require(response_call(self.client.get_bytes,remote_id, MAX_BYTES) == obj.raw, 'readback_mismatch')
         return remote_id
 
     def scan(self, deployment_id):
@@ -165,7 +166,7 @@ class GoogleDriveBackend:
         token, seen_tokens, objects, physical_ids = None, set(), [], set()
         prefix = 'ddv0-' + deployment_id + '-'
         for _ in range(MAX_PAGES):
-            page = self.client.list_page(self.folder_id, token, 100)
+            page = response_call(self.client.list_page,self.folder_id, token, 100)
             require(isinstance(page, dict) and type(page.get('files')) is list,
                     'malformed_list_page')
             require(type(page.get('incompleteSearch',False)) is bool, 'malformed_list_page')
@@ -181,7 +182,7 @@ class GoogleDriveBackend:
                 require(item['id'] not in physical_ids, 'duplicate_physical_listing')
                 physical_ids.add(item['id'])
                 require(len(physical_ids) <= MAX_OBJECTS, 'object_budget_exceeded')
-                obj = Object.parse(self.client.get_bytes(item['id'], MAX_BYTES))
+                obj = Object.parse(response_call(self.client.get_bytes,item['id'], MAX_BYTES))
                 require(item['name'] == filename(obj) and
                         obj.body['identity']['deployment_id'] == deployment_id, 'object_name_mismatch')
                 objects.append(obj)
@@ -202,11 +203,11 @@ class GoogleDriveBackend:
         locator=reference['locator']
         require(locator['backend']=='drive' and locator['folder_id']==self.folder_id,'message_backend_or_folder_mismatch')
         require(self.client.capabilities.direct_metadata_read,'direct_metadata_capability_required')
-        meta=self.client.get_metadata(locator['file_id'])
+        meta=response_call(self.client.get_metadata,locator['file_id'])
         require(isinstance(meta,dict) and meta.get('id')==locator['file_id'] and meta.get('trashed') is False and
                 type(meta.get('parents')) is list and all(isinstance(parent,str) for parent in meta['parents']) and
                 self.folder_id in meta['parents'],'message_metadata_scope_mismatch')
-        obj=Object.parse(self.client.get_bytes(locator['file_id'],MAX_BYTES))
+        obj=Object.parse(response_call(self.client.get_bytes,locator['file_id'],MAX_BYTES))
         require(obj.oid==reference['object_id'] and meta.get('name')==filename(obj),'message_reference_mismatch')
         return obj
 

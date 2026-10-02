@@ -20,6 +20,7 @@ import time
 from remote_transport.backend import read_private_file
 from remote_transport.drive_http import DriveHTTPClient
 from remote_transport.model import ProtocolError, require
+from remote_transport.global_response import current_response_deadline
 
 
 def _credential_info():
@@ -215,12 +216,65 @@ def _read_failure(exc, attempts):
 
 
 def _check_budget(deadline, check, operation="read"):
+    budget=current_response_deadline()
+    if budget is not None:budget.remaining("remote_wait_budget_expired")
     # Caller liveness/stop/integrity checks are not provider errors and must not
     # be wrapped into retryable transport failures.
     if check is not None:
         check()
     if deadline is not None:
         require(time.monotonic() < deadline, "docs_" + operation + "_deadline_exceeded")
+
+
+@contextmanager
+def _response_transport(service):
+    """Temporarily clamp this SDK transport while its existing lock is held."""
+    budget=current_response_deadline()
+    if budget is None:
+        yield
+        return
+    remaining=budget.remaining('remote_wait_budget_expired')
+    transports=[];current=getattr(service,'_http',None);seen=set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current));transports.append(current);current=getattr(current,'http',None)
+    changed=[];sockets=[];known_connections={}
+    try:
+        for transport in transports:
+            known_connections[id(transport)]={id(value) for value in getattr(transport,'connections',{}).values()}
+            if hasattr(transport,'timeout'):
+                original=transport.timeout
+                timeout=min(original,remaining) if isinstance(original,(int,float)) and original>0 else remaining
+                transport.timeout=timeout;changed.append((transport,original))
+            for connection in getattr(transport,'connections',{}).values():
+                sock=getattr(connection,'sock',None)
+                if sock is not None:
+                    original=sock.gettimeout();sock.settimeout(min(original,remaining) if original else remaining)
+                    sockets.append((sock,original))
+        class ActiveSockets:
+            def shutdown(self,how):
+                for transport in transports:
+                    for connection in list(getattr(transport,'connections',{}).values()):
+                        sock=getattr(connection,'sock',None)
+                        if sock is not None:
+                            try:sock.shutdown(how)
+                            except OSError:pass
+        with budget.watch_socket(ActiveSockets()):
+            yield
+    finally:
+        for transport,original in changed:
+            transport.timeout=original
+            # Connections opened while clamped must not retain that request's
+            # shorter timeout for later read-only recovery or another route.
+            for connection in getattr(transport,'connections',{}).values():
+                if id(connection) in known_connections[id(transport)]:continue
+                if hasattr(connection,'timeout'):connection.timeout=original
+                sock=getattr(connection,'sock',None)
+                if sock is not None:
+                    try:sock.settimeout(original)
+                    except OSError:pass
+        for sock,original in sockets:
+            try:sock.settimeout(original)
+            except OSError:pass
 
 
 class DocsSDKClient:
@@ -244,6 +298,8 @@ class DocsSDKClient:
 
     @contextmanager
     def _transport(self, deadline, check, operation="read"):
+        budget=current_response_deadline()
+        if budget is not None:budget.remaining("remote_wait_budget_expired")
         _check_budget(deadline, check, operation)
         if deadline is None and check is None:
             self._transport_lock.acquire()
@@ -258,7 +314,7 @@ class DocsSDKClient:
             # facade. Keep this check outside the provider-error catch so it
             # cannot become a retryable failure or permit a stale dispatch.
             _check_budget(deadline, check, operation)
-            yield
+            with _response_transport(self.service):yield
         finally:
             self._transport_lock.release()
 
@@ -271,6 +327,10 @@ class DocsSDKClient:
         require(deadline is None or type(deadline) in (int, float) and math.isfinite(deadline),
                 "invalid_docs_read_deadline")
         require(check is None or callable(check), "invalid_docs_read_check")
+        budget=current_response_deadline()
+        if budget is not None:
+            budget.remaining("remote_wait_budget_expired")
+            deadline=min(deadline,budget.until) if deadline is not None else budget.until
         for attempt in range(1, len(READ_RETRY_DELAYS) + 2):
             with self._transport(deadline, check):
                 try:

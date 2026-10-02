@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from .model import Object, ProtocolError, canonical, hash_bytes, require, valid_hash, MAX_REQUESTS, MAX_SESSION_SECONDS
 from .backend import validate_reference
+from .global_response import response_call, current_response_deadline
 
 BEGIN = 'DOTS2CODEX_CONTROL_BEGIN_V1\n'
 END = '\nDOTS2CODEX_CONTROL_END_V1\n'
@@ -51,6 +52,14 @@ def dispatch_docs_write(client, document_id, requests, write_control, *, deadlin
     require(deadline is None or type(deadline) in (int, float) and math.isfinite(deadline),
             'invalid_docs_write_deadline')
     require(check is None or callable(check), 'invalid_docs_write_check')
+    budget=current_response_deadline()
+    if budget is not None:
+        budget.remaining('remote_wait_budget_expired')
+        deadline=min(deadline,budget.until) if deadline is not None else budget.until
+        original_check=check
+        def check():
+            budget.remaining('remote_wait_budget_expired')
+            if original_check is not None:original_check()
     if check is not None: check()
     require(deadline is None or time.monotonic()<deadline, 'docs_write_deadline_exceeded')
     if callable(getattr(type(client), 'batch_update_document_guarded', None)):
@@ -271,7 +280,7 @@ class GoogleDocsCASControlStore:
         self.snapshot_ttl=snapshot_ttl
 
     def read(self):
-        return self.snapshot_from_document(self.client.get_document(self.document_id))
+        return self.snapshot_from_document(response_call(self.client.get_document,self.document_id))
 
     def snapshot_from_document(self,document):
         # Pure parsing entrypoint for a directly obtained connector structuredContent.

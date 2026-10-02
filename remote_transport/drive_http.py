@@ -3,6 +3,8 @@
 No credential file/env/browser inspection, OAuth provisioning, or network calls at
 import. Do not pass native connector secrets. This adapter is not live-certified.
 """
+import contextlib
+import http.client
 import json
 import urllib.error
 import urllib.parse
@@ -10,6 +12,7 @@ import urllib.request
 import uuid
 from .backend import AlreadyExists, Capabilities
 from .model import ProtocolError, require
+from .global_response import current_response_deadline
 
 
 class DriveHTTPClient:
@@ -21,8 +24,11 @@ class DriveHTTPClient:
         self._token_provider, self.timeout = access_token_provider, timeout
 
     def _call(self, path, *, query=None, data=None, content_type=None, limit=262144):
+        budget=current_response_deadline()
+        if budget is not None:budget.remaining("remote_wait_budget_expired")
         # Token kept only in this authorized request. Never persist/log it.
         token = self._token_provider()
+        if budget is not None:budget.remaining("remote_wait_budget_expired")
         require(isinstance(token, str) and token and '\r' not in token and '\n' not in token,
                 'invalid_access_token')
         base = 'https://www.googleapis.com/'
@@ -34,10 +40,34 @@ class DriveHTTPClient:
         class NoRedirect(urllib.request.HTTPRedirectHandler):
             def redirect_request(self, req, fp, code, msg, headers, newurl):
                 return None
-        opener = urllib.request.build_opener(NoRedirect)
+        # A guard captures the exact TLS socket. urllib's read timeout alone
+        # cannot stop an indefinitely trickling header/body within one call.
+        guards=contextlib.ExitStack()
+        class BoundedConnection(http.client.HTTPSConnection):
+            def connect(inner):
+                inner.timeout=min(inner.timeout,budget.remaining('remote_wait_budget_expired'))
+                super().connect();inner.auto_open=0
+                guards.enter_context(budget.watch_socket(inner.sock))
+                inner.sock.settimeout(budget.remaining('remote_wait_budget_expired'))
+            def request(inner,*args,**kwargs):
+                inner.timeout=min(inner.timeout,budget.remaining('remote_wait_budget_expired'))
+                if inner.sock is not None:inner.sock.settimeout(inner.timeout)
+                super().request(*args,**kwargs)
+                budget.remaining('remote_wait_budget_expired')
+            def getresponse(inner):
+                inner.sock.settimeout(min(inner.timeout,budget.remaining('remote_wait_budget_expired')))
+                result=super().getresponse();budget.remaining('remote_wait_budget_expired')
+                return result
+        class BoundedHTTPSHandler(urllib.request.HTTPSHandler):
+            def https_open(inner,request):
+                return inner.do_open(BoundedConnection,request,context=inner._context)
+        opener = urllib.request.build_opener(NoRedirect,BoundedHTTPSHandler()) if budget is not None else urllib.request.build_opener(NoRedirect)
         try:
-            with opener.open(request, timeout=self.timeout) as response:
+            with guards, opener.open(request, timeout=(min(self.timeout,budget.remaining('remote_wait_budget_expired'))
+                    if budget is not None else self.timeout)) as response:
+                if budget is not None:budget.remaining('remote_wait_budget_expired')
                 raw = response.read(limit + 1)
+                if budget is not None:budget.remaining('remote_wait_budget_expired')
                 require(len(raw) <= limit, 'drive_response_too_large')
                 return raw
         except urllib.error.HTTPError as exc:

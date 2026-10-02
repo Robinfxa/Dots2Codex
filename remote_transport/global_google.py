@@ -29,6 +29,7 @@ from .model import Object, ProtocolError, canonical, deployment, hash_bytes, req
 from .selection import pin_selection
 from .session import Journal
 from .global_timing import controller_active, TIMING, observation_window_current
+from .global_response import GLOBAL_RESPONSE_WAIT_SECONDS
 
 
 def mirror_verified_queue(store,state,code,pins=None):
@@ -74,7 +75,8 @@ def mirror_verified_queue(store,state,code,pins=None):
         checkpoint={'root_hash':queue.root_hash(state),'activation_id':state['activation_id'],
                     'controller_id':controller_id,'epoch':epoch,'timing':state['controller_timing'],
                     'heartbeat':c['heartbeat_at'],'expires':c['lease_expires'],'joined_at':c['joined_at'],
-                    'event_hashes':hashes,'observed_at':now,'terminal_reason':failure}
+                    'event_hashes':hashes,'observed_at':now,'terminal_reason':failure,
+                    'activation_expires':state['expires']}
         db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)',('native_controller_checkpoint',json.dumps(checkpoint)))
         if failure:db.execute('UPDATE controller SET expires=0,heartbeat=0 WHERE id=1')
     # Raise only after committing the durable fence, never inside the transaction.
@@ -88,6 +90,17 @@ def mirror_verified_queue(store,state,code,pins=None):
         db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)',('native_activation',json.dumps(state['activation_id'])))
         db.execute('INSERT OR REPLACE INTO controller VALUES(1,?,?,?,?,?,?)',
                    (controller_id,epoch,'native_google_v2',expires,heartbeat,c['capacity']))
+        # Immutable authenticated child authority is retained even after READY.
+        # The native handoff's expiry is exactly this minimum, not the longer pin.
+        for rid,demand in state['logical']['demands'].items():
+            cap={'activation_id':state['activation_id'],'controller_epoch':epoch,
+                 'bootstrap_expires':demand['child_bootstrap']['expires'],
+                 'handoff_expires':min(state['expires'],demand['expires'],c['lease_expires'],
+                                       demand['child_bootstrap']['expires'])}
+            key='native_response_cap:'+rid
+            prior=db.execute('SELECT value FROM meta WHERE key=?',(key,)).fetchone()
+            require(prior is None or json.loads(prior['value'])==cap,'global_response_authority_changed')
+            db.execute('INSERT OR REPLACE INTO meta VALUES(?,?)',(key,json.dumps(cap)))
         for rid,pin in pins.items():
             demand=state['logical']['demands'].get(rid);row=db.execute('SELECT * FROM routes WHERE id=?',(rid,)).fetchone()
             require(demand is not None and demand['state'] in ('admitted','ready') and row is not None,
@@ -461,7 +474,8 @@ class GoogleQueueBridge:
         backend=GoogleDriveBackend(self.drive,self.config['folder_id'],discovery='control_refs')
         control=GoogleDocsCASControlStore(self.docs,active['control_document_id'],active['control_tab_id'],active['control_id'],route_id,self.config['mac_writer_identity'])
         controller=CASController(Journal(runtime/'controller',pin,'controller'),backend,SessionCoordinator(control,backend))
-        facade=RemoteResponsesFacade(controller,long_session=True,request_deadline=180,poll_interval=1,heartbeat_interval=15).start()
+        facade=RemoteResponsesFacade(controller,long_session=True,request_deadline=GLOBAL_RESPONSE_WAIT_SECONDS,
+            response_expires=min(self.store.response_deadline_caps(route_id)),poll_interval=1,heartbeat_interval=15).start()
         self.facades[route_id]=facade
         row=self.store.route(route_id)
         if row['state']=='ready':
