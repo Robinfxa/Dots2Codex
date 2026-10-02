@@ -9,6 +9,18 @@ import json
 from .protocol import ProtocolError, canonical, require, sha256
 
 MAX_BYTES = 1024 * 1024
+HOSTED_TOOL_TYPES = frozenset({'web_search', 'web_search_preview', 'file_search', 'code_interpreter',
+                              'image_generation', 'computer', 'computer_use_preview'})
+TOOL_DIAGNOSTIC_TYPES = HOSTED_TOOL_TYPES | {'namespace', 'function', 'custom', 'tool_search', 'unknown'}
+
+
+def _tool_error(code, tool, index, child_index=None):
+    error = ProtocolError(code)
+    kind = tool.get('type')
+    error.details = {'tool_index': index, 'tool_type': kind if isinstance(kind, str) and kind in TOOL_DIAGNOSTIC_TYPES else 'unknown',
+                     'name_present': 'name' in tool}
+    if child_index is not None: error.details['child_index'] = child_index
+    raise error
 
 
 def strict_json(raw):
@@ -38,16 +50,24 @@ def request_tools(request):
         if item.get('type') == 'additional_tools':
             require(isinstance(item.get('tools'), list), 'invalid_additional_tools')
             sources.extend(item['tools'])
-    def visit(tool, namespace=None):
+    def visit(tool, index, namespace=None, child_index=None):
         require(isinstance(tool, dict), 'invalid_tool')
         name, kind = tool.get('name'), tool.get('type')
-        require(isinstance(name, str) and 0 < len(name) <= 256, 'invalid_tool_name')
+        # Hosted/client-discovery declarations are not ordinary named tools.
+        # Reject their semantics explicitly before applying name validation.
+        if isinstance(kind, str) and kind in HOSTED_TOOL_TYPES:
+            _tool_error('unsupported_hosted_tool', tool, index, child_index)
+        if kind == 'tool_search':
+            _tool_error('unsupported_client_tool_search', tool, index, child_index)
+        if not isinstance(kind, str) or kind not in {'namespace', 'function', 'custom'}:
+            _tool_error('unsupported_tool_type', tool, index, child_index)
+        if not isinstance(name, str) or not 0 < len(name) <= 256:
+            _tool_error('invalid_tool_name', tool, index, child_index)
         if kind == 'namespace':
             require(namespace is None and isinstance(tool.get('tools'), list), 'invalid_tool_namespace')
-            for child in tool['tools']:
-                visit(child, name)
+            for offset, child in enumerate(tool['tools']):
+                visit(child, index, name, offset)
         else:
-            require(kind in {'function', 'custom'}, 'unsupported_tool_type')
             key = (namespace, name)
             require(key not in result, 'duplicate_tool')
             result[key] = tool
@@ -56,8 +76,8 @@ def request_tools(request):
             elif 'format' in tool:
                 require(isinstance(tool['format'], dict) and tool['format'].get('type') in {'text', 'grammar'},
                         'unsupported_custom_tool_format')
-    for tool in sources:
-        visit(tool)
+    for index, tool in enumerate(sources):
+        visit(tool, index)
     return result
 
 

@@ -92,7 +92,8 @@ def catalog_for_selection(selection):
 Use the official CLI's pre-existing fallback instructions unchanged. In
 particular, do not replace approvals, Guardian settings, or sandbox policy with
 model-catalog overrides. The adapter supports plain text and standard Responses
-tool declarations; it does not implement Responses Lite or effort updates.
+tool declarations; it does not implement server tool search, Responses Lite or
+effort updates. Client web search is disabled by the owned trial config patch.
     """
     selected = validate_selection(selection)
     instructions = INSTRUCTIONS_PATH.read_bytes()
@@ -119,6 +120,7 @@ tool declarations; it does not implement Responses Lite or effort updates.
         'apply_patch_tool_type': 'freeform',
         'truncation_policy': {'mode': 'bytes', 'limit': 10000},
         'experimental_supported_tools': [],
+        'supports_search_tool': False,
         'input_modalities': ['text'],
         'include_apps_usage_instructions': False,
         'use_responses_lite': False,

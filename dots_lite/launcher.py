@@ -23,7 +23,7 @@ from urllib.parse import urlsplit
 from .protocol import (PROTOCOL, JOIN_MARKER, DEFAULT_LIMITS, ProtocolError, canonical,
                        hash_bytes, require, grant_hash, validate_grant)
 from .private_io import (private_dir, private_write, private_lock, no_symlinks,
-                         read_private_file, read, save)
+                         read_private_file, read, save, strict_json)
 from .client_catalog import load_catalog, select, validate_selection, write_catalog, validate_catalog
 from . import config_transaction as config_tx
 from .package import package_identity
@@ -201,6 +201,35 @@ def health(base_url):
         connection.close()
 
 
+def retrieve_result(base_url, activation_id, request_id, token, *, max_bytes, timeout=30):
+    """Only contact the recorded loopback owner. Never retry or POST a request."""
+    parsed = urlsplit(base_url)
+    require(parsed.scheme == 'http' and parsed.hostname == '127.0.0.1' and parsed.port
+            and parsed.netloc == f'127.0.0.1:{parsed.port}'
+            and parsed.path == f'/activations/{activation_id}/v1'
+            and not parsed.query and not parsed.fragment, 'invalid_recovery_endpoint')
+    require(isinstance(request_id, str) and re.fullmatch('[0-9a-f]{32}', request_id), 'invalid_local_request_id')
+    require(isinstance(token, str) and re.fullmatch('[0-9a-f]{64}', token), 'invalid_recovery_token')
+    connection = http.client.HTTPConnection('127.0.0.1', parsed.port, timeout=timeout)
+    try:
+        connection.request('GET', parsed.path + '/responses/' + request_id,
+                           headers={'X-Dots-Recovery-Token': token})
+        response = connection.getresponse()
+        raw = response.read(max_bytes + 16385)
+        require(len(raw) <= max_bytes + 16384, 'recovery_response_too_large')
+        value = strict_json(raw)
+        require(isinstance(value, dict), 'invalid_recovery_response')
+        if response.status not in (200, 202):
+            error = value.get('error')
+            code = error.get('code') if isinstance(error, dict) else None
+            require(isinstance(code, str) and re.fullmatch('[a-z][a-z0-9_]{1,120}', code),
+                    'recovery_http_error')
+            raise ProtocolError(code)
+        return value
+    finally:
+        connection.close()
+
+
 class Ports:
     def copy(self, text):
         require(sys.platform == 'darwin', 'clipboard_requires_macos')
@@ -219,6 +248,7 @@ class Ports:
         return {'pid': proc.pid, 'process_identity': process_identity(proc.pid)}
 
     def health(self, base_url): return health(base_url)
+    def recover(self, *args, **kwargs): return retrieve_result(*args, **kwargs)
     def package(self, root): return package_identity(root)
     def wait(self, seconds): time.sleep(seconds)
     def now(self): return time.time()
@@ -413,6 +443,80 @@ class Launcher:
             current.update(self.ports.spawn(self.root, runtime))
             save(self.state / 'current.json', current)
         return {**self.status(), 'resume_requested': True, 'fresh_join_created': False}
+
+    def recover(self, request_id, *, print_result=False):
+        """Read one existing result via the living owner, including after expiry.
+
+        This process never opens MacGateway or its journal and cannot replay a
+        request, emit a tool, create a child, or restore an old client connection.
+        """
+        require(isinstance(request_id, str) and re.fullmatch('[0-9a-f]{32}', request_id), 'invalid_local_request_id')
+        require(type(print_result) is bool, 'invalid_recovery_print_option')
+        active = self.active()
+        require(active is not None, 'v3_not_started')
+        require(owned(active) and alive(active.get('pid')),
+                'recovery_requires_running_owner_resume_same_activation_with_matching_package')
+        runtime = private_dir(active['runtime'])
+        grant = validate_grant(read(runtime / 'grant.json'))
+        info = read(runtime / 'config-info.json')
+        require(grant['activation_id'] == active['run_id'] == info.get('generation')
+                and info.get('protocol') == PROTOCOL, 'v3_activation_mismatch')
+        selected = validate_selection(info['selection'])
+        require({'model': selected['model'], 'reasoning_effort': selected['reasoning_effort']}
+                in grant['allowed_pairs'], 'recovery_selection_mismatch')
+        observed = self.ports.health(info['base_url'])
+        require(observed.get('activation_id') == active['run_id']
+                and observed.get('protocol') == PROTOCOL and observed.get('listener_ready') is True,
+                'local_listener_activation_mismatch')
+        from .gateway import recovery_token
+        token = recovery_token(read_private_file(runtime / 'join-key', 64).decode(), active['run_id'], request_id)
+        # Expiry blocks new admission, not retrieval of an already begun result.
+        value = self.ports.recover(info['base_url'], active['run_id'], request_id, token,
+                                  max_bytes=grant['limits']['max_result_bytes'])
+        require(owned(active) and alive(active.get('pid')), 'recovery_owner_changed')
+        require(isinstance(value, dict) and value.get('protocol') == PROTOCOL
+                and value.get('activation_id') == active['run_id'] and value.get('read_only') is True
+                and value.get('sse_emitted') is False and value.get('client_connection_resumed') is False,
+                'invalid_recovery_response')
+        ticket = value.get('ticket')
+        require(isinstance(ticket, dict) and ticket.get('request_id') == request_id
+                and isinstance(ticket.get('route_id'), str) and re.fullmatch('[0-9a-f]{32}', ticket['route_id'])
+                and type(ticket.get('seq')) is int and ticket['seq'] > 0
+                and isinstance(ticket.get('request_sha256'), str) and re.fullmatch('[0-9a-f]{64}', ticket['request_sha256']),
+                'recovery_ticket_mismatch')
+        require(ticket.get('state') in {'reserved', 'upload_unknown', 'uploaded', 'publish_unknown',
+                                       'published', 'verified', 'acknowledged'}, 'invalid_recovery_state')
+        require(all(type(value.get(key)) is bool for key in
+                ('result_available', 'delivery_started', 'tool_output_withheld')), 'invalid_recovery_response')
+        require(not value['result_available'] or ticket['state'] == 'verified', 'invalid_recovery_state')
+        result = value.get('result')
+        output = {key: value[key] for key in ('protocol', 'activation_id', 'ticket', 'result_available',
+                  'delivery_started', 'tool_output_withheld', 'read_only', 'sse_emitted', 'client_connection_resumed')}
+        output.update(verified_result_saved=False, automatic_retry=False, native_fallback=False)
+        if result is not None:
+            require(value['result_available'] and ticket.get('state') == 'verified'
+                    and not value['tool_output_withheld'], 'unverified_recovery_result')
+            from .wire import validate_response
+            # The owner has verified signed remote bindings. Validate the text
+            # Responses object again before saving or showing it; tools are never
+            # available through this inspection command.
+            result = validate_response(result, {'model': selected['model'], 'input': [], 'tools': []},
+                                       max_bytes=grant['limits']['max_result_bytes'])
+            raw = canonical({'protocol': PROTOCOL, 'activation_id': active['run_id'],
+                             'ticket': {k: ticket[k] for k in ('request_id', 'route_id', 'seq', 'request_sha256')},
+                             'result': result, 'result_sha256': hash_bytes(canonical(result))})
+            directory = private_dir(runtime / 'recovered', create=True)
+            path = directory / (request_id + '.json')
+            from .storage import private_write as immutable_write
+            immutable_write(path, raw, immutable=True)
+            output.update(verified_result_saved=True, result_path=str(path),
+                          response_sha256=hash_bytes(canonical(result)))
+            if print_result:
+                output['output_text'] = '\n'.join(part['text'] for item in result['output']
+                    for part in item['content'])
+        else:
+            require(not value['result_available'] or value['tool_output_withheld'], 'recovery_result_missing')
+        return output
 
     def copy_join(self):
         active = self.active()
@@ -626,7 +730,7 @@ def legacy_action(operation, launcher):
 def parser():
     result = argparse.ArgumentParser(description='Explicit opt-in lightweight v3, separate from START/v2')
     result.add_argument('operation', nargs='?', default='menu', choices=(
-        'menu', 'start', 'resume', 'status', 'stop', 'copy-join', 'copy-stop', 'apply-config', 'restore',
+        'menu', 'start', 'resume', 'recover', 'status', 'stop', 'copy-join', 'copy-stop', 'apply-config', 'restore',
         'legacy-status', 'legacy-stop', 'legacy-restore', 'serve'))
     result.add_argument('--state', default=str(DEFAULT_STATE))
     result.add_argument('--legacy-state', default=str(DEFAULT_LEGACY_STATE))
@@ -638,6 +742,8 @@ def parser():
     result.add_argument('--model')
     result.add_argument('--effort')
     result.add_argument('--runtime')
+    result.add_argument('--request-id', help='Existing 32-hex request ID; recover never creates or replays a request')
+    result.add_argument('--print-result', action='store_true', help='Show recovered assistant text in this command output')
     return result
 
 
@@ -655,12 +761,15 @@ def main(argv=None):
         router_config=args.router_config, router_active=args.router_active, ui=ui)
     if args.operation == 'menu':
         choices = {'Start lightweight v3 trial': 'start', 'Status': 'status', 'Resume same activation': 'resume',
+            'Recover existing request': 'recover',
             'Copy private JOIN': 'copy-join', 'Apply first-use config trial': 'apply-config',
             'Stop local v3': 'stop', 'Copy native stop request': 'copy-stop',
             'Restore v3 config': 'restore', 'Legacy Global status': 'legacy-status',
             'Stop legacy Global': 'legacy-stop', 'Restore legacy Global config': 'legacy-restore', 'Quit': 'quit'}
         args.operation = choices[ui.choose('Dots2Codex lightweight v3 (opt-in)', choices)]
         if args.operation == 'quit': return 0
+        if args.operation == 'recover' and args.request_id is None:
+            args.request_id = ui.text('Existing request ID (32 lowercase hex characters); save verified text without replay')
     if args.operation in {'resume', 'restore', 'apply-config', 'legacy-status', 'legacy-stop', 'legacy-restore'}:
         # Reuse a healthy private interpreter when available, never install just
         # to stop/status/restore an existing activation.
@@ -688,6 +797,9 @@ def main(argv=None):
             env['PYTHONNOUSERSITE'] = '1'
             os.execve(str(python), [str(python), '-B', '-m', 'dots_lite.launcher', *forwarded], env)
         result = launcher.start(args)
+    elif args.operation == 'recover':
+        require(args.request_id is not None, 'recovery_request_id_required')
+        result = launcher.recover(args.request_id, print_result=args.print_result)
     elif args.operation.startswith('legacy-'):
         result = legacy_action(args.operation.removeprefix('legacy-'), launcher)
     else:

@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import base64
 import copy
+import contextlib
 import hashlib
 import json
 import os
@@ -24,6 +25,38 @@ ROOT = Path(__file__).resolve().parents[1]
 CELL = ROOT / 'native_connector' / 'lite_cell.js'
 CONFIG = 'native-config.json'
 MAX_CAPTURE = 196608
+LOCAL_STAGES = []
+
+
+@contextlib.contextmanager
+def measured(stage):
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        LOCAL_STAGES.append({'stage': stage, 'duration_ms': (time.perf_counter() - start) * 1000,
+                             'clock_source': 'time.perf_counter'})
+
+
+def upload_failure(w, error):
+    # Raw provider responses never enter the command, filesystem, or journal.
+    allowed = {'approval_blocked': 'lite_approval_blocked',
+               'transport_unknown': 'lite_transport_unknown',
+               'provider_unknown': 'lite_response_invalid'}
+    p.require(type(error) is dict and set(error) <= {'category', 'code', 'status'} and
+              error.get('category') in allowed and error.get('code') == allowed[error['category']],
+              'safe_upload_diagnostic_required')
+    if 'status' in error:
+        p.require(type(error['status']) is int and 100 <= error['status'] <= 599,
+                  'safe_upload_diagnostic_required')
+    with w.journal.locked():
+        state = w.journal.read(); w._validate(state)
+        p.require(state['phase'] == 'RESULT_SAVED' and state['current']['upload_attempts'] > 0,
+                  'result_upload_not_allowed')
+        state['current']['upload_failure'] = {**error, 'attempt': state['current']['upload_attempts']}
+        w._write(state)
+    return {'ok': False, 'status': 'upload_blocked' if error['category'] == 'approval_blocked' else 'upload_unknown',
+            'error': error, 'retry_requires_raw_review': True}
 
 
 def package_hash():
@@ -183,8 +216,10 @@ def invoke(root,actor,route_id,operation,data):
             return {'ok':True,'spawn_arguments':result,'native_spawn_invoked':False,
                     'next':'Call collaboration.spawn_agent directly once with these exact arguments; capture its actual result.'}
         if operation=='parent-admit':
-            args=read(data['actual_arguments_file'],65536);result=read(data['native_result_file'],65536)
-            return packet_plan(c.record_actual_admission(args,result))
+            with measured('native_admission_evidence_read'):
+                args=read(data['actual_arguments_file'],65536);result=read(data['native_result_file'],65536)
+            with measured('native_admission_record'):
+                return packet_plan(c.record_actual_admission(args,result))
         if operation=='parent-admitted':
             result=recovered_handoff if recovered_handoff is not None else c.accept_admission(**evidence)
             if result.get('status') in {'unknown','conflicting'}:return accepted(result)
@@ -218,11 +253,13 @@ def invoke(root,actor,route_id,operation,data):
         # download_file may legitimately produce mode0644. Consume its actual
         # bytes without printing them, then copy into our private route staging.
         source=Path(data['raw_path']);p.require(source.is_absolute(),'materialized_absolute_path_required')
+        read_started=time.perf_counter()
         fd=os.open(source,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
         try:
             info=os.fstat(fd);p.require(stat.S_ISREG(info.st_mode) and info.st_uid==os.getuid() and info.st_size<=descriptor['byte_length'],'unsafe_materialized_file')
             with os.fdopen(fd,'rb',closefd=False) as handle:raw=handle.read(descriptor['byte_length']+1)
         finally:os.close(fd)
+        LOCAL_STAGES.append({'stage':'downloaded_input_local_read','duration_ms':(time.perf_counter()-read_started)*1000,'clock_source':'time.perf_counter'})
         p.require(len(raw)==descriptor['byte_length'] and p.sha256(raw)==descriptor['request_sha256'],'request_bytes_mismatch')
         from .private_io import private_write
         staging=root/'materialized-request.json';private_write(staging,raw)
@@ -233,16 +270,33 @@ def invoke(root,actor,route_id,operation,data):
         result=w.accept_begin_and_expose(expose_to_path=True,**evidence)
         return accepted(result)
     if operation=='child-save':
-        output=read(data['output_file'],config['grant']['limits']['max_result_bytes'])
-        w.save_actual_result(data['request_id'],output)
-        artifact=w.record_upload_attempt()
+        current=w.state['current']
+        p.require(current is not None and current['upload_attempts']==0,'upload_retry_requires_explicit_review')
+        with measured('native_response_file_read'):
+            output=read(data['output_file'],config['grant']['limits']['max_result_bytes'])
+        with measured('immutable_result_save_and_reserve'):
+            w.save_actual_result(data['request_id'],output)
+            artifact=w.record_upload_attempt()
         return {'ok':True,'artifact':upload_artifact(artifact,config)}
     if operation=='child-retry-upload':
+        state=w.state;current=state['current'];failure=(current or {}).get('upload_failure')
+        p.require(failure is not None and failure['attempt']==current['upload_attempts'],
+                  'upload_failure_capture_review_required')
+        p.require(failure['category']!='approval_blocked','upload_approval_blocked')
+        p.require(data.get('retry_decision')=='transport_retry_after_raw_review',
+                  'upload_retry_requires_explicit_review')
         return {'ok':True,'artifact':upload_artifact(w.record_upload_attempt(),config)}
     if operation=='child-publish':
-        if data.get('upload_receipt') is None:return {'ok':False,'status':'upload_unknown','error':{'code':'immutable_upload_unknown'}}
+        if data.get('upload_receipt') is None:return upload_failure(w,data.get('upload_error'))
         return packet_plan(w.publish_result(data['upload_receipt']))
     if operation=='child-accepted':return accepted(w.accept_result(**evidence))
+    if operation=='child-result-retry-status':return {'ok':True,**w.result_retry_status()}
+    if operation=='child-retry-result':
+        # This explicit active-controller declaration is not a platform approval
+        # receipt. The actual connector call still enforces current permission.
+        p.require(data.get('retry_decision')=='same_result_cas_after_raw_and_permission_review',
+                  'result_retry_requires_explicit_review')
+        return packet_plan(w.retry_result(data.get('expected_operation_id'),data.get('expected_attempt')))
     if operation=='status':
         state=w.state
         # Never print the entire durable journal, raw input/output, or JOIN key.
@@ -281,21 +335,24 @@ def emit_cell(args):
     command=' '.join(__import__('shlex').quote(x) for x in ['python3','-B','-m','dots_lite.cli','load-cell',
                                                           '--sha256',digest])
     key='dots-lite-source-'+digest
-    # Source remains file-backed and hash-pinned. Copy only this small loader to
-    # functions.exec. store/load cache the public static source, never a key.
-    code='// @exec: {"yield_time_ms": 1000, "max_output_tokens": 4000}\n'
-    code+='let source=load('+json.dumps(key)+');\n'
-    code+='if(!source){const r=await tools.exec_command('+json.dumps({'cmd':command,'workdir':str(ROOT),'max_output_tokens':12000,'yield_time_ms':10000})+');'
+    capture_key='dots-lite-captures-'+p.sha256(p.canonical([config['stateDir'],config['actorTaskId']]))
+    # Static source and raw provider diagnostics use distinct session-memory
+    # keys. The callback is injected, never resolved in new Function's globals.
+    code='// @exec: {"yield_time_ms": 1000, "max_output_tokens": 6000}\n'
+    code+='const monotonic=typeof performance!=="undefined"&&typeof performance.now==="function";const now=monotonic?()=>performance.now():()=>Date.now();const start=now();\n'
+    code+='let source=load('+json.dumps(key)+'),cold=!source;\n'
+    code+='if(!source){const r=await tools.exec_command('+json.dumps({'cmd':command,'workdir':str(ROOT),'max_output_tokens':16000,'yield_time_ms':10000})+');'
     code+='if(r.exit_code!==0||r.session_id)throw Error("lite_source_load_failed");const p=JSON.parse(r.output);'
-    code+='if(p.sha256!=='+json.dumps(digest)+'||typeof p.source!=="string")throw Error("lite_source_changed");source=p.source;store('+json.dumps(key)+',source);}\n'
-    code+='const adapter=(new Function("tools","config",source+"\\nreturn createLiteNativeAdapter(tools,config);"))(tools,'+json.dumps(config)+');\n'
-    code+='const outcome=await adapter.run('+json.dumps(args.action)+','+json.dumps(action_args)+');text(outcome);\n'
+    code+='if(p.sha256!=='+json.dumps(digest)+'||typeof p.source!=="string")throw Error("lite_source_changed");source=p.source;store('+json.dumps(key)+',source); }\n'
+    code+='const sourceMs=now()-start;\n'
+    code+='const adapter=(new Function("tools","config","store","load","key",source+"\\nconfig.captureSink=createLiteMemoryCaptureSink(store,load,key);return createLiteNativeAdapter(tools,config);"))(tools,'+json.dumps(config)+',store,load,'+json.dumps(capture_key)+');\n'
+    code+='const outcome=await adapter.run('+json.dumps(args.action)+','+json.dumps(action_args)+');outcome.capture_key='+json.dumps(capture_key)+';outcome.loader_diagnostics={cold_source_load:cold,source_helper_calls:cold?1:0,source_duration_ms:sourceMs>=0?sourceMs:null,clock_source:monotonic?"performance.now":"Date.now"};text(outcome);\n'
     destination=Path(args.save).absolute();private_dir(destination.parent)
     p.require(not destination.exists(),'cell_destination_exists')
     from .private_io import private_write
     private_write(destination,code.encode())
     return {'ok':True,'cell_file':str(destination),'cell_sha256':p.sha256(code.encode()),
-            'loader_bytes':len(code.encode()),'source_sha256':digest,'native_execution_required':True,
+            'loader_bytes':len(code.encode()),'source_sha256':digest,'capture_key':capture_key,'native_execution_required':True,
             'native_spawn_invoked':False,'google_calls':0}
 
 
@@ -306,7 +363,7 @@ def main(argv=None):
     init.add_argument('--available-child-slots',type=int,required=True)
     rpc=sub.add_parser('rpc');rpc.add_argument('--state-dir',required=True);rpc.add_argument('--actor-task-id',required=True)
     rpc.add_argument('--route-id');rpc.add_argument('--operation',required=True);rpc.add_argument('--input-base64',required=True)
-    emit=sub.add_parser('emit-cell');emit.add_argument('action',choices=['parent-prepare','parent-admit','child-takeover','child-begin','child-complete','child-retry-upload','child-refresh','parent-recover-handoff','reconcile','status'])
+    emit=sub.add_parser('emit-cell');emit.add_argument('action',choices=['parent-prepare','parent-admit','child-takeover','child-begin','child-complete','child-retry-upload','child-result-retry-status','child-retry-result','child-refresh','parent-recover-handoff','reconcile','status'])
     emit.add_argument('--state-dir',required=True);emit.add_argument('--actor-task-id',required=True);emit.add_argument('--route-id')
     emit.add_argument('--arguments-file');emit.add_argument('--save',required=True)
     load=sub.add_parser('load-cell');load.add_argument('--sha256',required=True)
@@ -324,9 +381,11 @@ def main(argv=None):
 
 
 if __name__=='__main__':
+    started=time.perf_counter()
     try:result=main()
     except Exception as error:
         # No provider text, credential, request, path, or traceback on stdout.
         code=error.code if isinstance(error,p.ProtocolError) and re.fullmatch('[a-z][a-z0-9_]{0,99}',error.code) else 'native_helper_failed'
         result={'ok':False,'error':{'code':code}}
+    result['local_timing']={'duration_ms':(time.perf_counter()-started)*1000,'clock_source':'time.perf_counter','stages':LOCAL_STAGES}
     print(json.dumps(result,ensure_ascii=False,separators=(',',':')))

@@ -148,6 +148,45 @@ class GatewayAudit(unittest.TestCase):
             value=''.join(r['textRun']['content'] for e in document['tabs'][0]['documentTab']['body']['content'][1:] for r in e['paragraph']['elements'])
             self.assertLessEqual(len(value.encode()),(p.INBOX_MAX_BYTES if docid=='inbox-a' else p.OUTBOX_MAX_BYTES)+1)
 
+    def test_keyless_http_timeout_and_late_recovery_keep_one_begin_exposure(self):
+        self.gateway.wait_seconds = .2
+        server = ResponsesServer(self.gateway)
+        thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+        body = request('Late synthetic result, no reinference')
+        identity = self.identity('keyless-http')
+        def post():
+            connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)
+            try:
+                connection.request('POST', '/activations/activation-a/v1/responses', p.canonical(body),
+                    {'Content-Type':'application/json', **identity})
+                result = connection.getresponse()
+                return result.status, result.getheader('X-Request-ID'), result.read()
+            finally: connection.close()
+        try:
+            status, _, raw = post()
+            self.assertEqual(status, 409)
+            first = self.gateway.submit(identity, p.canonical(body))
+            self.assertEqual(first['request_id'], json.loads(raw)['request_id'])
+            before = copy.deepcopy(self.google.counts)
+            self.assertEqual(self.gateway.submit(identity, p.canonical(body)), first)
+            self.assertEqual(self.google.counts, before)
+            out = response({'type':'message', 'id':'late-message', 'role':'assistant',
+                            'content':[{'type':'output_text', 'text':'Late verified answer'}]}, 'late-response')
+            self.drive_worker(first, out)
+            before = copy.deepcopy(self.google.counts)
+            result = self.gateway.existing_request(first['request_id'], identity=identity)
+            self.assertEqual(result['result'], out); self.assertFalse(result['delivery_started'])
+            status, request_id, frames = post()
+            self.assertEqual((status, request_id), (200, first['request_id']))
+            self.assertIn(b'Late verified answer', frames)
+            self.assertEqual(self.native_calls, 1)
+            self.assertEqual(self.exposures[first['route_id']], 1)
+            self.assertEqual(len(self.gateway.journal.read()['requests']), 1)
+            for key in ('create_document', 'upload', 'batch_update'):
+                self.assertEqual(self.google.counts[key], before[key])
+        finally:
+            server.shutdown(); server.server_close(); thread.join(timeout=3)
+
     def test_real_loopback_http_delivers_exact_function_sse(self):
         server=ResponsesServer(self.gateway);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         def send():

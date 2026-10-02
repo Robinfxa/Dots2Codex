@@ -93,11 +93,11 @@ shell command, stdout, a public Doc, a task message, or an error report.
      --route-id ROUTE_ID --save PRIVATE_NEW_CELL_FILE
    ```
 
-   Read that small loader file (about 1–2 KiB), then execute its complete contents
+   Read that small loader file (about 2–3 KiB), then execute its complete contents
    as a `functions.exec` cell in this actual native context. The loader loads
    the reviewed adapter from its local file, checks its pinned hash, and caches
-   only static source. No 51 KiB source paste or remote source instructions are
-   needed. The cell reads Inbox/Outbox, durably allocates capacity, reserves one
+   static source and installs the mandatory synchronous memory-only capture
+   sink. No large source paste or remote source instructions are needed. The cell reads Inbox/Outbox, durably allocates capacity, reserves one
    spawn, and commits `SPAWN_RESERVED`. Its result contains `spawn_arguments`.
 
 3. Call the actual `collaboration.spawn_agent` directly with precisely those
@@ -132,8 +132,9 @@ when active, or the user can return to it. Do not advertise hidden automatic wak
 ## Compact child runbook
 
 Use your actual returned task path, the handoff's private route state directory,
-and the same reviewed package. Generated cells share a public source cache;
-input/result content and the JOIN key are never put into that cache.
+and the same reviewed package. Generated cells share a public static-source
+cache and a separate private, bounded provider-capture memory key. The JOIN key
+and raw request/result file contents never enter the static-source cache.
 
 1. Emit and execute `child-takeover`:
 
@@ -199,6 +200,9 @@ the cell does one read-only GET and reconciles its original durable operation.
 A matching operation recovers its phase. An absent operation remains unknown;
 a string containing 400/409 is not proof of non-commit. No new operation ID,
 new revision overwrite, replacement spawn, or repeated inference is authorized.
+Capture failure pauses immediately before any dependent helper/write; it does
+not trigger a retry or a readback. Preserve the existing state and report the
+capture blocker. Missing capture evidence cannot justify replay.
 For a later attempt, emit `reconcile` with private arguments JSON:
 
 ```json
@@ -214,12 +218,25 @@ other routes available and never burns the whole JOIN merely for connectivity.
 - If ADMITTED is accepted but a crash interrupts local handoff export, run
   `parent-recover-handoff` on the same parent/root/route. It exports the existing
   recorded child handoff read-only; no spawn or Docs write is performed
-- If a result was durably saved but upload failed or its response was lost, run
-  `child-retry-upload` in the same child. It reserves another attempt and uploads
-  exactly the same immutable bytes/result ID. Maximum three physical attempts;
-  harmless orphan copies are possible. This never invokes inference
-- If RESULT publication is uncertain, use `reconcile` with `child-accepted`.
-  Never re-upload or create a new answer while that write is unresolved
+- If a result was durably saved but upload failed or its response was lost,
+  stop and inspect the full captured response/throw in session memory. Never
+  assume a permission/approval denial is transport failure. Known structured
+  approval codes produce `upload_blocked`; arbitrary denial strings remain
+  `upload_unknown` and require the active controller's semantic review. Neither
+  category authorizes another upload. A repeated `child-complete` is refused
+- Only after reviewing the actual raw failure and confirming current permission
+  for a transport retry, emit `child-retry-upload` in the same child with private
+  arguments `{"retryDecision":"transport_retry_after_raw_review"}`. This is an
+  explicit controller decision, not platform permission evidence. It reserves
+  one attempt and uploads exactly the same immutable bytes/result ID, with at
+  most three physical attempts including the first. Known approval-blocked
+  attempts are refused by this action; obtain the missing authorization before
+  pursuing recovery. Missing raw capture/disposition also blocks retry. Orphan
+  copies are possible. No inference or result regeneration occurs
+- If RESULT publication is uncertain, first use `reconcile` with
+  `child-accepted`. Never re-upload or create a new answer while it is unresolved.
+  If still unresolved, the freshly reviewed release supports an explicit,
+  RESULT-only exact-CAS retry described below
 - If EXPOSED is burned but no actual result exists, preserve `execution_unknown`.
   Inspect the same actual native task through supported platform tools. Do not
   reissue the prompt or spawn a replacement from a missing heartbeat
@@ -232,11 +249,72 @@ other routes available and never burns the whole JOIN merely for connectivity.
   child when requested. A Docs stop record is not proof that native execution
   stopped, and a running request may already have begun
 
-Do not emit raw connector errors. The adapter retains actual responses in its
-invocation's memory and only reports fixed error categories/status codes. Keys,
-provider error messages, signed download URLs, and user content do not belong in
-shell diagnostics. The helper accepts only bounded control/metadata receipts
-and local paths; base64 command encoding is quoting, not confidentiality.
+### Explicit RESULT-only CAS recovery
+
+`child-result-retry-status` reads the existing sealed pending RESULT plan and
+returns its `operation_id`, `next_attempt`, `attempts_used`, `max_attempts`, plan
+hash, original required revision, and quarantine state. It creates no write.
+Review the latest exact captured publication failure and current permission in
+this same admitted child. An approval denial requires fresh, specific consent;
+an unknown outcome does not grant it. Then, and only then, emit
+`child-retry-result` with this private arguments object using the returned
+operation and attempt:
+
+```json
+{"retryDecision":"same_result_cas_after_raw_and_permission_review","expectedOperationId":"EXACT_PENDING_OPERATION_ID","expectedAttempt":2}
+```
+
+The declaration records the active controller's decision; it is not a platform
+approval receipt and cannot override the tool's approval checks. Each attempt
+requires a fresh decision for that exact attempt number. The core burns a durable
+attempt marker before dispatch, permits at most three physical publications
+including the initial call, and returns the sealed original operation, requests,
+and `requiredRevisionId` unchanged. It never adopts a fresh revision or replans.
+If the first atomic CAS already applied, its original revision is stale and a
+repeat cannot apply a second time; ordinary acknowledgment/readback reconciles
+the original operation. A conflicting/newer control record quarantines recovery.
+Legacy unsealed pending plans cannot gain this capability. This action does not
+retry BEGIN/SPAWN/ADMITTED, upload a result, expose an input, or invoke inference.
+
+### Private capture and safe diagnostics
+
+Use the complete emitted loader, including its injected `store`/`load` sink.
+The sink is called synchronously after every actual provider return or throw,
+before unwrapping, classification, receipt construction, or dependent actions.
+It retains the exact full envelope, arguments, and returned `isError` field in a
+separate session-memory key reported as `capture_key`. A later `functions.exec`
+cell in the same session can access that key through `load(capture_key)` even
+though the original adapter's lexical variables are gone. No extra provider,
+helper, readback, shell, or filesystem call is added for capture.
+
+The memory history retains at most the latest 32 provider calls and 4,194,304
+serialized UTF-16 code units. Inspect a failure before subsequent work can evict it;
+a session reset loses this diagnostic history. Source caching is distinct from
+raw captures. Raw request/result artifacts remain file-backed as before. Within
+one adapter, `callCaptured` returns the exact provider result or rethrows the
+same original object, and `getCaptures()` exposes bounded original references.
+Across isolates the memory store necessarily copies serializable values. Error
+own data properties (including message and cause) are retained; a lazy stack
+accessor is explicitly marked unevaluated. Other accessors, custom prototypes,
+cycles, serialization/store failures, or a missing synchronous acknowledgment
+fail closed and pause dependent work without automatic retry.
+
+Do not emit raw captures, connector errors, signed URLs, credentials or user
+content to shell stdout, commands, files, ordinary outcome text, or diagnostic
+logs. Inspect memory through a private tool result containing only the minimally
+necessary failure details, with credentials and secrets excluded; emit only a
+safe/redacted conclusion in ordinary diagnostics. Do not dump the whole capture.
+The actual original error must be reviewed before any explicit
+retry; allowlisted structured approval and transport codes are hints, not a
+substitute for permission. The adapter does not guess from arbitrary strings
+or HTTP status alone. Only fixed categories, allowlisted codes, numeric status,
+counts and measured durations leave the capture layer.
+
+MCP envelope display/diagnostic content stays in memory. The helper receives
+only the necessary complete protocol resource and bounded metadata/receipts;
+unsupported document structure is preserved for strict validation or rejected,
+never silently stripped to make a malformed document look valid. Base64 command
+encoding is quoting, not confidentiality.
 
 ## Tested operation counts and remaining limits
 
@@ -262,6 +340,33 @@ user/native collaboration calls, recovery, and any larger-payload reads. Static
 source loading is one cached local call per functions tool session. Cold startup
 adds Inbox/Outbox reads, two parent control writes, actual spawn/handoff, and
 parent/takeover helpers; these are not represented as a measured live latency.
+
+The generated cell reports `diagnostics` with actual provider/helper counts,
+content-free stage names, duration in milliseconds, and each clock source.
+Provider/helper awaited durations use `performance.now` when the runtime offers
+it; otherwise `Date.now` is explicitly labeled as wall-clock timing and a
+backwards duration is null. Python reports local `time.perf_counter` durations
+for helper work, admission-evidence reads/recording, downloaded-input local
+reads, and actual native-response file reads/save. The loader separately reports
+cold source loading versus a cache hit and its source-helper count; `emit-cell`
+reports its local emission duration. These are observed execution durations,
+not Google server CPU time or underlying model machine time.
+
+Actual native spawn/handoff, model acquisition of the exposed request file,
+reasoning/inference, and the model's output-file-writing time are outside these
+helper boundaries. `request_file_read_ms` and `native_inference_ms` are null,
+not zero. Do not infer them by subtracting coarse timestamps or label a
+multi-call large-input read as native machine time. A live latency report must
+record those external boundaries separately and preserve their clock sources.
+
+A possible future presentation optimization is a lossless, locally validated
+model view containing all effective instructions, current task, conversation
+and tool history, plus a complete tool-name/type/namespace index with on-demand
+exact schema lookup. It must keep the original request bytes as the authoritative
+artifact and bind any projection/lookups to their hash. This release does not
+implement that optimization or omit instructions, current task, history, or
+schemas from the required full request read. Large payloads may still require
+multiple model-visible file reads.
 
 No live Mac first response, true native tool continuation, provider latency,
 underlying model internals, automatic wake, exactly-once side effects, or maximum

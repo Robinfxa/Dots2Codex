@@ -8,6 +8,8 @@ from __future__ import annotations
 import copy
 import fcntl
 import http.server
+import hashlib
+import hmac
 import os
 from pathlib import Path
 import re
@@ -21,13 +23,55 @@ from .protocol import (PROTOCOL, INBOX_MAX_BYTES, OUTBOX_MAX_BYTES, ProtocolErro
                        validate_grant, make_inbox, parse_inbox, parse_outbox, validate_result_envelope)
 from .storage import Journal, private_read, private_write, fsync_dir
 from .wire import (strict_json, validate_request, validate_response, validate_history,
-                   response_events, has_tools, event_frame, call_binding)
+                   response_events, has_tools, event_frame, call_binding, TOOL_DIAGNOSTIC_TYPES)
+
+
+_DIAGNOSTIC_MODELS = frozenset({'gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna', 'gpt-5.6-sol'})
+_DIAGNOSTIC_EFFORTS = frozenset({'low', 'medium', 'high', 'xhigh'})
+
+
+def _safe_pair(pair):
+    return {'model': pair['model'] if pair['model'] in _DIAGNOSTIC_MODELS else 'other',
+            'reasoning_effort': pair['reasoning_effort'] if pair['reasoning_effort'] in _DIAGNOSTIC_EFFORTS else 'other'}
+
+
+def error_payload(error):
+    """Only fixed enums/indices are observable; never echo a name or schema."""
+    payload = {'code': error.code}
+    details = getattr(error, 'details', None)
+    if not isinstance(details, dict): return payload
+    safe = {}
+    if error.code in {'unsupported_hosted_tool', 'unsupported_client_tool_search', 'unsupported_tool_type', 'invalid_tool_name'}:
+        for key in ('tool_index', 'child_index'):
+            if type(details.get(key)) is int and 0 <= details[key] <= 1024 * 1024: safe[key] = details[key]
+        if type(details.get('name_present')) is bool: safe['name_present'] = details['name_present']
+        kind = details.get('tool_type')
+        if isinstance(kind, str) and kind in TOOL_DIAGNOSTIC_TYPES: safe['tool_type'] = kind
+    elif error.code == 'pair_not_authorized':
+        candidate = details.get('requested_pair')
+        allowed = details.get('allowed_pairs')
+        def valid_pair(pair):
+            return isinstance(pair, dict) and set(pair) == {'model', 'reasoning_effort'} and all(isinstance(v, str) for v in pair.values())
+        if valid_pair(candidate): safe['requested_pair'] = _safe_pair(candidate)
+        if isinstance(allowed, list) and len(allowed) <= 32 and all(valid_pair(pair) for pair in allowed):
+            safe['allowed_pairs'] = [_safe_pair(pair) for pair in allowed]
+    if safe: payload['details'] = safe
+    return payload
 
 
 def route_identity(identity):
     require(isinstance(identity, dict) and set(identity) == {'session-id', 'thread-id'}, 'canonical_runtime_identity_required')
     require(all(isinstance(v, str) and re.fullmatch(r'[!-~]{1,256}', v) for v in identity.values()), 'invalid_runtime_identity')
     return copy.deepcopy(identity)
+
+
+def recovery_token(key, activation_id, request_id):
+    """Request-scoped local inspection capability; never transmit the JOIN key."""
+    require(isinstance(request_id, str) and re.fullmatch('[0-9a-f]{32}', request_id), 'invalid_local_request_id')
+    try: secret = bytes.fromhex(key) if isinstance(key, str) else key
+    except ValueError: raise ProtocolError('invalid_join_key') from None
+    require(type(secret) is bytes and len(secret) >= 32, 'invalid_join_key')
+    return hmac.new(secret, canonical(['dots-lite-local-recovery/3', activation_id, request_id]), hashlib.sha256).hexdigest()
 
 
 class MacGateway:
@@ -51,6 +95,8 @@ class MacGateway:
             raise ProtocolError('gateway_already_running') from None
         self._lock, self._route_locks = threading.RLock(), {}
         self._admission_stop = threading.Event()
+        self._diagnostic_lock = threading.Lock()
+        self._http_ingress = {'responses_posts': 0, 'responses_errors': 0, 'last_error': None, 'local_process_only': True}
         try:
             if create:
                 self.journal = Journal.create(self.root / 'mac', {'grant': self.grant, 'key_sha256': sha256(str(key).encode()),
@@ -158,7 +204,10 @@ class MacGateway:
         require(type(raw_request) is bytes and 0 < len(raw_request) <= self.grant['limits']['max_request_bytes'], 'wire_request_too_large')
         request = validate_request(strict_json(raw_request), max_bytes=self.grant['limits']['max_request_bytes'])
         pair = {'model': request['model'], 'reasoning_effort': request['reasoning']['effort']}
-        require(pair in self.grant['allowed_pairs'], 'pair_not_authorized')
+        if pair not in self.grant['allowed_pairs']:
+            error = ProtocolError('pair_not_authorized')
+            error.details = {'requested_pair': _safe_pair(pair), 'allowed_pairs': [_safe_pair(p) for p in self.grant['allowed_pairs']]}
+            raise error
         require(request_key is None or isinstance(request_key, str) and re.fullmatch(r'[!-~]{1,256}', request_key), 'invalid_idempotency_key')
         digest = sha256(raw_request)
         identity_hash = sha256(canonical(identity))
@@ -170,10 +219,35 @@ class MacGateway:
                 if key_hash is not None and old['route_id'] == route_id and old['key_hash'] == key_hash:
                     require(old['request_sha256'] == digest, 'idempotency_key_payload_conflict')
                     return self._ticket(old)
+            route = state['routes'].get(route_id)
+            previous_request, prior_outputs = None, []
+            if route is not None:
+                require(route['slot']['identity_sha256'] == identity_hash, 'route_identity_mismatch')
+                require(route['creation'] == 'created', 'outbox_creation_unknown_no_automatic_retry')
+                require(route['quarantine'] is None, 'route_quarantined')
+                require(all(route['slot'][k] == v for k, v in pair.items()), 'route_model_pair_changed')
+                previous_id = route['current_request_id']
+                if previous_id is not None:
+                    previous = state['requests'][previous_id]
+                    # Pinned Codex does not send Idempotency-Key. Only its current,
+                    # still-undelivered, keyless request can be identified by bytes.
+                    # Never merge an explicit new key or a historical request.
+                    if key_hash is None and previous['key_hash'] is None and previous['request_sha256'] == digest:
+                        saved = private_read(self._blob(previous_id, 'request'), self.grant['limits']['max_request_bytes'])
+                        require(saved == raw_request, 'saved_request_changed')
+                        if not previous['delivery_started']:
+                            return self._ticket(previous)
+                        require(not previous['tool_delivery'], 'tool_delivery_unknown_do_not_replay')
+                    self._new_allowed(state)
+                    require(previous['state'] == 'verified' and previous['delivery_started'], 'route_request_inflight_or_delivery_unknown')
+                    previous_request = strict_json(private_read(self._blob(previous_id, 'request'), self.grant['limits']['max_request_bytes']))
+                    prior_outputs.append(strict_json(private_read(self._blob(previous_id, 'result'), self.grant['limits']['max_result_bytes']))['output'])
+            validate_history(request, previous_request, prior_outputs, route['issued_calls'] if route else {})
+            seq = len(route['request_ids']) + 1 if route else 1
+            require(seq <= self.grant['limits']['max_requests_per_route'], 'route_request_quota_exhausted')
             self._new_allowed(state)
             state = self._reconcile(state, deadline)
             require(state['inbox'] is not None, 'gateway_not_initialized')
-            route = state['routes'].get(route_id)
             if route is None:
                 require(len(state['routes']) < self.grant['limits']['max_routes'], 'route_capacity_exhausted')
                 slot = {'route_id': route_id, 'identity_sha256': identity_hash, **pair, 'outbox_id': None, 'request': None, 'stop': False}
@@ -187,19 +261,6 @@ class MacGateway:
                 route = state['routes'][route_id]; route['slot']['outbox_id'] = outbox_id; route['creation'] = 'created'
                 state = self._save(state)
             route = state['routes'][route_id]
-            require(route['creation'] == 'created', 'outbox_creation_unknown_no_automatic_retry')
-            require(route['quarantine'] is None, 'route_quarantined')
-            require(all(route['slot'][k] == v for k, v in pair.items()), 'route_model_pair_changed')
-            previous_id = route['current_request_id']
-            previous_request, prior_outputs = None, []
-            if previous_id is not None:
-                previous = state['requests'][previous_id]
-                require(previous['state'] == 'verified' and previous['delivery_started'], 'route_request_inflight_or_delivery_unknown')
-                previous_request = strict_json(private_read(self._blob(previous_id, 'request'), self.grant['limits']['max_request_bytes']))
-                prior_outputs.append(strict_json(private_read(self._blob(previous_id, 'result'), self.grant['limits']['max_result_bytes']))['output'])
-            validate_history(request, previous_request, prior_outputs, route['issued_calls'])
-            seq = len(route['request_ids']) + 1
-            require(seq <= self.grant['limits']['max_requests_per_route'], 'route_request_quota_exhausted')
             rid = secrets.token_hex(16)
             begin_before = self.grant['expires_at'] if begin_before is None else min(begin_before, self.grant['expires_at'])
             require(type(begin_before) is int and time.time() < begin_before, 'request_begin_deadline_expired')
@@ -282,14 +343,15 @@ class MacGateway:
         require(job is not None and all(ticket.get(k) == job[k] for k in ('request_id','route_id','seq','request_sha256')), 'request_ticket_mismatch')
         return job
 
-    def poll(self, ticket, *, deadline=None):
+    def poll(self, ticket, *, deadline=None, reconcile_publication=True):
         with self._lock:
             rid = self._get_job(self._read(), ticket)['route_id']
             lock = self._route_locks.setdefault(rid, threading.RLock())
         with lock:
-            return self._poll_once(ticket, deadline=deadline)
+            return self._poll_once(ticket, deadline=deadline, reconcile_publication=reconcile_publication)
 
-    def _poll_once(self, ticket, *, deadline=None):
+    def _poll_once(self, ticket, *, deadline=None, reconcile_publication=True):
+        self._check_deadline(deadline)
         with self._lock:
             state = self._read(); job = self._get_job(state, ticket)
             require(job['state'] != 'acknowledged', 'result_acknowledged_cache_pruned')
@@ -298,7 +360,7 @@ class MacGateway:
                 require(sha256(raw) == job['result_locator']['result_sha256'], 'cached_result_changed')
                 return strict_json(raw)['output']
             route = copy.deepcopy(state['routes'][job['route_id']]); job = copy.deepcopy(job)
-        if job['state'] == 'publish_unknown': self.recover_request(ticket, deadline=deadline)
+        if job['state'] == 'publish_unknown' and reconcile_publication: self.recover_request(ticket, deadline=deadline)
         if job['state'] not in {'published', 'publish_unknown'}: return None
         actual = self.docs.get_document(route['slot']['outbox_id'], deadline=deadline)
         snap = control.snapshot(actual, route['slot']['outbox_id'],
@@ -356,6 +418,41 @@ class MacGateway:
             self._save(state)
         return response
 
+    def existing_request(self, request_id, *, identity=None, token=None, deadline=None):
+        """Inspect one known request through this owner; never admit or emit one.
+
+        A recovered text result is for local inspection, not a resumed Codex
+        connection. Tool payloads remain behind delivery()'s one-use barrier.
+        """
+        self._check_deadline(deadline)
+        require(isinstance(request_id, str) and re.fullmatch('[0-9a-f]{32}', request_id), 'invalid_local_request_id')
+        require((identity is None) != (token is None), 'recovery_identity_or_token_required')
+        with self._lock:
+            state = self._read()
+            job = state['requests'].get(request_id)
+            require(job is not None, 'unknown_request_id')
+            if identity is not None:
+                identity = route_identity(identity)
+                route = state['routes'][job['route_id']]
+                require(route['slot']['identity_sha256'] == sha256(canonical(identity)), 'recovery_route_identity_mismatch')
+            else:
+                require(isinstance(token, str) and re.fullmatch('[0-9a-f]{64}', token) and
+                        hmac.compare_digest(token, recovery_token(self.key, self.grant['activation_id'], request_id)),
+                        'invalid_recovery_token')
+            ticket = self._ticket(job)
+            acknowledged = job['state'] == 'acknowledged'
+        output = None if acknowledged else self.poll(ticket, deadline=deadline, reconcile_publication=False)
+        with self._lock:
+            job = self._get_job(self._read(), ticket)
+            # A successor may have acknowledged this result while polling.
+            available = output is not None and job['state'] == 'verified'
+            return {'protocol': PROTOCOL, 'activation_id': self.grant['activation_id'],
+                    'ticket': self._ticket(job), 'result_available': available,
+                    'result': output if available and not job['tool_delivery'] else None,
+                    'result_locator': copy.deepcopy(job['result_locator']),
+                    'delivery_started': job['delivery_started'], 'tool_output_withheld': job['tool_delivery'],
+                    'read_only': True, 'sse_emitted': False, 'client_connection_resumed': False}
+
     def delivery(self, ticket):
         with self._lock:
             state = self._read(); job = self._get_job(state, ticket)
@@ -380,13 +477,23 @@ class MacGateway:
             if state['inbox'] is not None: self._publish(state, deadline=deadline)
             return self.status()
 
+    def record_http_ingress(self, error=None):
+        # Fixed-size live-process diagnostics, not request/header/body logging.
+        with self._diagnostic_lock:
+            key = 'responses_posts' if error is None else 'responses_errors'
+            self._http_ingress[key] = min(self._http_ingress[key] + 1, 2147483647)
+            if error is not None: self._http_ingress['last_error'] = error_payload(error)
+
     def status(self):
+        with self._diagnostic_lock:
+            http_ingress = copy.deepcopy(self._http_ingress)
         with self._lock:
             state = self._read()
             return {'protocol': PROTOCOL, 'activation_id': self.grant['activation_id'], 'listener_ready': False,
                     'join_configured': state['inbox'] is not None and state['write_intent'] is None,
                     'first_round_trip_verified': state['first_round_trip_verified'], 'production_ready': False,
                     'stopped': state['stopped'], 'native_interruption_confirmed': False,
+                    'http_ingress': http_ingress,
                     'routes': [{'route_id': rid, 'request_id': route['current_request_id'],
                                 'state': state['requests'][route['current_request_id']]['state'] if route['current_request_id'] else route['creation']}
                                for rid, route in state['routes'].items()]}
@@ -416,19 +523,62 @@ class ResponsesHandler(http.server.BaseHTTPRequestHandler):
         require(not any(self.headers.get_all(k) for k in ('Origin','Authorization','Cookie','Proxy-Authorization',
             'Sec-Fetch-Site','Transfer-Encoding','Upgrade')), 'forbidden_local_header')
         require(not self.headers.get_all('Content-Encoding') or self.headers.get_all('Content-Encoding') == ['identity'], 'unsupported_encoding')
+    def _identity(self):
+        require(not self.headers.get_all('session_id') and not self.headers.get_all('thread_id'), 'ambiguous_legacy_session_header')
+        identity = {}
+        for name in ('session-id', 'thread-id'):
+            values = self.headers.get_all(name) or []
+            require(len(values) == 1, 'canonical_runtime_identity_required')
+            identity[name] = values[0]
+        return route_identity(identity)
     def _json(self, value, status=200):
         raw = canonical(value); self.send_response(status); self.send_header('Content-Type','application/json')
-        self.send_header('Content-Length',str(len(raw))); self.send_header('Connection','close'); self.end_headers()
+        self.send_header('Content-Length',str(len(raw))); self.send_header('Cache-Control','no-store')
+        self.send_header('Connection','close'); self.end_headers()
         self.wfile.write(raw); self.close_connection = True
     def do_GET(self):
+        timer, acquired = None, False
         try:
             self._headers()
             owner = self.server.gateway
-            require(self.path in {'/health', '/activations/' + owner.grant['activation_id'] + '/health'}, 'unsupported_endpoint')
-            self._json({**owner.status(), 'listener_ready': True})
-        except ProtocolError as exc: self._json({'error': {'code': exc.code}}, 400)
+            if self.path in {'/health', '/activations/' + owner.grant['activation_id'] + '/health'}:
+                self._json({**owner.status(), 'listener_ready': True})
+                return
+            prefix = '/activations/' + owner.grant['activation_id'] + '/v1/responses/'
+            require(self.path.startswith(prefix), 'unsupported_endpoint')
+            request_id = self.path[len(prefix):]
+            require(re.fullmatch('[0-9a-f]{32}', request_id), 'invalid_local_request_id')
+            require(not self.headers.get_all('Content-Length') or self.headers.get_all('Content-Length') == ['0'], 'get_body_not_supported')
+            tokens = self.headers.get_all('X-Dots-Recovery-Token') or []
+            require(len(tokens) <= 1, 'duplicate_recovery_token')
+            if tokens:
+                require(not any(self.headers.get_all(k) for k in ('session-id', 'thread-id', 'session_id', 'thread_id')),
+                        'ambiguous_recovery_identity')
+                identity = None
+            else: identity = self._identity()
+            deadline = time.monotonic() + owner.wait_seconds
+            acquired = self.server.waiters.acquire(blocking=False)
+            require(acquired, 'http_waiter_capacity_exhausted')
+            def end_wait():
+                try: self.connection.shutdown(socket.SHUT_RDWR)
+                except OSError: pass
+            timer = threading.Timer(owner.wait_seconds + .05, end_wait)
+            timer.daemon = True; timer.start()
+            result = owner.existing_request(request_id, identity=identity, token=tokens[0] if tokens else None, deadline=deadline)
+            self._json(result, 200 if result['result_available'] or result['ticket']['state'] == 'acknowledged' else 202)
+        except ProtocolError as exc:
+            try: self._json({'error': {'code': exc.code}, 'automatic_retry': False, 'native_fallback': False}, 400)
+            except OSError: pass
+        except (OSError, ValueError):
+            try: self._json({'error': {'code': 'gateway_io_outcome_unknown'}, 'automatic_retry': False}, 503)
+            except OSError: pass
+        finally:
+            if timer: timer.cancel()
+            if acquired: self.server.waiters.release()
+            self.close_connection = True
     def do_POST(self):
         ticket, timer, acquired = None, None, False
+        self.server.gateway.record_http_ingress()
         try:
             self._headers(); owner = self.server.gateway
             require(self.path == '/activations/' + owner.grant['activation_id'] + '/v1/responses', 'unsupported_endpoint')
@@ -444,11 +594,7 @@ class ResponsesHandler(http.server.BaseHTTPRequestHandler):
             require(len(lengths) == 1 and re.fullmatch(r'[0-9]{1,10}', lengths[0]), 'invalid_content_length')
             length = int(lengths[0]); require(0 < length <= owner.grant['limits']['max_request_bytes'], 'request_too_large')
             require(self.headers.get_content_type() == 'application/json', 'json_content_type_required')
-            identity = {}
-            require(not self.headers.get_all('session_id') and not self.headers.get_all('thread_id'), 'ambiguous_legacy_session_header')
-            for name in ('session-id', 'thread-id'):
-                values = self.headers.get_all(name) or []
-                require(len(values) == 1, 'canonical_runtime_identity_required'); identity[name] = values[0]
+            identity = self._identity()
             keys = self.headers.get_all('Idempotency-Key') or []
             require(len(keys) <= 1, 'duplicate_idempotency_key')
             self.connection.settimeout(min(5, max(.01, deadline-time.monotonic())))
@@ -465,10 +611,12 @@ class ResponsesHandler(http.server.BaseHTTPRequestHandler):
             self.send_header('Content-Length',str(len(frames))); self.send_header('Connection','close'); self.end_headers()
             self.wfile.write(frames); self.wfile.flush()
         except ProtocolError as exc:
-            try: self._json({'error': {'code': exc.code}, 'request_id': ticket['request_id'] if ticket else getattr(exc, 'request_id', None),
+            self.server.gateway.record_http_ingress(exc)
+            try: self._json({'error': error_payload(exc), 'request_id': ticket['request_id'] if ticket else getattr(exc, 'request_id', None),
                             'automatic_retry': False, 'native_fallback': False}, 409)
             except OSError: pass
         except (OSError, ValueError):
+            self.server.gateway.record_http_ingress(ProtocolError('gateway_io_outcome_unknown'))
             try: self._json({'error': {'code': 'gateway_io_outcome_unknown'}, 'request_id': ticket['request_id'] if ticket else None,
                             'automatic_retry': False}, 503)
             except OSError: pass

@@ -2,7 +2,7 @@
 const test=require('node:test'), assert=require('node:assert/strict');
 const fs=require('node:fs'), path=require('node:path'), os=require('node:os');
 const {spawnSync}=require('node:child_process');
-const {createLiteNativeAdapter}=require('./lite_cell.js');
+const {createLiteNativeAdapter,createLiteMemoryCaptureSink}=require('./lite_cell.js');
 const original=path.resolve(__dirname,'..');
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
 const goldenRaw=JSON.parse(fs.readFileSync(path.join(original,'lite_tests/fixtures/normalized-raw-fetch.json')));
@@ -30,8 +30,8 @@ join={'activation_id':grant['activation_id'],'inbox_id':grant['inbox_id'],'grant
 (root/'join.txt').write_text(JOIN_MARKER+' '+canonical(join).decode());os.chmod(root/'join.txt',0o600)
 print(json.dumps({'inbox':inbox,'files':files,'routes':routes,'grant':grant}))
 `;
-function fixture(requestTools=[]){
- const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'dots-lite-adapter-'));fs.chmodSync(tmp,0o700);
+function fixture(requestTools=[],{temporaryRoot=os.tmpdir()}={}){
+ const tmp=fs.mkdtempSync(path.join(temporaryRoot,'dots-lite-adapter-'));fs.chmodSync(tmp,0o700);
  const cwd=path.join(tmp,'package');fs.mkdirSync(cwd,{mode:0o700});
  fs.cpSync(path.join(original,'dots_lite'),path.join(cwd,'dots_lite'),{recursive:true,filter:x=>!x.includes('__pycache__')});
  fs.mkdirSync(path.join(cwd,'native_connector'));fs.copyFileSync(path.join(original,'native_connector/lite_cell.js'),path.join(cwd,'native_connector/lite_cell.js'));
@@ -83,12 +83,31 @@ function fakeTools(f,options={}){
  };
  return {tools,docs,blobs,counters,effects};
 }
-function makeExecutor(f,provider){let n=0;const store=new Map();return async function(action,{stateDir=f.root,actor='/root',route='alpha',args={}}={}){
+function compactLoaderBytes(emitted,source){
+ // Loader compactness is a bound on executable scaffolding, not the caller's
+ // absolute paths. Parse only the four known JSON data literals emitted by
+ // cli.py; keep all executable source, hash checks and source-cache keys in
+ // the original 2400-byte budget. Unknown emission shapes fail this test.
+ assert.equal(emitted.loader_bytes,Buffer.byteLength(source,'utf8'));
+ const command=/tools\.exec_command\((\{[^\n]*\})\);if\(r\.exit_code/.exec(source);
+ const config=/\)\)\(tools,(\{[^\n]*\}),store,load,/.exec(source);
+ const run=/^const outcome=await adapter\.run\(("(?:\\.|[^"\\])*"),(\{[^\n]*\})\);outcome\.capture_key=/m.exec(source);
+ assert.ok(command && config && run,'known file-backed loader data boundaries required');
+ const literals=[command[1],config[1],run[1],run[2]],parsed=literals.map(x=>JSON.parse(x));
+ assert.equal(parsed[0].cmd,'python3 -B -m dots_lite.cli load-cell --sha256 '+emitted.source_sha256);
+ assert.equal(parsed[0].workdir,parsed[1].cwd);
+ assert.equal(typeof parsed[2],'string');assert.equal(typeof parsed[3],'object');assert.ok(parsed[3] && !Array.isArray(parsed[3]));
+ assert.ok(!source.includes('function createLiteNativeAdapter('),'adapter must remain file-backed');
+ const data_bytes=literals.reduce((n,x)=>n+Buffer.byteLength(x,'utf8'),0),fixed_bytes=emitted.loader_bytes-data_bytes;
+ assert.ok(fixed_bytes<2400,'loader fixed overhead '+fixed_bytes+' must remain below 2400 bytes');
+ return {loader_bytes:emitted.loader_bytes,data_bytes,fixed_bytes};
+}
+function makeExecutor(f,provider,options={}){let n=0;const store=options.memory || new Map(),measurements=[];const execute=async function(action,{stateDir=f.root,actor='/root',route='alpha',args={}}={}){
  const nonce=require('node:crypto').randomBytes(8).toString('hex');const file=path.join(f.tmp,'cell-'+nonce+'-'+(++n)+'.js'),argsFile=privateJSON(path.join(f.tmp,'arguments-'+nonce+'-'+n+'.json'),args);
  const emitted=command(f.cwd,['-m','dots_lite.cli','emit-cell',action,'--state-dir',stateDir,'--actor-task-id',actor,'--route-id',route,'--arguments-file',argsFile,'--save',file]);
- assert.equal(emitted.ok,true,JSON.stringify(emitted));assert.ok(emitted.loader_bytes<2400);let output;
- await new AsyncFunction('tools','load','store','text',fs.readFileSync(file,'utf8'))(provider.tools,k=>store.get(k),(k,v)=>store.set(k,v),v=>{output=v;});return output;
-};}
+ assert.equal(emitted.ok,true,JSON.stringify(emitted));const source=fs.readFileSync(file,'utf8');measurements.push({action,...compactLoaderBytes(emitted,source)});execute.lastLoader={emitted,source};let output;
+ await new AsyncFunction('tools','load','store','text',source)(provider.tools,k=>store.get(k),(k,v)=>{if(options.failCapture && k.startsWith('dots-lite-captures-'))throw Error('private sink error');store.set(k,v);},v=>{output=v;});return output;
+};execute.memory=store;execute.loaderMeasurements=measurements;return execute;}
 async function admit(f,exec,route='alpha'){
  const reserved=await exec('parent-prepare',{route});assert.equal(reserved.ok,true,JSON.stringify(reserved));
  const args=reserved.spawn_arguments;assert.equal(args.fork_turns,'none');assert.equal(args.model,'gpt-6.1-sol');assert.equal(args.reasoning_effort,'xhigh');
@@ -169,8 +188,10 @@ test('three immutable upload attempts maximum; lost upload replies do not re-inf
  const f=fixture();try{const p=fakeTools(f),exec=makeExecutor(f,p),a=await admit(f,exec),begin=await exec('child-begin',a);
   const saved=[];p.tools.mcp__codex_apps__google_drive_upload_file=async args=>{p.counters.upload++;saved.push(fs.readFileSync(args.file_uri));throw Error('lost response with private data');};
   const first=await exec('child-complete',{...a,args:{requestId:begin.request_id,outputFile:output(f)}});assert.equal(first.status,'upload_unknown');
-  assert.equal((await exec('child-retry-upload',a)).status,'upload_unknown');assert.equal((await exec('child-retry-upload',a)).status,'upload_unknown');
-  assert.equal((await exec('child-retry-upload',a)).ok,false);assert.equal(p.counters.upload,3);assert.ok(saved.every(x=>x.equals(saved[0])));
+  assert.equal((await exec('child-retry-upload',a)).error.code,'upload_retry_requires_explicit_review');
+  const reviewed={...a,args:{retryDecision:'transport_retry_after_raw_review'}};
+  assert.equal((await exec('child-retry-upload',reviewed)).status,'upload_unknown');assert.equal((await exec('child-retry-upload',reviewed)).status,'upload_unknown');
+  assert.equal((await exec('child-retry-upload',reviewed)).ok,false);assert.equal(p.counters.upload,3);assert.ok(saved.every(x=>x.equals(saved[0])));
   assert.equal((await exec('child-begin',a)).ok,false);
  }finally{f.cleanup();}
 });
@@ -209,4 +230,110 @@ test('activation capacity includes an unresolved real-spawn reservation',async()
   const blocked=await exec('parent-prepare',{route:'beta'});assert.equal(blocked.ok,false);assert.equal(blocked.error.code,'native_capacity_reached');
   assert.deepEqual(p.effects,['SPAWN_RESERVED']);assert.equal(Object.keys(JSON.parse(fs.readFileSync(file)).routes).length,1);
  }finally{f.cleanup();}
+});
+
+const captureConfig={cwd:'/fixture',stateDir:'/private',actorTaskId:'/root/child',inboxId:'inbox'};
+test('capture primitive preserves exact arguments, return and throw identities, with sink only after dispatch',async()=>{
+ const events=[],args={file_uri:'/private/result.json'},returned={isError:true,content:[{type:'text',text:'entire private denial'}],structuredContent:{code:'approval_denied'}},thrown={message:'exact thrown object',nested:{secret:'private'}},seen=[];
+ const adapter=createLiteNativeAdapter({upload:async submitted=>{events.push('dispatch');assert.equal(submitted,args);return returned;},fail:async submitted=>{events.push('throw');assert.equal(submitted,args);throw thrown;}},{...captureConfig,captureSink:r=>{events.push('sink');seen.push(r);return true;}});
+ assert.equal(await adapter.callCaptured('upload',args),returned);
+ await assert.rejects(adapter.callCaptured('fail',args),e=>e===thrown);
+ assert.deepEqual(events,['dispatch','sink','throw','sink']);assert.equal(seen[0].args,args);assert.equal(seen[0].value,returned);assert.equal(seen[1].error,thrown);
+ assert.equal(adapter.getCaptures()[0],seen[0]);assert.equal(returned.isError,true);
+ for(let i=0;i<34;i++)await adapter.callCaptured('upload',args);
+ assert.equal(adapter.getCaptures().length,32);
+});
+
+test('JSON-backed session capture retains nested envelopes and exception data without invoking accessors',()=>{
+ const memory=new Map(),sink=createLiteMemoryCaptureSink((k,v)=>memory.set(k,JSON.parse(JSON.stringify(v))),k=>memory.get(k),'memory-key');
+ const full={isError:true,content:[{type:'text',text:'private approval reason'}],structuredContent:{isError:true,error:{code:'approval_denied'},provider_trace:{nested:['unaltered']}}};
+ sink({tool:'upload',args:{file_uri:'/private'},kind:'return',value:full});
+ const second=createLiteMemoryCaptureSink((k,v)=>memory.set(k,JSON.parse(JSON.stringify(v))),k=>memory.get(k),'memory-key');
+ const error=Error('entire thrown private reason',{cause:{nested:'private cause'}});error.code='ETIMEDOUT';
+ second({tool:'upload',args:{file_uri:'/private'},kind:'throw',error});
+ assert.deepEqual(memory.get('memory-key')[0].value,full);
+ assert.equal(memory.get('memory-key')[1].error.message,error.message);assert.deepEqual(memory.get('memory-key')[1].error.cause,error.cause);assert.equal(memory.get('memory-key')[1].error.code,'ETIMEDOUT');
+ let getterCalls=0;const dangerous={};Object.defineProperty(dangerous,'secret',{get(){getterCalls++;return 'should never read';},enumerable:true});
+ assert.throws(()=>sink({kind:'return',value:dangerous}),/lite_capture_failed/);assert.equal(getterCalls,0);
+ assert.equal(memory.get('memory-key').length,2);
+});
+
+test('generated loaders retain full normalized approval denial across cells and forbid upload retry',async()=>{
+ const f=fixture();try{const p=fakeTools(f),exec=makeExecutor(f,p),a=await admit(f,exec),begin=await exec('child-begin',a);
+  const full={isError:true,content:[{type:'text',text:'private approval rejection with all explanatory details'}],structuredContent:{error:{code:'approval_denied',message:'private policy reason'},status:403,extra:{entire:'unchanged'}}};
+  const originalExec=p.tools.exec_command;p.tools.exec_command=async args=>{assert.ok(!args.cmd.includes('private approval rejection'));assert.ok(!args.cmd.includes('private policy reason'));const b64=/'--input-base64' '([^']*)'/.exec(args.cmd);if(b64)assert.ok(!Buffer.from(b64[1],'base64').toString().includes('private policy reason'));return originalExec(args);};
+  p.tools.mcp__codex_apps__google_drive_upload_file=async()=>{p.counters.upload++;return full;};
+  const done=await exec('child-complete',{...a,args:{requestId:begin.request_id,outputFile:output(f)}});
+  assert.equal(done.status,'upload_blocked');assert.equal(done.error.category,'approval_blocked');assert.equal(done.error.code,'lite_approval_blocked');assert.equal(done.error.status,403);
+  assert.ok(!JSON.stringify(done).includes('private policy reason'));
+  const capture=exec.memory.get(done.capture_key).find(x=>x.stage==='result_upload');assert.deepEqual(capture.value,full);assert.equal(capture.value.isError,true);
+  const next=makeExecutor(f,p,{memory:exec.memory});assert.equal((await next('status',a)).ok,true);assert.deepEqual(next.memory.get(done.capture_key).find(x=>x.stage==='result_upload').value,full);
+  const retry=await next('child-retry-upload',{...a,args:{retryDecision:'transport_retry_after_raw_review'}});assert.equal(retry.error.code,'upload_approval_blocked');assert.equal(p.counters.upload,1);
+  assert.equal((await next('child-complete',{...a,args:{requestId:begin.request_id,outputFile:output(f)}})).error.code,'upload_retry_requires_explicit_review');assert.equal(p.counters.upload,1);
+  assert.equal(p.effects.filter(x=>x==='RESULT').length,0);
+ }finally{f.cleanup();}
+});
+
+test('unknown denial strings stay unknown and pause for raw review without automatic retry or inference',async()=>{
+ const f=fixture();try{const p=fakeTools(f),exec=makeExecutor(f,p),a=await admit(f,exec),begin=await exec('child-begin',a);
+  const full={isError:true,content:[{type:'text',text:'The reviewer denied this action. 403. Do not retry.'}],structuredContent:null};
+  p.tools.mcp__codex_apps__google_drive_upload_file=async()=>{p.counters.upload++;return full;};
+  const done=await exec('child-complete',{...a,args:{requestId:begin.request_id,outputFile:output(f)}});
+  assert.equal(done.status,'upload_unknown');assert.equal(done.error.category,'provider_unknown');assert.equal(done.error.status,undefined);
+  assert.deepEqual(exec.memory.get(done.capture_key).find(x=>x.stage==='result_upload').value,full);
+  assert.equal((await exec('child-retry-upload',a)).error.code,'upload_retry_requires_explicit_review');assert.equal(p.counters.upload,1);assert.equal(p.effects.filter(x=>x==='BEGIN').length,1);
+ }finally{f.cleanup();}
+});
+
+test('capture store failure pauses after actual upload and before any dependent helper or write',async()=>{
+ const f=fixture();try{const p=fakeTools(f),options={},exec=makeExecutor(f,p,options),a=await admit(f,exec),begin=await exec('child-begin',a),before={...p.counters};
+  options.failCapture=true;
+  const done=await exec('child-complete',{...a,args:{requestId:begin.request_id,outputFile:output(f)}});
+  assert.equal(done.error.code,'lite_capture_failed');assert.equal(p.counters.upload-before.upload,1);assert.equal(p.counters.exec-before.exec,1);assert.equal(p.counters.write-before.write,0);
+  options.failCapture=false;
+  assert.equal((await exec('child-retry-upload',{...a,args:{retryDecision:'transport_retry_after_raw_review'}})).error.code,'upload_failure_capture_review_required');assert.equal(p.counters.upload-before.upload,1);
+ }finally{f.cleanup();}
+});
+
+test('safe diagnostics count actual stages and label clocks without claiming inference or model-read time',async()=>{
+ const f=fixture();try{const p=fakeTools(f),exec=makeExecutor(f,p),a=await admit(f,exec),begin=await exec('child-begin',a),done=await exec('child-complete',{...a,args:{requestId:begin.request_id,outputFile:output(f)}});
+  assert.equal(begin.diagnostics.helper_calls+done.diagnostics.helper_calls,5);assert.equal(begin.diagnostics.provider_calls+done.diagnostics.provider_calls,7);
+  assert.equal(done.diagnostics.request_file_read_ms,null);assert.equal(done.diagnostics.native_inference_ms,null);
+  const stages=[...begin.diagnostics.stages,...done.diagnostics.stages];
+  assert.ok(stages.some(x=>x.stage==='input_download'));assert.ok(stages.some(x=>x.stage==='result_upload'));
+  assert.ok(stages.every(x=>x.duration_ms>=0 && ['performance.now','Date.now'].includes(x.clock_source)));
+  assert.ok(stages.some(x=>(x.local?.stages || []).some(x=>x.stage==='native_response_file_read' && x.clock_source==='time.perf_counter')));
+  assert.equal(done.loader_diagnostics.cold_source_load,false);assert.equal(done.loader_diagnostics.source_helper_calls,0);
+ }finally{f.cleanup();}
+});
+
+test('explicit RESULT-only retry republishes exact sealed CAS after raw/permission review without upload or inference',async()=>{
+ const f=fixture();try{const options={},p=fakeTools(f,options),exec=makeExecutor(f,p),a=await admit(f,exec),begin=await exec('child-begin',a);
+  options.skipWritePhase='RESULT';const written=[],original=p.tools.mcp__codex_apps__google_drive_batch_update_document;
+  p.tools.mcp__codex_apps__google_drive_batch_update_document=async args=>{written.push(structuredClone(args));return original(args);};
+  const first=await exec('child-complete',{...a,args:{requestId:begin.request_id,outputFile:output(f)}});assert.equal(first.status,'unknown');
+  const state=await exec('child-result-retry-status',a);assert.equal(state.ok,true,JSON.stringify(state));assert.equal(state.attempts_used,1);assert.equal(state.next_attempt,2);
+  assert.equal((await exec('child-retry-result',a)).error.code,'result_retry_requires_explicit_review');assert.equal(written.length,1);
+  options.skipWritePhase=null;const before={...p.counters};
+  const done=await exec('child-retry-result',{...a,args:{retryDecision:'same_result_cas_after_raw_and_permission_review',expectedOperationId:state.operation_id,expectedAttempt:state.next_attempt}});
+  assert.equal(done.ok,true,JSON.stringify(done));assert.deepEqual(written[1],written[0]);assert.equal(p.counters.upload,before.upload);assert.equal(p.counters.write,before.write+1);assert.equal(p.effects.filter(x=>x==='BEGIN').length,1);
+  assert.equal(JSON.parse(docText(p.docs.get('outbox-alpha'))).phase,'RESULT');
+  assert.equal((await exec('child-retry-result',{...a,args:{retryDecision:'same_result_cas_after_raw_and_permission_review',expectedOperationId:state.operation_id,expectedAttempt:state.next_attempt}})).ok,false);assert.equal(written.length,2);
+ }finally{f.cleanup();}
+});
+
+
+test('loader fixed-overhead budget is path-independent and still rejects executable growth',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'dots-lite-long-loader-'));
+ const nested=path.join(root,...Array.from({length:4},(_,i)=>'isolated-validation-path-'+i+'-'+('x'.repeat(48))),`quoted-漢-😀-"-'`);
+ fs.mkdirSync(nested,{recursive:true,mode:0o700});const f=fixture([],{temporaryRoot:nested});
+ try{const p=fakeTools(f),exec=makeExecutor(f,p),a=await admit(f,exec),begin=await exec('child-begin',a);
+  assert.equal(begin.status,'exposed');assert.equal((await exec('child-complete',{...a,args:{requestId:begin.request_id,outputFile:output(f)}})).ok,true);
+  assert.ok(exec.loaderMeasurements.some(x=>x.action==='parent-admit' && x.loader_bytes>2400));
+  assert.equal(new Set(exec.loaderMeasurements.map(x=>x.fixed_bytes)).size,1);
+  assert.ok(exec.loaderMeasurements.every(x=>x.loader_bytes===x.data_bytes+x.fixed_bytes));
+  const {emitted,source}=exec.lastLoader,grown=source+'\n'+('void 0;\n'.repeat(400));
+  assert.throws(()=>compactLoaderBytes({...emitted,loader_bytes:Buffer.byteLength(grown,'utf8')},grown),/fixed overhead/);
+  assert.throws(()=>compactLoaderBytes({...emitted,loader_bytes:emitted.loader_bytes+1},source),assert.AssertionError);
+ }finally{f.cleanup();fs.rmSync(root,{recursive:true,force:true});}
 });

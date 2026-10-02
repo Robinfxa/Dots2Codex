@@ -4,14 +4,20 @@ These helpers never spawn, call a model, upload, or invoke any Google API.
 Only the real native parent/child adapter performs those external operations.
 """
 import copy
+import hashlib
+import hmac
 from pathlib import Path
 import secrets
 import re
 import time
 from .protocol import (PROTOCOL, OUTBOX_MAX_BYTES, canonical, strict_json, sha256, require, safe_id,
                        ProtocolError, validate_grant, validate_route, parse_inbox, parse_outbox, sign_record)
-from .docs import plan_write, accept_write, reconcile_write, snapshot
+from .docs import plan_write, validate_plan, accept_write, reconcile_write, snapshot
 from .storage import Journal, private_read, private_write, fsync_dir, burn_fence
+
+
+RESULT_CAS_CONTRACT = 'dots-lite-result-cas/1'
+RESULT_CAS_MAX_ATTEMPTS = 3
 
 
 def _clock():
@@ -170,8 +176,11 @@ class Worker(_Actor):
             if current['artifact'] is not None:keep.add(Path(current['artifact']['path']))
         changed=False
         for item in state['history']:
-            for path in (self.journal.directory/('input-'+item['request_sha256']+'.json'),
-                         self.journal.directory/('result-'+item['result_id']+'.json')):
+            paths=[self.journal.directory/('input-'+item['request_sha256']+'.json'),
+                   self.journal.directory/('result-'+item['result_id']+'.json')]
+            if item.get('result_publication_operation_id'):
+                paths.append(self._result_seal_path(item['result_publication_operation_id']))
+            for path in paths:
                 if path.resolve() not in keep and path.exists():
                     require(not path.is_symlink(),'unsafe_cached_payload')
                     path.unlink();changed=True
@@ -238,7 +247,9 @@ class Worker(_Actor):
             plan=plan_write(state['outbox'],record,op)
             if previous is not None:
                 state['history'].append({'request_id':previous['descriptor']['request_id'],'request_sha256':previous['descriptor']['request_sha256'],
-                                         'seq':previous['descriptor']['seq'],'result_id':previous['artifact']['result_id'],'result_sha256':previous['artifact']['result_sha256']})
+                                         'seq':previous['descriptor']['seq'],'result_id':previous['artifact']['result_id'],'result_sha256':previous['artifact']['result_sha256'],
+                                         **({'result_publication_operation_id':previous['result_publication']['operation_id']}
+                                            if previous.get('result_publication') else {})})
             state.update(phase='BEGIN_PREPARED',route=copy.deepcopy(route),pending_plan=plan,write_status='prepared',
                          current={'descriptor':copy.deepcopy(desc),'input_path':str(path.resolve()),'exposure':'INPUT_NOT_EXPOSED',
                                   'artifact':None,'upload_attempts':0,'upload_receipt':None})
@@ -297,6 +308,97 @@ class Worker(_Actor):
             require(len(raw)==artifact['byte_length'] and sha256(raw)==artifact['result_sha256'],'immutable_result_changed')
             current['upload_attempts']+=1;self._write(state);return copy.deepcopy(artifact)
 
+    def _result_seal_mac(self,value):
+        key=bytes.fromhex(self.key) if isinstance(self.key,str) else self.key
+        return hmac.new(key,(RESULT_CAS_CONTRACT+'\0').encode()+canonical(value),hashlib.sha256).hexdigest()
+
+    def _result_seal_path(self,operation_id):
+        require(isinstance(operation_id,str) and re.fullmatch('[0-9a-f]{32}',operation_id) is not None,
+                'invalid_result_publication_operation')
+        return self.journal.directory/('publication-'+operation_id+'.json')
+
+    def _result_attempt_evidence(self,state,plan,attempt):
+        return {'contract':RESULT_CAS_CONTRACT,'journal_id':state['journal_id'],
+                'operation_id':plan['operation_id'],'attempt':attempt,
+                'plan_sha256':plan['plan_sha256'],'body_sha256':sha256(canonical(plan['body']))}
+
+    def _result_attempts(self,state,plan):
+        # The independent fsynced markers, not a mutable counter, own the
+        # dispatch budget. A crash after burning a marker consumes that attempt.
+        count=0;gap=False
+        for attempt in range(1,RESULT_CAS_MAX_ATTEMPTS+1):
+            path=self.journal.directory/('result-cas-'+plan['operation_id']+'-'+str(attempt)+'.once')
+            if not path.exists() and not path.is_symlink():gap=True;continue
+            require(not gap,'result_publication_attempt_history_corrupt')
+            require(private_read(path,8192)==canonical(self._result_attempt_evidence(state,plan,attempt)),
+                    'result_publication_attempt_history_corrupt')
+            count=attempt
+        recorded=state['current']['result_publication']['attempts']
+        require(type(recorded) is int and 0<=recorded<=count,'result_publication_attempt_history_corrupt')
+        return count
+
+    def _saved_result_plan(self,state):
+        require(state['phase']=='RESULT_PREPARED' and state.get('pending_plan') is not None,'result_not_pending')
+        current=state['current'];publication=current.get('result_publication')
+        # Never retrofit a seal/permit onto a live journal from an older release.
+        require(type(publication) is dict and set(publication)=={'operation_id','seal_sha256','attempts','quarantined'},
+                'result_publication_seal_required_new_release')
+        operation=publication['operation_id'];path=self._result_seal_path(operation)
+        raw=private_read(path,131072)
+        require(sha256(raw)==publication['seal_sha256'],'result_publication_seal_changed')
+        seal=strict_json(raw)
+        require(type(seal) is dict and set(seal)=={'binding','mac'} and canonical(seal)==raw,
+                'result_publication_seal_changed')
+        binding=seal['binding']
+        require(type(binding) is dict and set(binding)=={'contract','journal_id','owner','grant_sha256','plan'},
+                'result_publication_seal_changed')
+        require(isinstance(seal['mac'],str) and hmac.compare_digest(self._result_seal_mac(binding),seal['mac']),
+                'result_publication_seal_authentication_failed')
+        require(binding['contract']==RESULT_CAS_CONTRACT and binding['journal_id']==state['journal_id']
+                and binding['owner']==self.identity and binding['grant_sha256']==sha256(canonical(state['grant'])),
+                'result_publication_seal_binding_mismatch')
+        plan=validate_plan(binding['plan'])
+        require(plan['operation_id']==operation and canonical(state['pending_plan'])==canonical(plan),
+                'result_publication_plan_changed')
+        require(plan['source']==state['outbox'] and plan['source']['text']==canonical(state['record']).decode()+'\n'
+                and state['record']['phase']=='BEGIN' and current['exposure']=='EXPOSED',
+                'result_publication_source_changed')
+        record=parse_outbox(plan['record'],state['route'],self.key,state['grant'])
+        require(record['phase']=='RESULT' and record['request']==current['descriptor'],'result_publication_binding_mismatch')
+        artifact=current['artifact'];receipt=current['upload_receipt']
+        require(type(artifact) is dict and type(receipt) is dict,'result_publication_artifact_missing')
+        locator={k:artifact[k] for k in ('result_id','result_sha256','byte_length')}
+        locator.update(file_id=receipt['file_id'],folder_id=receipt['folder_id'])
+        expected=copy.deepcopy(state['record']);expected.update(phase='RESULT',operation_id=operation,result=locator)
+        require(sign_record(expected,self.key)==record and receipt['byte_length']==artifact['byte_length'],
+                'result_publication_binding_mismatch')
+        expected_path=self.journal.directory/('result-'+artifact['result_id']+'.json')
+        require(Path(artifact['path'])==expected_path.resolve(),'result_publication_artifact_path_changed')
+        payload=private_read(expected_path,state['grant']['limits']['max_result_bytes'])
+        require(len(payload)==artifact['byte_length'] and sha256(payload)==artifact['result_sha256'],
+                'immutable_result_changed')
+        from .protocol import validate_result_envelope
+        validate_result_envelope(strict_json(payload),state['grant'],state['route'],record)
+        return plan
+
+    def _result_quarantined(self,state,plan):
+        path=self.journal.directory/('result-cas-'+plan['operation_id']+'-quarantine.once')
+        return state['current']['result_publication']['quarantined'] is not False or path.exists() or path.is_symlink()
+
+    def _issue_result_attempt(self,state,plan,expected_attempt):
+        require(not self._result_quarantined(state,plan),'result_publication_quarantined')
+        count=self._result_attempts(state,plan)
+        require(count<RESULT_CAS_MAX_ATTEMPTS,'result_publication_attempt_budget_exhausted')
+        require(type(expected_attempt) is int and expected_attempt==count+1,'result_publication_attempt_mismatch')
+        burn_fence(self.journal.directory,'result-cas-'+plan['operation_id']+'-'+str(expected_attempt)+'.once',
+                   self._result_attempt_evidence(state,plan,expected_attempt))
+        state['current']['result_publication']['attempts']=expected_attempt
+        state['write_status']='prepared' if expected_attempt==1 else 'retry_prepared'
+        self._write(state)
+        # Initial dispatch and explicit retries both leave through these same
+        # canonical saved bytes. No fresh revision, replan, upload or exposure.
+        return copy.deepcopy(plan)
+
     def publish_result(self,upload_receipt):
         with self.journal.locked():
             state=self.journal.read();self._validate(state)
@@ -307,12 +409,75 @@ class Worker(_Actor):
             locator={k:artifact[k] for k in ('result_id','result_sha256','byte_length')};locator.update(file_id=receipt['file_id'],folder_id=receipt['folder_id'])
             record=copy.deepcopy(state['record']);record.update(phase='RESULT',operation_id=secrets.token_hex(16),result=locator);record=sign_record(record,self.key)
             parse_outbox(record,state['route'],self.key,state['grant']);plan=plan_write(state['outbox'],record,record['operation_id'])
-            state['current']['upload_receipt']=copy.deepcopy(receipt);state.update(phase='RESULT_PREPARED',pending_plan=plan,write_status='prepared')
-            self._write(state);return copy.deepcopy(plan)
+            binding={'contract':RESULT_CAS_CONTRACT,'journal_id':state['journal_id'],'owner':self.identity,
+                     'grant_sha256':sha256(canonical(state['grant'])),'plan':plan}
+            seal=canonical({'binding':binding,'mac':self._result_seal_mac(binding)})
+            private_write(self._result_seal_path(plan['operation_id']),seal,immutable=True)
+            state['current']['upload_receipt']=copy.deepcopy(receipt)
+            state['current']['result_publication']={'operation_id':plan['operation_id'],'seal_sha256':sha256(seal),
+                                                    'attempts':0,'quarantined':False}
+            state.update(phase='RESULT_PREPARED',pending_plan=plan,write_status='prepared')
+            # Persist the sealed original before allocating any dispatch permit.
+            # If this crashes, an explicit reviewed attempt can resume only this
+            # exact plan; a consumed marker can never be recovered or reused.
+            state=self._write(state)
+            plan=self._saved_result_plan(state)
+            return self._issue_result_attempt(state,plan,1)
+
+    def result_retry_status(self):
+        """Read-only metadata for the active controller's permission review."""
+        with self.journal.locked():
+            state=self.journal.read();self._validate(state);plan=self._saved_result_plan(state)
+            count=self._result_attempts(state,plan)
+            return {'operation_id':plan['operation_id'],'attempts_used':count,
+                    'next_attempt':count+1 if count<RESULT_CAS_MAX_ATTEMPTS else None,
+                    'max_attempts':RESULT_CAS_MAX_ATTEMPTS,'write_status':state['write_status'],
+                    'quarantined':self._result_quarantined(state,plan),'plan_sha256':plan['plan_sha256'],
+                    'required_revision_id':plan['body']['writeControl']['requiredRevisionId']}
+
+    def retry_result(self,expected_operation_id,expected_attempt):
+        """Issue one exact RESULT-only CAS after explicit controller review.
+
+        This local protocol primitive is not a permission attestation. The
+        active native controller must review the actual prior outcome and its
+        current authority before calling; neither Docs nor saved booleans grant
+        permission. The explicit operation AND attempt prevent an old review
+        being reused for a subsequent dispatch. No automatic retry calls this.
+        """
+        with self.journal.locked():
+            state=self.journal.read();self._validate(state);plan=self._saved_result_plan(state)
+            require(expected_operation_id==plan['operation_id'],'result_publication_operation_mismatch')
+            return self._issue_result_attempt(state,plan,expected_attempt)
 
     def accept_result(self,actual_response=None,readback=None):
         with self.journal.locked():
             state=self.journal.read();self._validate(state);require(state['phase']=='RESULT_PREPARED','result_not_pending')
-            result=self._accept(state,actual_response,readback)
-            if result['status'] not in {'accepted','applied'}:return result
-            state['phase']='RESULT_COMMITTED';self._write(state);return result
+            # Existing journals retain read-only exact acceptance/reconciliation;
+            # only freshly sealed publications gain the new retry primitive.
+            sealed=state['current'].get('result_publication') is not None
+            if not sealed:
+                operation=state['pending_plan']['operation_id']
+                if isinstance(operation,str) and re.fullmatch('[0-9a-f]{32}',operation):
+                    require(not self._result_seal_path(operation).exists(),'result_publication_seal_required_new_release')
+            plan=self._saved_result_plan(state) if sealed else state['pending_plan']
+            if sealed and self._result_quarantined(state,plan):
+                return {'status':'unknown','reason':'result_publication_quarantined','quarantined':True}
+            result=_accepted(plan,actual_response,readback)
+            if result['status'] not in {'accepted','applied'}:
+                if sealed and readback is not None:
+                    try:
+                        fresh=snapshot(readback,plan['document_id'],plan['source']['tab_id'],plan['source']['max_bytes'])
+                        observed=parse_outbox(fresh,state['route'],self.key,state['grant'])
+                    except ProtocolError:observed=None
+                    if observed is not None and observed not in (state['record'],plan['record']):
+                        path=self.journal.directory/('result-cas-'+plan['operation_id']+'-quarantine.once')
+                        if not path.exists() and not path.is_symlink():
+                            burn_fence(self.journal.directory,path.name,{'operation_id':plan['operation_id'],
+                                       'observed_record_sha256':sha256(canonical(observed))})
+                        state['current']['result_publication']['quarantined']=True
+                if sealed:
+                    result={**result,'status':'unknown','quarantined':self._result_quarantined(state,plan)}
+                state['write_status']=result['status'];self._write(state);return result
+            state['outbox']=result['snapshot'];state['record']=plan['record']
+            state.update(pending_plan=None,write_status='accepted',phase='RESULT_COMMITTED')
+            self._write(state);return result

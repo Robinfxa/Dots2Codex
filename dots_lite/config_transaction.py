@@ -21,7 +21,8 @@ from .private_io import private_dir, private_write, read_private_file, strict_js
 CONTRACT = 'dots-lite-config-transaction/3'
 PROVIDER = 'dots2codex_lightweight_v3'
 MAX_CONFIG_BYTES = 1024*1024
-TOP = ('model_provider', 'model', 'model_reasoning_effort', 'model_catalog_json')
+TOP = ('model_provider', 'model', 'model_reasoning_effort', 'model_catalog_json', 'web_search')
+LEGACY_OWNED = tuple((k,) for k in TOP if k != 'web_search') + (('model_providers', PROVIDER),)
 OWNED = tuple((k,) for k in TOP) + (('model_providers', PROVIDER),)
 MISSING = {'__dots_missing__': True}
 WARNINGS = [
@@ -30,6 +31,7 @@ WARNINGS = [
     'Fully quit/reopen each actual local client and use a new thread; existing threads can retain their provider.',
     'Profiles, project settings, CLI overrides and managed settings may override this file.',
     'Catalog pinned to codex-cli 0.159.2; actual app compatibility remains unverified.',
+    'This text-only trial disables web_search in the selected config; server search tools, Responses Lite and reasoning-effort updates are unsupported.',
     'Cooperative locks cannot exclude a noncooperating editor racing the final atomic replace.',
 ]
 
@@ -191,6 +193,7 @@ def load_transaction(state_dir,tid):
     # their proof, backup hashes or original-directory identity requirement.
     value.update(codex_home=str(home),config_path=str(home/'config.toml'))
     check_transaction_target(value)
+    transaction_owned(value)
     before=read_private_file(value['backup'],MAX_CONFIG_BYTES);after=read_private_file(value['postimage'],MAX_CONFIG_BYTES)
     require(hash_bytes(before)==value['before_hash'] and hash_bytes(after)==value['after_hash'],'transaction_backup_hash_mismatch')
     return path,value,before,after
@@ -239,12 +242,12 @@ def owned_node_bytes(doc,path):
     return (keys,syntax,tuple(getattr(trivia,k,None) for k in ('indent','comment_ws','comment','trail')))
 
 
-def restore_bytes(before,after,current):
+def restore_bytes(before,after,current,*,owned_paths=OWNED):
     original_doc,original=decoded(before);after_doc,ours=decoded(after);doc,present=decoded(current)
-    for path in OWNED:
+    for path in owned_paths:
         require(value_at(present,path)==value_at(ours,path),'restore_owned_value_conflict')
         require(owned_node_bytes(doc,path)==owned_node_bytes(after_doc,path),'restore_owned_syntax_conflict')
-    for path in OWNED:
+    for path in owned_paths:
         # Copy original TOML nodes rather than reconstructing strings or comments.
         node=original_doc
         for part in path:
@@ -258,7 +261,7 @@ def restore_bytes(before,after,current):
         if not table and '#' not in table.as_string():del doc['model_providers']
     raw=parser().dumps(doc).encode('utf-8')
     expected=copy.deepcopy(present)
-    for path in OWNED:
+    for path in owned_paths:
         old=value_at(original,path)
         if len(path)==1:
             if old==MISSING:expected.pop(path[0],None)
@@ -273,6 +276,15 @@ def restore_bytes(before,after,current):
     return raw
 
 
+def transaction_owned(value):
+    # Old v3 transactions never owned web_search. Do not claim a user's later
+    # search preference while restoring a transaction made by an older package.
+    recorded=value.get('owned_paths')
+    if recorded is None:return LEGACY_OWNED
+    require(recorded==[list(path) for path in OWNED], 'invalid_transaction_owned_paths')
+    return OWNED
+
+
 def restore(state_dir,tid,*,confirm=False,before_commit=None,after_replace=None):
     require(confirm is True,'explicit_restore_confirmation_required')
     journal,value,before,after=load_transaction(state_dir,tid)
@@ -283,7 +295,7 @@ def restore(state_dir,tid,*,confirm=False,before_commit=None,after_replace=None)
         path=Path(value['config_path']);current=snapshot(path)
         require(current['exists'],'config_deleted_after_takeover')
         exact=current['raw']==after
-        restored=before if exact else restore_bytes(before,after,current['raw'])
+        restored=before if exact else restore_bytes(before,after,current['raw'],owned_paths=transaction_owned(value))
         delete=exact and not value['before_exists']
         value.update(phase='restore_prepared',restore_hash=hash_bytes(restored),restore_exists=not delete)
         check_transaction_target(value)
@@ -319,7 +331,7 @@ def new_values(info):
             and url.path == f"/activations/{info['generation']}/v1"
             and not url.query and not url.fragment, 'activation_qualified_loopback_required')
     return {'model_provider': PROVIDER, 'model': selected['model'],
-            'model_reasoning_effort': selected['reasoning_effort'],
+            'model_reasoning_effort': selected['reasoning_effort'], 'web_search': 'disabled',
             'model_catalog_json': info['catalog_path'], 'model_providers': {PROVIDER: {
                 'name': 'Dots2Codex lightweight v3 first-use trial', 'base_url': info['base_url'],
                 'wire_api': 'responses', 'requires_openai_auth': False,
@@ -373,6 +385,7 @@ def apply(state_dir, codex_home, info, *, expected_before_hash, expected_after_h
         private_write(backup, before['raw']); private_write(postimage, after)
         manifest = {'contract': CONTRACT, 'id': tid, 'phase': 'prepared',
             'config_path': str(path), 'codex_home': str(home), 'home_identity': home_id,
+            'owned_paths': [list(path) for path in OWNED],
             'generation': info['generation'], 'created': time.time(),
             'before_hash': before['hash'], 'after_hash': hash_bytes(after),
             'before_exists': before['exists'], 'before_identity': before['identity'],

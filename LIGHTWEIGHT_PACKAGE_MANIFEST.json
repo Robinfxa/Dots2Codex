@@ -19,11 +19,11 @@
     },
     {
       "path": "docs/LIGHTWEIGHT_NATIVE_CONTROLLER.md",
-      "sha256": "8961bd28f45c228039a2252f7a894a34f01f3dd33bc9f9b5d53a319be5332f25"
+      "sha256": "4d7d09bd2591670c675fd54c8f5915080db5dc99a1cd3ea2eae8765b93b9df3e"
     },
     {
       "path": "docs/LIGHTWEIGHT_QUICKSTART.zh-CN.md",
-      "sha256": "ca1f10fd13ccfa7d7dae84e7bd17611f228138c7559e1b573829417c31db7700"
+      "sha256": "8e63f45a285346cde5a70fb9a917cb4d66e74a26f81781933c687c5fab7019af"
     },
     {
       "path": "dots_lite/__init__.py",
@@ -31,11 +31,11 @@
     },
     {
       "path": "dots_lite/cli.py",
-      "sha256": "114c51061d98a0c468667bd6d7b3f217dfb9dd63717b843a01f79af8c1137631"
+      "sha256": "49a5309bc3090e1f217083b84ad611f9e450dc7009b21525b9b44a50e328497b"
     },
     {
       "path": "dots_lite/client_catalog.py",
-      "sha256": "caa486ef16ff800b6e56c699c92a578f923b36aa9301caba02631066c627faa8"
+      "sha256": "2fb2ed7f2a68f6cec71c685167bae5ba25e5c892b9b300b3a9ccd15ff03b1233"
     },
     {
       "path": "dots_lite/codex_instructions_0_159_2.txt",
@@ -43,7 +43,7 @@
     },
     {
       "path": "dots_lite/config_transaction.py",
-      "sha256": "9cb6ad32683006647d5bd66e26eec91ef229075821f9bc63bbed20146da9608d"
+      "sha256": "f39d8638c5af9e0dec083def03648e3e57009d5ae6aeb4ee931108e9b0573934"
     },
     {
       "path": "dots_lite/docs.py",
@@ -55,7 +55,7 @@
     },
     {
       "path": "dots_lite/gateway.py",
-      "sha256": "97f05cffe579b4788c250058316c2aab61b0175aa80e1d32df06a7d89d3f9556"
+      "sha256": "64778fce51314f30fb2923db4c6c075f64bfd9559b02ae719e48270962f6306e"
     },
     {
       "path": "dots_lite/google_ports.py",
@@ -63,7 +63,7 @@
     },
     {
       "path": "dots_lite/launcher.py",
-      "sha256": "3fb5197aa12bf53d71ca796c64bc866e771f934f9e9c8432d0b96b51f0e990cd"
+      "sha256": "528d29e6de763e25eb493e6a42463ed5f2c7b9324da31ebd9c4a4fab8bc88e20"
     },
     {
       "path": "dots_lite/native_capabilities.json",
@@ -95,15 +95,15 @@
     },
     {
       "path": "dots_lite/wire.py",
-      "sha256": "b3abcd19b1877b504559a30c6742a50b2d97b44f6252b128da3b793634d7ce9c"
+      "sha256": "447573d399fa8072e62c442cfc274fe7146f0411ebd114d5732d23c957b891c5"
     },
     {
       "path": "dots_lite/worker.py",
-      "sha256": "d586042cd985b03d220c302cc39b60c5077cc6997a26d40705db02ee8d2bfdab"
+      "sha256": "66fe50571ecb47b6d4619e87d02b0e7c0e4ee3fdad6375c9322680b026c80cec"
     },
     {
       "path": "native_connector/lite_cell.js",
-      "sha256": "e9c8025b7c482b0191db7b360ba9dcc42217e36d45d3e1e1c87a3fac12892044"
+      "sha256": "d8f91d4c6ef83b93b29197feb223c1ab47accb2e501c4227767afc837e5c71dc"
     },
     {
       "path": "requirements-global.txt",
