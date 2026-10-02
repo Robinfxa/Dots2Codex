@@ -59,7 +59,7 @@
     },
     {
       "path": "dots_lite/google_ports.py",
-      "sha256": "ff6f120700666ee373a2e2c8a5f3c66e1adde8a296c5690630fd5e827d3db2a8"
+      "sha256": "f0c7265dd2af85fcca8edef9eb84c84c4336587d266e3592fc98f957ebfc3489"
     },
     {
       "path": "dots_lite/launcher.py",

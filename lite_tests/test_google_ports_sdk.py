@@ -1,14 +1,17 @@
 """Real Google SDK request construction, offline transport, no credentials."""
 import json
+import os
+import ssl
 import unittest
 import urllib.parse
+from unittest import mock
 try:
     import httplib2
     from googleapiclient.discovery import build
     SDK_AVAILABLE = True
 except ImportError:
     SDK_AVAILABLE = False
-from dots_lite.google_ports import DocsSDKClient
+from dots_lite.google_ports import DocsSDKClient, DriveHTTPClient
 from dots_lite import docs
 from dots_lite.protocol import make_inbox
 from lite_tests.gateway_fixtures import FakeGoogle, grant, KEY
@@ -24,6 +27,20 @@ class RecordedHTTP:
 
 @unittest.skipUnless(SDK_AVAILABLE, 'run this module with the pinned Google SDK interpreter')
 class RealSDKConstruction(unittest.TestCase):
+    def test_real_certifi_bundle_loads_for_drive(self):
+        import certifi
+        expected = ssl.create_default_context(cafile=certifi.where())
+        token = mock.Mock()
+        with mock.patch.dict(os.environ, {}, clear=True), \
+             mock.patch('dots_lite.google_ports.http.client.HTTPSConnection') as connect:
+            context = DriveHTTPClient(token)._ssl_context
+        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(context.check_hostname)
+        self.assertGreater(len(context.get_ca_certs()), 0)
+        self.assertEqual(context.get_ca_certs(binary_form=True), expected.get_ca_certs(binary_form=True))
+        token.assert_not_called()
+        connect.assert_not_called()
+
     def make(self, value):
         transport=RecordedHTTP(value)
         service=build('docs','v1',http=transport,static_discovery=True,cache_discovery=False,num_retries=0)

@@ -43,7 +43,7 @@ class GooglePortsTests(unittest.TestCase):
     def test_raw_drive_create_has_one_post_and_no_redirect_follow(self):
         connections=[]
         class Connection:
-            def __init__(self,host,timeout):connections.append(self);self.host=host;self.sock=None;self.requests=[];self.status=302
+            def __init__(self,host,timeout,context):connections.append(self);self.host=host;self.sock=None;self.requests=[];self.status=302
             def connect(self):pass
             def request(self,*args,**kwargs):self.requests.append((args,kwargs))
             def getresponse(self):return self

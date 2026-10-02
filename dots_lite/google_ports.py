@@ -156,12 +156,36 @@ class DocsSDKClient:
                 raise ProtocolError('docs_write_outcome_unknown') from None
 
 
+def _drive_ssl_context():
+    # Project-local trust only; never replace or supplement an explicit override.
+    try:
+        cafile, capath = os.environ.get('SSL_CERT_FILE'), os.environ.get('SSL_CERT_DIR')
+        if cafile is not None or capath is not None:
+            if cafile == '' or capath == '':
+                raise ValueError('empty_trust_override')
+            return ssl.create_default_context(cafile=cafile, capath=capath)
+        try:
+            import certifi
+        except ModuleNotFoundError as exc:
+            if exc.name != 'certifi':
+                raise
+            # Keep standalone use possible without the optional Google dependencies.
+            return ssl.create_default_context()
+        bundle = certifi.where()
+        if not isinstance(bundle, str) or not bundle:
+            raise ValueError('invalid_certifi_bundle')
+        return ssl.create_default_context(cafile=bundle)
+    except Exception:
+        raise ProtocolError('drive_transport_outcome_unknown') from None
+
+
 class DriveHTTPClient:
     def __init__(self, access_token_provider, *, timeout=20, token_accepts_deadline=False):
         require(callable(access_token_provider), 'explicit_token_provider_required')
         require(type(timeout) in (int, float) and 1 <= timeout <= 30, 'invalid_transport_timeout')
         self._token_provider, self.timeout = access_token_provider, timeout
         self._token_accepts_deadline = token_accepts_deadline
+        self._ssl_context = _drive_ssl_context()
         self._lock = threading.RLock()
 
     def _call(self, path, *, query=None, data=None, content_type=None, limit=262144, deadline=None):
@@ -171,7 +195,8 @@ class DriveHTTPClient:
             token = self._token_provider(deadline=deadline) if self._token_accepts_deadline else self._token_provider()
             require(isinstance(token, str) and token and '\r' not in token and '\n' not in token, 'invalid_access_token')
             url = '/' + path + ('?' + urllib.parse.urlencode(query) if query else '')
-            conn = http.client.HTTPSConnection('www.googleapis.com', timeout=_remaining(deadline, self.timeout))
+            conn = http.client.HTTPSConnection('www.googleapis.com', timeout=_remaining(deadline, self.timeout),
+                                               context=self._ssl_context)
             timer = None
             try:
                 conn.connect(); conn.auto_open = 0
