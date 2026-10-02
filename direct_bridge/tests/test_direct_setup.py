@@ -347,7 +347,7 @@ class SetupTests(unittest.TestCase):
         self.assertNotIn(direct.KEY_NAME, output)
 
 
-    def test_shell_entrypoint_help_from_path_with_spaces(self):
+    def test_global_shell_entrypoint_help_from_path_with_spaces(self):
         # Source extraction itself is tested by release verification; copy launcher UI here.
         bundle = Path(self.temp.name) / "bundle with spaces"
         (bundle / "direct_bridge/scripts").mkdir(parents=True)
@@ -356,11 +356,12 @@ class SetupTests(unittest.TestCase):
             self.skipTest("Root launcher is not part of this standalone test layout")
         import shutil
         shutil.copy2(command, bundle / "DIRECT.command")
-        shutil.copy2(ROOT / "scripts/direct.py", bundle / "direct_bridge/scripts/direct.py")
+        shutil.copy2(ROOT / "global_launcher.py", bundle / "direct_bridge/global_launcher.py")
+        shutil.copytree(ROOT.parent / "dots_lite", bundle / "dots_lite", ignore=shutil.ignore_patterns("__pycache__"))
         result = subprocess.run([str(bundle / "DIRECT.command"), "help", "--state-dir", str(self.state)],
             capture_output=True, text=True, timeout=10, env={**os.environ, "PYTHON_BIN": sys.executable})
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("guided Mac setup", result.stdout)
+        self.assertIn("DIRECT Global", result.stdout)
         self.assertFalse(self.state.exists())
 
 

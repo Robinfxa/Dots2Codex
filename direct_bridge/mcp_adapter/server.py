@@ -20,7 +20,7 @@ import jsonschema
 from mcp import types
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from .tools import BRIDGE_TOOLS
+from .tools import BRIDGE_TOOLS, GLOBAL_BRIDGE_TOOLS
 
 MAX_INPUT_BYTES = 2 * 1024 * 1024
 MAX_OUTPUT_BYTES = 4 * 1024 * 1024
@@ -123,13 +123,14 @@ class MCPServer:
         self._slots = threading.BoundedSemaphore(max_concurrent_calls)
         self._pool = ThreadPoolExecutor(max_workers=max_concurrent_calls, thread_name_prefix="bridge-mcp")
         self._cancel_events = set()
-        self._definitions = {item["name"]: item for item in BRIDGE_TOOLS}
-        self.app = Server("dots2codex-direct-bridge", version="0.1.0",
+        self.tool_definitions = GLOBAL_BRIDGE_TOOLS if getattr(runtime, "mode", None) == "global" else BRIDGE_TOOLS
+        self._definitions = {item["name"]: item for item in self.tool_definitions}
+        self.app = Server("dots2codex-direct-bridge", version="0.2.0",
                           instructions="Single-owner request handoff only. Never execute Mac tools here. Timeouts do not authorize retries with new action IDs.")
 
         @self.app.list_tools()
         async def list_tools():
-            return [types.Tool(**item) for item in BRIDGE_TOOLS]
+            return [types.Tool(**item) for item in self.tool_definitions]
 
         # Validate locally so exceptions never include argument values in errors.
         @self.app.call_tool(validate_input=False)
@@ -180,9 +181,10 @@ class MCPServer:
             return error_result("request_timeout")
         except anyio.get_cancelled_exc_class():
             raise
-        except Exception:
+        except Exception as exc:
             redacted_log("runtime_error")
-            return error_result("runtime_error")
+            code = self.runtime.public_error(exc) if hasattr(self.runtime, "public_error") else "runtime_error"
+            return error_result(code)
         finally:
             cancel_event.set()
             self._cancel_events.discard(cancel_event)

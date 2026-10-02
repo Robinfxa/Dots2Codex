@@ -356,4 +356,7 @@ class BridgeRuntime:
 
 
 def create_runtime(config):
+    if config.get("mode") == "global":
+        from .global_runtime import GlobalRuntime
+        return GlobalRuntime(config)
     return BridgeRuntime(config)

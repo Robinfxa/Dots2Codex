@@ -1,0 +1,28 @@
+{
+  "fixture": "production MCP stdio + actual localhost HTTP, synthetic actors",
+  "live_mac_verified": false,
+  "live_native_child_verified": false,
+  "model_api_calls": 0,
+  "routes": 2,
+  "response_turns": 4,
+  "full_context_returns": 2,
+  "delta_context_returns": 2,
+  "response_commits": 4,
+  "http_emissions": 4,
+  "context_payload_bytes": [
+    [
+      3169,
+      915,
+      878
+    ],
+    [
+      3169
+    ]
+  ],
+  "elapsed_seconds": 1.0236599469935754,
+  "status": "passed",
+  "mcp_tool_calls": 14,
+  "measured_mcp_median_ms": 4.727555511635728,
+  "measured_mcp_max_ms": 7.609444000991061,
+  "timing_scope": "Local synthetic fixture overhead, not Mac, tunnel, native inference or production latency"
+}

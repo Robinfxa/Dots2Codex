@@ -1,3 +1,8 @@
+> **已归档：下文仅供旧单路 CLI 试验参考，不是当前全局版的操作指南。**
+> 当前请从 [Direct 全局版指南](../../GLOBAL_DIRECT_README.md) 开始，使用根目录 `DIRECT.command` 的 Start / Stop / Restore；要求 Python 3.11+。
+> 下文旧的试验目录、试验专用 CLI 启动参数、`REOPEN`、双 Terminal 环境变量及“不改全局配置/不保存凭据”等描述，只属于保留的旧脚本。不要用于全局版。
+> 原生控制端请使用 [当前全局参数和真实子任务流程](GLOBAL_NATIVE_CONTROLLER.zh-CN.md)；MCP 名称相同不代表旧 schema 可直接复用。
+
 # Codex 客户端：仅本次会话的 Direct provider
 
 优先用仓库根目录 `./DIRECT.command codex`，它从确认过的本地 route 生成参数。下面只用于审阅；provider ID 占位符需替换为启动器为本轮 route 生成的唯一值，不应直接复制运行。端口和 model / effort 必须与 route 完全一致，工作目录由你在启动时明确选择。`DOTS_BRIDGE_HTTP_BEARER` 在用户终端运行环境中提供，值不出现在命令行。

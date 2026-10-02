@@ -14,6 +14,9 @@ def main():
         parser.error("http-port must be between 1 and 65535")
     # The tunnel control-plane key is not needed by the MCP child process.
     os.environ.pop("CONTROL_PLANE_API_KEY", None)
+    if os.environ.get("DOTS_DIRECT_OWNER_DIR") or os.environ.get("DOTS_DIRECT_RUN_ID"):
+        from global_launcher import register_child_owner
+        register_child_owner()
     runtime = None
     try:
         import anyio

@@ -38,3 +38,25 @@ BRIDGE_TOOLS = [
     definition("cancel_request", "Request cooperative cancellation for the bound request; does not undo an emitted side effect.",
                REQUEST, ("request_id",)),
 ]
+
+# Eight stable tool names. Global mode adds explicit logical ownership fields;
+# clients must synchronize the schema before actual native children can claim.
+GLOBAL_BRIDGE_TOOLS = deepcopy(BRIDGE_TOOLS)
+for tool in GLOBAL_BRIDGE_TOOLS:
+    name = tool['name']
+    schema = tool['inputSchema']
+    if name == 'bridge_status':
+        tool['description'] = 'Read global health, authorized model/effort pairs, pending routes and claimed logical owners. A pending route needs an actual native child; this tool does not spawn or wake one.'
+        continue
+    schema['properties'].update({'route_id': ID, 'claim_token': TOKEN})
+    schema['required'] += ['route_id']
+    if name == 'get_request':
+        schema['properties'].update({'worker_id': ID, 'context_epoch': ID, 'model': ID, 'reasoning_effort': ID})
+        schema['properties']['after_seq']['maximum'] = 1024
+        tool['description'] = 'Claim an unowned route using your actual native task ID, context epoch and exact route model/effort, or read using its returned claim_token. Ownership is immutable and logical, not platform attestation. Replayed=true means resume the same request, never start another execution.'
+    else:
+        schema['required'] += ['claim_token']
+    if name == 'cancel_request':
+        schema['properties']['close_route'] = {'type': 'boolean', 'default': False}
+        schema['required'].remove('request_id')
+        tool['description'] = 'Cancel one pending request, or close_route=true to retire a settled/cancelled route and free capacity. A closed route cannot be reassigned. Cancellation never undoes an emitted effect.'

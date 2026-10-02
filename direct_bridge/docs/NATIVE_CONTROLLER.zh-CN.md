@@ -1,3 +1,8 @@
+> **已归档：下文仅供旧单路 CLI 试验参考，不是当前全局版的操作指南。**
+> 当前请从 [Direct 全局版指南](../../GLOBAL_DIRECT_README.md) 开始，使用根目录 `DIRECT.command` 的 Start / Stop / Restore；要求 Python 3.11+。
+> 下文旧的试验目录、试验专用 CLI 启动参数、`REOPEN`、双 Terminal 环境变量及“不改全局配置/不保存凭据”等描述，只属于保留的旧脚本。不要用于全局版。
+> 原生控制端请使用 [当前全局参数和真实子任务流程](GLOBAL_NATIVE_CONTROLLER.zh-CN.md)；MCP 名称相同不代表旧 schema 可直接复用。
+
 # Direct 原生控制器：最短规程
 
 前提：目标 dot 和它创建的**同一个**真实原生子会话，均能实际调用同一专用连接的八个工具：`bridge_status`、`get_request`、`discover_tools`、`lookup_schema`、`submit_action_and_wait_result`、`await_result`、`finish_request`、`cancel_request`。

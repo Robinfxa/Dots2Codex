@@ -1,0 +1,3 @@
+# Official MCP SDK plus main's format-preserving reversible config parser.
+mcp==1.29.0
+tomlkit==0.13.3
