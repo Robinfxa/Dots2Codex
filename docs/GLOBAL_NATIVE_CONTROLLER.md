@@ -83,7 +83,7 @@ The CLI is `python3 -m remote_transport.global_native OPERATION ...`.
    against that same window. A due trailing heartbeat inside claim preparation
    that encounters this handoff stops before any native spawn reservation.
 5. Before preparing a native spawn, choose a new private `NATIVE_PLAN` path plus future exact actual-argument/result files. Pre-emit the post-spawn cell from step 8. Its `--record-snapshot-file SAME_ROOT_SNAPSHOT` must already exist and be an exact verified resource of this queue/root; it only selects the local evidence ledger. It need not be the as-yet-unknown future dispatch snapshot. Native preparation will separately return its actual `record_snapshot_file` for audit. Never use the earlier snapshot to authorize a write or import.
-6. Prefer `emit-cell --cell-operation claim-prepare-native --route-id ID --plan-file NATIVE_PLAN --package-root VERIFIED_PACKAGE --save NEW_CELL.js` with the common arguments, then execute its exact bytes. The cell reads fresh authority and the host-clock chooser selects exactly `claim-begin`, or `heartbeat-claim-begin` if the target heartbeat is already due. Each is a fixed ordered same-route/native-actor group under one revision-guarded replacement, with all original event checks and the earliest predecessor deadline. A durable group excludes legacy/component reissue; only its complete exact signed prefix can verify. After any newly due trailing heartbeat verifies, the cell passes that same invocation's accepted readback to `plan-native --check-native-now` as its final helper. No native reservation waits behind a CAS or network call. Native-exposing cells use a long outer yield allowance to reduce avoidable wrapper gaps; if a cell nevertheless yields, collect its result immediately without unrelated work.
+6. Prefer `emit-cell --cell-operation claim-prepare-native --route-id ID --plan-file NATIVE_PLAN --package-root VERIFIED_PACKAGE --save NEW_CELL.js` with the common arguments, then execute its exact bytes. The cell reads fresh authority and the host-clock chooser selects exactly `claim-begin`, or `heartbeat-claim-begin` if the target heartbeat is already due. Each is a fixed ordered same-route/native-actor group under one revision-guarded indexed batch, with all original event checks and the earliest predecessor deadline. A durable group excludes legacy/component reissue; only its complete exact signed prefix can verify. After any newly due trailing heartbeat verifies, the cell passes that same invocation's accepted readback to `plan-native --check-native-now` as its final helper. No native reservation waits behind a CAS or network call. Native-exposing cells use a long outer yield allowance to reduce avoidable wrapper gaps; if a cell nevertheless yields, collect its result immediately without unrelated work.
 
    `claim-begin` remains a claim/begin-only cell without a native reservation when immediate native dispatch is not desired. `pre-native --plan-file NATIVE_PLAN` starts with its own fresh read for an already verified begun route; it never reuses a previous invocation's snapshot. Every native plan still burns one attempt before exposing exact arguments. Make the next real native tool call directly outside `functions.exec`, before the original `execute_before` (at most 10 seconds from preparation), with no heartbeat, status or unrelated tool in between. A late/expired plan cannot be regenerated. A platform call actually dispatched in time may return later; retain its actual result without inventing a new dispatch time.
 7. The active trusted Router must now actually call `collaboration.spawn_agent` exactly once with those returned arguments. The helper/Python does not call it. The selected `model`, `reasoning_effort`, `fork_turns="none"`, task name and trusted message must match exactly. Do not substitute a default model, an existing task, a follow-up call or the first route's worker.
@@ -99,7 +99,7 @@ Do not copy the native spawn-plan arguments or child JOIN into normal status log
 
 ## Concurrency and recovery
 
-The authoritative queue is one signed Doc per activation. Every mutation requires the exact read revision and literal single-tab replacement; signed event history gives read-only reconciliation. The native and Mac local ledgers reject rollback and repeated attempt issuance. A known conflict and an unknown outcome are different; the current production Docs port conservatively treats ambiguous failures as unknown. It must not automatically resubmit a CAS merely because a subsequent read lacks the desired event.
+The authoritative queue is one signed Doc per activation. Every queue mutation requires the exact read revision and one atomic pinned-tab indexed delete/insert batch; signed event history gives read-only reconciliation. The native and Mac local ledgers reject rollback and repeated attempt issuance. A known conflict and an unknown outcome are different; the current production Docs port conservatively treats ambiguous failures as unknown. It must not automatically resubmit a CAS merely because a subsequent read lacks the desired event.
 
 The current connected `batch_update_document` wrapper exposes generic tool
 results and errors, not an authoritative request-bound non-commit receipt or a
@@ -131,6 +131,62 @@ One Google control session is bound to one activation generation. New threads ma
 
 `stop` first saves a durable local stop intent so a later old heartbeat cannot re-enable the session. It immediately fences local controller readiness, disables new admissions, attempts the signed queue close and each local facade's authoritative session close, then closes local sockets. Its result explicitly does not attest that native children stopped. Completed/late-result evidence and immutable catalogs are retained. Restoring user config remains a separate reviewed transaction and never kills clients silently.
 
+## Indexed Global queue updates
+
+All five Global queue planners use one shared builder: single events, `join-heartbeat`,
+`claim-begin`, `heartbeat-claim-begin`, and `heartbeat-admitted`. Native controller
+writes and Mac demand/ready/close writes therefore use the same two-request packet.
+One `batchUpdate` contains, in this order:
+
+1. `deleteContentRange` on the exact pinned tab with range
+   `[1, 1 + UTF16(source_text_without_its_final_newline))`
+2. `insertText` at index 1 on that same tab, containing the new canonical signed
+   block without its final newline
+
+Both requests share the unchanged `requiredRevisionId` from the same complete
+source read. The last mandatory document newline survives the deletion and ends
+the inserted block. No trimming, text normalization, search matching, second write,
+or fallback replacement is involved. Google documents
+[UTF-16 indices and the last-newline restriction](https://developers.google.com/workspace/docs/api/reference/rest/v1/documents/request)
+and [atomic batch application with one reply per request](https://developers.google.com/workspace/docs/api/reference/rest/v1/documents/batchUpdate).
+
+Before making a Global snapshot, the parser verifies a complete dedicated sole
+root tab, using either the raw `tabProperties`/`documentTab` shape or the connector's
+verified normalized shape, including its null top-level body and absent optional
+metadata represented as null. A content-bearing top-level body beside tabs is
+rejected. An initial section break, when present, must cover
+`[0,1)`; its zero `startIndex` may be omitted. Paragraphs and their text runs must
+have contiguous exact UTF-16 integer spans beginning at 1, each paragraph must end
+in one newline, and the final end must equal `1 + UTF16(full_text)`. Boolean, float,
+string, absent, overlapping, gapped or inconsistent offsets are rejected. Extra
+or nested tabs, mixed legacy/tab bodies, suggested edits, non-text union members,
+tables, extra section breaks, headers/footers/footnotes and inline/positioned objects
+are not editable Global queues. Packet reconstruction compares canonical JSON bytes
+so `true` and `1.0` cannot impersonate an integer index.
+
+For a returned response, only exactly `replies=[{},{}]` is accepted for these two
+requests, together with the existing document and changed-revision checks. Empty
+per-request replies are expected; a missing response is a distinct lost-response
+case. Neither reply shape nor a changed revision proves success. Acceptance still
+requires a fresh complete indexed readback, the exact authenticated root, a
+canonical signed state, a new revision, and the full planned signed-event prefix
+within the original acceptance deadline. A later valid signed event may follow the
+prefix, so the response and readback revisions need not match each other. Malformed
+response evidence remains a rejection; it is not silently treated as a lost reply.
+Unknown outcomes, durable reservations, no replay and native-dispatch fences are
+unchanged.
+
+This change addresses the observed post-ready heartbeat content no-op. Its saved
+24,660-character ASCII needle exactly matched the original document minus its
+mandatory final newline, across three contiguous paragraphs. The revision changed
+but the authenticated state did not, and the empty replacement response did not
+prove a replacement. That evidence does not establish a provider or connector
+root cause. The old failed event remains unaccepted and non-replayable. The repair
+does not change child bootstrap/control or legacy cleanup, or the blank-document
+queue initialization's one-insert protocol. Changed controller source hashes
+require one coherent reviewed package and a fresh authorized activation; no old
+signed queue is migrated or retried in place.
+
 ## Startup optimization boundaries
 
 The fixed group whitelist is `join-heartbeat`, `claim-begin`, `heartbeat-claim-begin`, and `heartbeat-admitted`; it does not permit arbitrary event batching. Each exact signed event remains present and all predecessor deadlines survive. Controller cells reuse accepted full readbacks only within the same invocation. The child pairing cell may also reuse its initial authenticated WAITING_FOR_WORKER snapshot after probes in that same invocation; current guards still run and exact revision conflicts cannot authorize replay. Small bounded evidence envelopes preserve the exact source/response privately and run the existing plan/check or verify/import in one helper RPC; oversized envelopes retain the original chunked capture path. Explicit wide result transfer is bounded by serialized bytes, keeps exact digest/offset checks, and falls back only to reading the same immutable result file, never rerunning a planner. One-use private argument permits recheck the original deadline at actual dispatch and burn on failure, including observed clock rollback. Actual native dispatch and returned evidence remain separate real platform operations.
@@ -139,7 +195,7 @@ The known standalone and desktop client factory paths enable bounded resource pr
 
 Mac preparation reuses the same-call verified blank Bootstrap resource for exact-revision initialization and keeps the actual initialization readback. Bundle publication reuses its same-call authenticated child snapshot; a concurrent writer burns the conflict rather than triggering a retry. For first readiness, verified consumption precedes the ready CAS, so that exact global ready readback is also the later queue checkpoint. Existing-route recovery retains its own fresh gate.
 
-The remaining dependency floor includes actual native admission evidence, exact CAS acceptance readbacks, both genuine raw probe paths, and materialized runtime plus fresh IDLE control before polling proof. Removing the fresh global ready source after consumption is an availability tradeoff: normal controller heartbeats can cause avoidable conflicts. Range-based Doc replacement or independent safe Docs clients could be separate redesigns; they are not proven impossible, nor validated by these optimizations. Live connector/platform timing is still needed before claiming an end-to-end limit.
+The remaining dependency floor includes actual native admission evidence, exact CAS acceptance readbacks, both genuine raw probe paths, and materialized runtime plus fresh IDLE control before polling proof. Removing the fresh global ready source after consumption is an availability tradeoff: normal controller heartbeats can cause avoidable conflicts. The Global queue now uses the indexed batch described above; child bootstrap/control and legacy cleanup retain their existing literal replacement protocols. Independent safe Docs clients remain a separate design question. Live connector/platform timing is still needed before claiming an end-to-end limit.
 
 Changed source bindings require a fresh activation. Offline operation-count improvements do not establish live Google latency, native scheduling latency, or a cold-start guarantee under three minutes. Measure verified child readiness and first meaningful response content separately from heartbeat and keepalive events.
 

@@ -173,7 +173,7 @@ function sanitizeGlobalControllerError(value, category) {
     'global_cas_dispatch_window_expired_no_replay','global_unresolved_cas_readonly_reconciliation_required',
     'global_controller_clock_rollback','global_controller_not_active_restart_required',
     'global_controller_not_active_prepared_event_expired','global_operation_already_issued_no_replay',
-    'global_plan_not_reserved','global_response_document_mismatch','global_exact_replace_required',
+    'global_plan_not_reserved','global_response_document_mismatch','global_exact_indexed_replies_required',
     'global_response_revision_unverified','global_observation_rollback_or_fork',
     'global_actual_controller_identity_mismatch','global_controller_limits_required',
     'global_controller_join_required','global_controller_cell_source_mismatch',

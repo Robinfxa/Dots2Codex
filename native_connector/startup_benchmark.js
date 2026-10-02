@@ -11,6 +11,7 @@ const os=require('node:os');
 const {execFile}=require('node:child_process');
 const {promisify}=require('node:util');
 const {virtualClock}=require('./test_support');
+const {reflowDocument,applyDocumentBatch}=require('./indexed_docs_test_support');
 const execFileAsync=promisify(execFile);
 const fixtureScript=path.resolve(__dirname,'../remote_tests/startup_benchmark_fixture.py');
 const DEFAULT_LATENCIES=Object.freeze({docs_read:3000,docs_write:5000,helper_exec:1000});
@@ -31,6 +32,7 @@ async function runScenario(repo,scenario,{latencies=DEFAULT_LATENCIES,loseWrite=
     const config=JSON.parse(fs.readFileSync(path.join(root,'fixture.json'),'utf8'));
     config.nativePlanFile=path.join(config.stateDir,'preselected-native-plan.json');
     let document=JSON.parse(fs.readFileSync(path.join(root,'document.json'),'utf8'));
+    document=reflowDocument(document,config.tabId);
     const tools={
       async exec_command({cmd,workdir}) {
         assert.equal(workdir,repo);
@@ -76,24 +78,14 @@ async function runScenario(repo,scenario,{latencies=DEFAULT_LATENCIES,loseWrite=
           // Concurrent unrelated provider revision after the prior readback.
           // Keep the signed content unchanged so exact-event reconciliation
           // must reject the uncommitted operation, never replay its write.
-          document.revisionId='r'+(Number(document.revisionId.slice(1))+1);
+          document.revisionId+='-conflict';
           throw Object.assign(Error('requiredRevisionId revision mismatch'),{status:409});
         }
-        assert.deepEqual(args.write_control,{requiredRevisionId:document.revisionId});
-        assert.equal(args.requests.length,1);
-        const replacement=args.requests[0].replaceAllText;
-        assert(replacement);assert.equal(replacement.tabsCriteria.tabIds[0],config.tabId);
-        const run=document.tabs[0].documentTab.body.content[1].paragraph.elements[0].textRun;
-        const old=replacement.containsText.text;
-        const occurrences=run.content.split(old).length-1;
-        assert.equal(occurrences,1);
-        run.content=run.content.replace(old,replacement.replaceText);
-        document.revisionId='r'+(Number(document.revisionId.slice(1))+1);
+        const applied=applyDocumentBatch(document,args,{tabId:config.tabId});
+        document=applied.document;
         readAfterWrite=true;
         if(loseWrite&&!writeLost){writeLost=true;throw Object.assign(Error('synthetic lost response'),{code:'ETIMEDOUT'});}
-        return {structuredContent:{documentId:document.documentId,
-          replies:[{replaceAllText:{occurrencesChanged:occurrences}}],
-          writeControl:{requiredRevisionId:document.revisionId}}};
+        return {structuredContent:applied.response};
       }
     };
     const {createNativeToolAdapter}=require(path.join(repo,'native_connector/tool_adapter.js'));

@@ -1,47 +1,45 @@
 {
   "contract": "dots2codex-desktop-global-pilot/1",
-  "base_commit": "6be738b68f90f0e1c6493f91dabe61e263d3b267",
-  "base_source_tree_sha256": "79f40f5ab1cb5eb63dd38fbffbb1428bcd440819cda3d6f32f5104005e1ea8d7",
+  "base_commit": "cf086bfe362bb11eb820baa550eb079915d895cf",
+  "base_source_tree_sha256": "461e0f1167faa950aab40ae2d66d07f222807cf4cfe599e0412decdf82b2c8a6",
   "input_launcher_source_tree_sha256": "7774123803de7f12e89b8cb8be7a510f5cfc2e829572921c0fde33632d4e096e",
   "input_gateway_source_tree_sha256": "ab3026308c240f613b8be00b623cfa3eb67cd73fcac4e87556da7d1619215891",
-  "source_tree_sha256": "461e0f1167faa950aab40ae2d66d07f222807cf4cfe599e0412decdf82b2c8a6",
+  "source_tree_sha256": "7af580450657ee2cb86ef4e697adfc7dba4b9f79a7bfdfd25ba71750ddf6bb14",
   "source_tree_hash_algorithm": "SHA-256 of UTF-8 canonical JSON files array (sort_keys=true,separators=comma/colon,ensure_ascii=false); array sorted by path",
-  "hashed_file_count": 269,
+  "hashed_file_count": 273,
   "manifest_self_excluded": true,
   "changed_files": [
     "docs/GLOBAL_NATIVE_CONTROLLER.md",
-    "examples/google_clients.py",
-    "examples/remote_setup.py",
+    "native_connector/global_atomic_startup_audit.test.js",
     "native_connector/global_controller_cell.js",
+    "native_connector/global_controller_cell.test.js",
     "native_connector/global_controller_heartbeat_handoff.test.js",
-    "remote_tests/fixtures/retired_v1_sessions.json",
-    "remote_tests/test_global_heartbeat_ready_handoff.py",
-    "remote_tests/test_global_staged_cli.py",
-    "remote_tests/test_google_read_recovery.py",
-    "remote_tests/test_google_sdk_concurrency.py",
-    "remote_tests/test_legacy_cleanup.py",
-    "remote_transport/control.py",
-    "remote_transport/global_control.py",
-    "remote_transport/global_desktop.py",
-    "remote_transport/global_google.py",
-    "remote_transport/global_native.py",
-    "remote_transport/legacy_cleanup.py",
-    "remote_transport/model.py",
-    "remote_transport/router_bootstrap.py",
-    "remote_transport/router_mac.py",
-    "remote_transport/selection.py"
+    "native_connector/global_controller_roundtrips.test.js",
+    "native_connector/global_indexed_queue_integration.test.js",
+    "native_connector/global_native_preparation_integration.test.js",
+    "native_connector/indexed_docs_test_support.js",
+    "native_connector/indexed_docs_test_support.test.js",
+    "native_connector/router_pairing_helper_fixture.js",
+    "native_connector/startup_benchmark.js",
+    "remote_tests/startup_benchmark_fixture.py",
+    "remote_tests/test_global_atomic_startup_audit.py",
+    "remote_tests/test_global_claim_begin_group.py",
+    "remote_tests/test_global_control.py",
+    "remote_tests/test_global_fixed_startup_groups.py",
+    "remote_tests/test_global_indexed_queue.py",
+    "remote_tests/test_long_sessions.py",
+    "remote_tests/test_round3_compression_audit.py",
+    "remote_transport/global_control.py"
   ],
   "added_files": [
-    "native_connector/global_controller_heartbeat_handoff.test.js",
-    "remote_tests/fixtures/retired_v1_sessions.json",
-    "remote_tests/test_global_heartbeat_ready_handoff.py",
-    "remote_tests/test_google_sdk_concurrency.py",
-    "remote_tests/test_legacy_cleanup.py",
-    "remote_transport/legacy_cleanup.py"
+    "native_connector/global_indexed_queue_integration.test.js",
+    "native_connector/indexed_docs_test_support.js",
+    "native_connector/indexed_docs_test_support.test.js",
+    "remote_tests/test_global_indexed_queue.py"
   ],
   "all_six_source_bindings_preserved": true,
   "existing_runtime_migration": "fresh_activation_and_v2_join_required",
-  "status": "recovery-fixes-offline-validated-awaiting-live-acceptance",
+  "status": "indexed-queue-offline-validated-awaiting-live-acceptance",
   "launcher_global_menu_supported": true,
   "production_ready": false,
   "ready_for_config": false,
@@ -307,8 +305,8 @@
     },
     {
       "path": "docs/GLOBAL_NATIVE_CONTROLLER.md",
-      "bytes": 33344,
-      "sha256": "fbe56673dad2d4e2e4f324a8893029e6e22116c5bcba49e301f5d3fa5d5f4875",
+      "bytes": 37202,
+      "sha256": "b66556d870f12ee9fb600aea7031a89908e5c06ec6ffb841e9529ef4807d207e",
       "mode": "0644"
     },
     {
@@ -619,26 +617,26 @@
     },
     {
       "path": "native_connector/global_atomic_startup_audit.test.js",
-      "bytes": 5112,
-      "sha256": "7c07051be56e11bc633d016a4ba8c2d78cef6c40d94cd52e9fc7c9cb60055aaa",
+      "bytes": 5228,
+      "sha256": "805203c590873a1659f0010a50249ecd9d10d14c788b3b55672cb4525e6c1d05",
       "mode": "0644"
     },
     {
       "path": "native_connector/global_controller_cell.js",
-      "bytes": 32582,
-      "sha256": "548b8724ebdce097a9cbf275dd2c80f1dc98cd188485f55adbfc5aecd8a0736f",
+      "bytes": 32590,
+      "sha256": "dbec8f5e26fb4d3da7cc07592eb247a021c65639893d76479c1c00092860d800",
       "mode": "0644"
     },
     {
       "path": "native_connector/global_controller_cell.test.js",
-      "bytes": 14912,
-      "sha256": "0c5dfc4fb0bf9b0e019398c2724fb1a6a6b7cbeeb3ee63ca6f459e8ff79a0ec4",
+      "bytes": 15298,
+      "sha256": "88147f49dc37ef950d1070d788b6891495ccc2229b607fd141cadd89eb84df89",
       "mode": "0644"
     },
     {
       "path": "native_connector/global_controller_heartbeat_handoff.test.js",
-      "bytes": 6961,
-      "sha256": "4e09c66fcb4fcea6736d1b9975674b9bb78e8869929ac8a4c10edf5095a68f4a",
+      "bytes": 6927,
+      "sha256": "c2a22b42b9fe56272ad3bffa2a0648189538c9ada8b672ad32c2a2b3a5e1c308",
       "mode": "0644"
     },
     {
@@ -649,8 +647,8 @@
     },
     {
       "path": "native_connector/global_controller_roundtrips.test.js",
-      "bytes": 11801,
-      "sha256": "77d72e7fe5161eacd9d94b04d51fa1f0e3bdc3eec28a7009c85a04626eb5e30c",
+      "bytes": 11855,
+      "sha256": "952fb4a8dcdb553939ad15555e40ee3bc6e20269a71e032acf2667520c342a4b",
       "mode": "0644"
     },
     {
@@ -660,15 +658,33 @@
       "mode": "0644"
     },
     {
+      "path": "native_connector/global_indexed_queue_integration.test.js",
+      "bytes": 9338,
+      "sha256": "dab27f4dc83d2a44dac78d02644ca5936314515dfdba59b4b9b70c54880d439e",
+      "mode": "0644"
+    },
+    {
       "path": "native_connector/global_native_preparation_integration.test.js",
-      "bytes": 4535,
-      "sha256": "97b47d9c6413ce441a1ec52a884a5b40d9df553161db9f90dbfd123a416f3862",
+      "bytes": 4115,
+      "sha256": "829a9e89c699d68b42c37bd045144bc4bd0adcecf115bc29e44b4ecefd837f45",
       "mode": "0644"
     },
     {
       "path": "native_connector/global_pre_native_cell.test.js",
       "bytes": 7135,
       "sha256": "4e613ac4b3d2d0126058ead620639a7bc20069439f16a32b3725dae1240a829b",
+      "mode": "0644"
+    },
+    {
+      "path": "native_connector/indexed_docs_test_support.js",
+      "bytes": 5388,
+      "sha256": "27f09dbe0d4dac9f021a262c362b614cfa0d6896abb9f8f49ed934f401488013",
+      "mode": "0644"
+    },
+    {
+      "path": "native_connector/indexed_docs_test_support.test.js",
+      "bytes": 4628,
+      "sha256": "98933341ff16b651853055a966caf8d36e78bafd9ebd0d2ddf9b1215fe9e1006",
       "mode": "0644"
     },
     {
@@ -697,8 +713,8 @@
     },
     {
       "path": "native_connector/router_pairing_helper_fixture.js",
-      "bytes": 6403,
-      "sha256": "5c0c3a76f37f77e621fb24f2b98ee512f93de7d26d320fa257520c2a132bf18a",
+      "bytes": 7561,
+      "sha256": "d94ded5b9d83aff765410f104c70bd5cb357042fad8ce10ad272e33ac84760b9",
       "mode": "0644"
     },
     {
@@ -715,8 +731,8 @@
     },
     {
       "path": "native_connector/startup_benchmark.js",
-      "bytes": 16154,
-      "sha256": "c9a28499b3399b960436ff8d6e563ba287fc07e497072febb646b3329999eea2",
+      "bytes": 15551,
+      "sha256": "7116c091cd0c91e7a61581644e2b2c2eaaacfc5bc9228864e2735b8d5599500a",
       "mode": "0644"
     },
     {
@@ -817,8 +833,8 @@
     },
     {
       "path": "remote_tests/startup_benchmark_fixture.py",
-      "bytes": 8849,
-      "sha256": "690f9413ebc4f41b109a3dcbbb400cf45638b18e92d36ab7d6193c8544b1525e",
+      "bytes": 10757,
+      "sha256": "bbf938d87b3fd63c719a56026d08595ae3cedc85a216791b8bd67de741f4a027",
       "mode": "0644"
     },
     {
@@ -907,8 +923,8 @@
     },
     {
       "path": "remote_tests/test_global_atomic_startup_audit.py",
-      "bytes": 8907,
-      "sha256": "7f4952adf09e64b4cd9cbe16a634680c6d7d6253dfe6a8b67e70509f30f6080d",
+      "bytes": 8898,
+      "sha256": "fa54cf2179d2f8f765443c8818f272e79fc1f9e86d0ecd91e2b3c7a33c7653a8",
       "mode": "0644"
     },
     {
@@ -925,8 +941,8 @@
     },
     {
       "path": "remote_tests/test_global_claim_begin_group.py",
-      "bytes": 21560,
-      "sha256": "bd0eb609baf74b3f8422220f8084d40a1eeb461917f4f5b27b2aee6c15fa724a",
+      "bytes": 22079,
+      "sha256": "9004c40c63531c14aafb1458b017e69f83c3e2dff484094b15d6af61864b1f1a",
       "mode": "0644"
     },
     {
@@ -943,8 +959,8 @@
     },
     {
       "path": "remote_tests/test_global_control.py",
-      "bytes": 17540,
-      "sha256": "53031cb6f2b8797c033c38a516ed9218917aebbee9e0f4cabe7f41c9d0b5082f",
+      "bytes": 22094,
+      "sha256": "5ad1e40c2453879dc084ca0692a48ea001333e497d86700bd5320c412b6d9fdd",
       "mode": "0644"
     },
     {
@@ -961,8 +977,8 @@
     },
     {
       "path": "remote_tests/test_global_fixed_startup_groups.py",
-      "bytes": 29995,
-      "sha256": "07eb6e7f8e3f3c871bc0763abb697123d4b0087ec3e1ca35368ac03e51e3ba8e",
+      "bytes": 29989,
+      "sha256": "b6d4dca61771e8b779644ce8a1c39cbf1108646ebb2016c87804efc429f4c4bf",
       "mode": "0644"
     },
     {
@@ -987,6 +1003,12 @@
       "path": "remote_tests/test_global_heartbeat_ready_handoff.py",
       "bytes": 13104,
       "sha256": "3592b53115c3d031119af08760f82e8d1e70f938c237668efbf9c62dfe1ac9c7",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_tests/test_global_indexed_queue.py",
+      "bytes": 21356,
+      "sha256": "9b7f7c165a75ddfa3ed282ef5308c1a36b0feb2b9d74ecb0033e47ccfc5e21fc",
       "mode": "0644"
     },
     {
@@ -1063,8 +1085,8 @@
     },
     {
       "path": "remote_tests/test_long_sessions.py",
-      "bytes": 21132,
-      "sha256": "1d0544e661952bc3ee4ae78b3117a8134cbd82a014273fb3b14091c5bea8e462",
+      "bytes": 23703,
+      "sha256": "aaf7f1655852e7d17cc97a2d060bf9b0efe3bd0ed98f34d79e8e29e3c6942b18",
       "mode": "0644"
     },
     {
@@ -1099,8 +1121,8 @@
     },
     {
       "path": "remote_tests/test_round3_compression_audit.py",
-      "bytes": 17430,
-      "sha256": "5569b8d57c019631c155cce630d2b5dc94ab68af550c3cd43466a3780270a1d0",
+      "bytes": 17269,
+      "sha256": "5dc0a4e2c4d30333e290028a8aafb6e9547a5c1f4768d8d17a73ecf14a343bc3",
       "mode": "0644"
     },
     {
@@ -1267,8 +1289,8 @@
     },
     {
       "path": "remote_transport/global_control.py",
-      "bytes": 31624,
-      "sha256": "35c82fc8311fcc7f62f43e9be7fd2f3d5fe05e27980848bf0529228d7259b514",
+      "bytes": 39196,
+      "sha256": "c8d8b502d7e65a0050906fb04cda75206378089734561d60ad5e031ab61e479f",
       "mode": "0644"
     },
     {
@@ -1668,7 +1690,7 @@
       "mode": "0644"
     }
   ],
-  "parent_commit": "6be738b68f90f0e1c6493f91dabe61e263d3b267",
+  "parent_commit": "cf086bfe362bb11eb820baa550eb079915d895cf",
   "global_config_pilot_gate_implemented": true,
   "global_config_pilot_runtime_exercised": false,
   "input_desktop_global_source_tree_sha256": "7999cd2b2a5e028bc706760d7a290f44a3b5365b76c5f38f88a4d9478a89b4f3",
@@ -1721,21 +1743,21 @@
     "real_mac_native_google_acceptance": false
   },
   "test_results": {
-    "contract": "dots2codex-recovery-fixes-offline-validation/1",
+    "contract": "dots2codex-indexed-queue-offline-validation/1",
     "status": "passed_with_explicit_optional_skips",
-    "source_tree_sha256": "461e0f1167faa950aab40ae2d66d07f222807cf4cfe599e0412decdf82b2c8a6",
+    "source_tree_sha256": "7af580450657ee2cb86ef4e697adfc7dba4b9f79a7bfdfd25ba71750ddf6bb14",
     "final_snapshot_validated": true,
     "live_mac_google_native_verified": false,
     "google_writes": 0,
     "native_inference_calls": 0,
     "dependency_install_performed": false,
-    "full_run_jobs": 87,
+    "full_run_jobs": 90,
     "max_concurrent_test_jobs": 6,
     "six_way_isolated_full_run": true,
     "reused_prior_run_results": false,
     "tests": {
-      "tests": 1387,
-      "passed": 1378,
+      "tests": 1451,
+      "passed": 1442,
       "failures": 0,
       "errors": 0,
       "skipped": 9,
@@ -1743,8 +1765,8 @@
       "unexpected_successes": 0
     },
     "python": {
-      "tests": 1202,
-      "passed": 1193,
+      "tests": 1223,
+      "passed": 1214,
       "failures": 0,
       "errors": 0,
       "skipped": 9,
@@ -1752,8 +1774,8 @@
       "unexpected_successes": 0
     },
     "node": {
-      "tests": 185,
-      "passed": 185,
+      "tests": 228,
+      "passed": 228,
       "failures": 0,
       "errors": 0,
       "skipped": 0,
@@ -1762,8 +1784,8 @@
     },
     "totals_by_suite": {
       "remote_tests": {
-        "tests": 933,
-        "passed": 924,
+        "tests": 954,
+        "passed": 945,
         "failures": 0,
         "errors": 0,
         "skipped": 9,
@@ -1816,8 +1838,8 @@
         "unexpected_successes": 0
       },
       "node": {
-        "tests": 185,
-        "passed": 185,
+        "tests": 228,
+        "passed": 228,
         "failures": 0,
         "errors": 0,
         "skipped": 0,
@@ -1838,10 +1860,9 @@
       "optional tomlkit unavailable; real parser integration NOT VERIFIED": 9
     },
     "new_test_modules": [
-      "native_connector/global_controller_heartbeat_handoff.test.js",
-      "remote_tests/test_global_heartbeat_ready_handoff.py",
-      "remote_tests/test_google_sdk_concurrency.py",
-      "remote_tests/test_legacy_cleanup.py"
+      "native_connector/global_indexed_queue_integration.test.js",
+      "native_connector/indexed_docs_test_support.test.js",
+      "remote_tests/test_global_indexed_queue.py"
     ],
     "real_sdk_modules": {
       "remote_tests/test_google_read_recovery.py": 29,
@@ -1849,14 +1870,16 @@
       "sdk_tests/test_google_sdk_independent.py": 3
     },
     "real_sdk_modules_zero_skips": true,
-    "full_run_seconds": 170.931,
-    "full_snapshot_sha256": "a8a6ba32ef1acaeaacf0515f25df09c01a76632ef7c9ffba895335b68df542cb",
+    "full_run_seconds": 190.81,
+    "full_snapshot_sha256": "e29455e1458aa8731a1a35f0547a6775dc842a4bbd7f0818482a76be70ede36a",
     "tree_unchanged_during_run": true,
     "final_manifest_verified": true,
-    "manifest_entries": 269,
+    "test_inventory_unchanged_during_run": true,
+    "source_cache_artifacts": [],
+    "manifest_entries": 273,
     "syntax_checks": {
-      "python": 147,
-      "node": 22,
+      "python": 148,
+      "node": 25,
       "shell": 11,
       "json": 17
     },
@@ -2543,7 +2566,7 @@
       "Retired v1 selections and signed roots are not rewritten or silently downgraded; stop and restore prior activation, explicitly reselect in Settings, then start a new same-version pairing."
     ]
   },
-  "recovery_fixes_validation": {
+  "prior_recovery_fixes_validation": {
     "contract": "dots2codex-recovery-fixes-offline-validation/1",
     "status": "passed_with_explicit_optional_skips",
     "source_tree_sha256": "461e0f1167faa950aab40ae2d66d07f222807cf4cfe599e0412decdf82b2c8a6",
@@ -2680,6 +2703,158 @@
     "syntax_checks": {
       "python": 147,
       "node": 22,
+      "shell": 11,
+      "json": 17
+    },
+    "network_attempts_blocked": 0,
+    "leaked_subprocesses": 0,
+    "per_job_descendant_supervision": true,
+    "network_guards": "Python audit hook, Node hooks, inherited native socket guard; local fixture loopback only",
+    "toml_parser_integration_verified": false,
+    "known_limits": [
+      "Optional real tomlkit parser integration cases, if listed in skips_by_reason, were skipped because the dependency is unavailable; no dependency installation performed.",
+      "Mac native UI, real Google writes, native admission/inference, client traffic, live queue/protocol traffic, and end-to-end activation were not run.",
+      "Deterministic benchmark results describe offline scheduling only, not live-service latency."
+    ]
+  },
+  "indexed_queue_validation": {
+    "contract": "dots2codex-indexed-queue-offline-validation/1",
+    "status": "passed_with_explicit_optional_skips",
+    "source_tree_sha256": "7af580450657ee2cb86ef4e697adfc7dba4b9f79a7bfdfd25ba71750ddf6bb14",
+    "final_snapshot_validated": true,
+    "live_mac_google_native_verified": false,
+    "google_writes": 0,
+    "native_inference_calls": 0,
+    "dependency_install_performed": false,
+    "full_run_jobs": 90,
+    "max_concurrent_test_jobs": 6,
+    "six_way_isolated_full_run": true,
+    "reused_prior_run_results": false,
+    "tests": {
+      "tests": 1451,
+      "passed": 1442,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "python": {
+      "tests": 1223,
+      "passed": 1214,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "node": {
+      "tests": 228,
+      "passed": 228,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "totals_by_suite": {
+      "remote_tests": {
+        "tests": 954,
+        "passed": 945,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 9,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "tests": {
+        "tests": 134,
+        "passed": 134,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "remote_audit/cas": {
+        "tests": 47,
+        "passed": 47,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "remote_audit/drive": {
+        "tests": 48,
+        "passed": 48,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "sdk_tests": {
+        "tests": 3,
+        "passed": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "docs/gemini_setup/tools": {
+        "tests": 37,
+        "passed": 37,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "node": {
+        "tests": 228,
+        "passed": 228,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "benchmark": {
+        "tests": 0,
+        "passed": 0,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      }
+    },
+    "skips_by_reason": {
+      "optional tomlkit unavailable; real parser integration NOT VERIFIED": 9
+    },
+    "new_test_modules": [
+      "native_connector/global_indexed_queue_integration.test.js",
+      "native_connector/indexed_docs_test_support.test.js",
+      "remote_tests/test_global_indexed_queue.py"
+    ],
+    "real_sdk_modules": {
+      "remote_tests/test_google_read_recovery.py": 29,
+      "remote_tests/test_google_sdk_concurrency.py": 23,
+      "sdk_tests/test_google_sdk_independent.py": 3
+    },
+    "real_sdk_modules_zero_skips": true,
+    "full_run_seconds": 190.81,
+    "full_snapshot_sha256": "e29455e1458aa8731a1a35f0547a6775dc842a4bbd7f0818482a76be70ede36a",
+    "tree_unchanged_during_run": true,
+    "final_manifest_verified": true,
+    "test_inventory_unchanged_during_run": true,
+    "source_cache_artifacts": [],
+    "manifest_entries": 273,
+    "syntax_checks": {
+      "python": 148,
+      "node": 25,
       "shell": 11,
       "json": 17
     },

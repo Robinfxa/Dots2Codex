@@ -32,7 +32,8 @@ function fixture(t,{chunkSize=100000,proof={},onCommand=()=>{},mutateChunk=x=>x,
         packet={plan_file:'/private/plan',group_id:'group-one',operation_ids:['claim-one','begin-one'],
           execute_before:110,dispatch_check:{dispatch_allowed:true,checked_at:100,execute_before:110,...proof},
           tool_arguments:{document_id:'doc',write_control:{requiredRevisionId:'exact-revision'},
-            requests:[{replaceAllText:{replaceText:'exact 😀 文本',containsText:{text:'old'}}}]}};
+            requests:[{deleteContentRange:{range:{startIndex:1,endIndex:4,tabId:'tab'}}},
+              {insertText:{location:{index:1,tabId:'tab'},text:'exact 😀 文本'}}]}};
         value=chunk(0);
       }
       if(truncatePlan&&cmd.includes("'plan-claim-begin'"))return {exit_code:0,output:'{\"truncated\":'};
@@ -64,7 +65,7 @@ test('Multi-chunk Unicode result retains exact arguments and fixed digest withou
   const f=fixture(t,{chunkSize:70}),plan=await f.plan();
   assert(f.commands.length>2);assert.equal(f.commands.filter(cmd=>cmd.includes("'plan-claim-begin'")).length,1);
   assert(f.commands.slice(1).every(cmd=>cmd.includes("'packet-chunk'")&&!cmd.includes("'--offset' '0'")));
-  assert.equal(plan.tool_arguments.requests[0].replaceAllText.replaceText,'exact 😀 文本');
+  assert.equal(plan.tool_arguments.requests[1].insertText.text,'exact 😀 文本');
   await f.adapter.io.check(plan,'/private/exact-source');await f.adapter.io.write(plan.tool_arguments);
 });
 test('Transfer time consumes the original helper deadline rather than starting a new window',async t=>{
@@ -162,7 +163,7 @@ for(const [name,options] of [['first chunk',{truncatePlan:true}],['continuation'
     assert.match(f.commands[0],/'--result-large-chunk'/);
     assert(f.commands.some(c=>c.includes("'packet-chunk'")&&c.includes("'--max-chars' '16384'")));
     await f.adapter.io.check(plan,'/private/exact-source');await f.adapter.io.write(plan.tool_arguments);
-    assert.equal(f.writes.length,1);assert.equal(f.writes[0].requests[0].replaceAllText.replaceText,'exact 😀 文本');
+    assert.equal(f.writes.length,1);assert.equal(f.writes[0].requests[1].insertText.text,'exact 😀 文本');
   });
 
 test('Legacy fallback transfer still consumes the original dispatch deadline',async t=>{

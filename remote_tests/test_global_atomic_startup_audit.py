@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from remote_tests import test_global_heartbeat as fixtures
+from remote_tests.test_global_control import replace_document_text
 from remote_transport import global_control as queue, global_native
 from remote_transport.model import ProtocolError
 
@@ -27,13 +28,13 @@ class AtomicStartupAuditTests(unittest.TestCase):
     def resource(self, state, revision='audit-new-revision'):
         source = self.f.google.get_document(self.f.initial['document_id'])
         source['revisionId'] = revision
-        source['tabs'][0]['documentTab']['body']['content'][1]['paragraph']['elements'][0]['textRun']['content'] = queue.block(state)
+        replace_document_text(source, queue.block(state))
         return source
 
     def test_group_is_one_replacement_with_ordered_distinct_ids(self):
         source, path, result, packet = self.group()
         self.assertEqual(packet['contract'], queue.GROUP_PLAN_CONTRACT)
-        self.assertEqual(len(packet['tool_arguments']['requests']), 1)
+        self.assertEqual(len(packet['tool_arguments']['requests']), 2)
         self.assertEqual(packet['tool_arguments']['write_control'], {'requiredRevisionId': source.revision_id})
         events = packet['expected_state']['events'][-2:]
         self.assertEqual([event['kind'] for event in events], ['claim', 'begin'])

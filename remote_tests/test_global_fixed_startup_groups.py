@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from remote_tests import test_global_heartbeat as fixtures
+from remote_tests.test_global_control import replace_document_text
 from remote_transport import global_control as q, global_native as native
 from remote_transport.global_gateway import private_write
 from remote_transport.model import ProtocolError, canonical, hash_bytes
@@ -36,7 +37,7 @@ class FixedStartupGroupTests(unittest.TestCase):
 
     def document(self,state,revision='r-synthetic'):
         f=self.f;doc=f.google.get_document(f.initial['document_id']);doc['revisionId']=revision
-        doc['tabs'][0]['documentTab']['body']['content'][1]['paragraph']['elements'][0]['textRun']['content']=q.block(state)
+        replace_document_text(doc, q.block(state))
         return doc
 
     def import_admission(self):
@@ -63,7 +64,7 @@ class FixedStartupGroupTests(unittest.TestCase):
         self.assertEqual([e['kind'] for e in packet['expected_state']['events'][-2:]],['heartbeat','admitted'])
         self.assertEqual(packet['expected_state']['epoch'],source.state['epoch']+2)
         self.assertEqual(len(json.loads(f.ledger.path.read_bytes())['operations']),len(before['operations'])+1)
-        self.assertEqual(len(out['tool_arguments']['requests']),1)
+        self.assertEqual(len(out['tool_arguments']['requests']), 2)
         verified=f.commit(path,out);self.assertTrue(verified['verified']);self.assertFalse(verified['first_heartbeat_required'])
         self.assertEqual(len(f.google.calls),calls+1)
         self.assertTrue(self.import_admission()['imported'])

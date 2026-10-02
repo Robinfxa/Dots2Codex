@@ -14,7 +14,11 @@ import sys
 import time
 
 
-def prepare(root, scenario):
+def prepare(root, scenario, minimum_state_bytes=0):
+    if type(minimum_state_bytes) is not int or not 0 <= minimum_state_bytes <= 128 * 1024:
+        raise ValueError("minimum state bytes must be between 0 and 131072")
+    if scenario == "join" and minimum_state_bytes:
+        raise ValueError("a first-JOIN fixture cannot have preexisting event history")
     sys.path.insert(0, str(Path.cwd()))
     from remote_tests.test_global_control import FakeGoogle
     from remote_transport import global_control as queue
@@ -36,7 +40,7 @@ def prepare(root, scenario):
     due = scenario == 'claim_begin_due'
     initial = queue.initial(activation_id=activation, queue_id=secrets.token_hex(16),
         folder_id='synthetic-folder', document_id=document, tab_id='t.0',
-        join_code=code, created=now - (40 if due else 5), expires=now + 1800,
+        join_code=code, created=now - (800 if minimum_state_bytes else 40 if due else 5), expires=now + 1800,
         runtime_source_hashes=_source_hashes())
     bridge = GoogleQueueBridge(store, root / 'bridge', provider, provider, initial, code)
     bridge.initialize_blank_queue()
@@ -55,8 +59,28 @@ def prepare(root, scenario):
 
     try:
         if scenario != 'join':
-            event('join', capacity=2, seconds=1200, now=now - (31 if due else 3))
-            event('heartbeat', now=now - (30 if due else 2))
+            if minimum_state_bytes:
+                # Offline authentic history, not unsigned padding or expired
+                # native reservations. Measured operations begin after this
+                # history and retain their actual dispatch/acceptance windows.
+                state = queue.transition(initial, code, 'join', 'native',
+                    {'native_task_id': native_id, 'controller_epoch': secrets.token_hex(16),
+                     'lease_expires': now + 1200, 'capacity': 2}, now=now-799)
+                controller = state['logical']['controller']
+                arguments = {key: controller[key] for key in ('native_task_id', 'controller_epoch')}
+                tick = now-798
+                while len(queue.block(state).encode()) < minimum_state_bytes:
+                    if tick >= now-31:
+                        raise ValueError('minimum size exceeds the bounded synthetic history')
+                    state = queue.transition(state, code, 'heartbeat', 'native', arguments, now=tick)
+                    tick += 1
+                state = queue.transition(state, code, 'heartbeat', 'native', arguments,
+                                         now=now-(30 if due else 2))
+                queue.verify(state, code)
+                provider.docs[document] = [queue.block(state), provider.docs[document][1] + 1]
+            else:
+                event('join', capacity=2, seconds=1200, now=now - (31 if due else 3))
+                event('heartbeat', now=now - (30 if due else 2))
             bridge.sync_heartbeat()
             row = store.admission(activation, identity(), selection)
             route = row['id']
@@ -76,6 +100,7 @@ def prepare(root, scenario):
             'nativeTaskId': native_id, 'documentId': document, 'tabId': 't.0',
             'joinCodeFile': str(root / 'join.txt'), 'routeId': route,
             'initialEpoch': bridge.read().state['epoch'],
+            'initialStateBytes': len(queue.block(bridge.read().state).encode()),
             'ledgerFile': str(ledger.path)}
         if scenario == 'admission':
             metadata.update(planFile=str(native_plan), actualArgumentsFile=str(arguments),
@@ -154,9 +179,10 @@ if __name__ == '__main__':
     parser.add_argument('--root', type=Path, required=True)
     parser.add_argument('--scenario', choices=['join', 'claim_begin', 'claim_begin_due', 'claim_prepare_native', 'admission'], required=True)
     parser.add_argument('--audit-final', action='store_true')
+    parser.add_argument('--minimum-state-bytes', type=int, default=0)
     args = parser.parse_args()
     os.umask(0o077)
     if args.audit_final:
         print(json.dumps(audit(args.root, args.scenario)))
     else:
-        prepare(args.root, args.scenario)
+        prepare(args.root, args.scenario, args.minimum_state_bytes)

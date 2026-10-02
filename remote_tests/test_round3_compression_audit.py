@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from remote_tests import test_global_heartbeat as fixtures
+from remote_tests.test_global_control import replace_document_text
 from remote_transport import global_control as queue, global_native
 from remote_transport.global_gateway import private_write
 from remote_transport.model import ProtocolError, canonical
@@ -35,7 +36,7 @@ class AdmissionCompressionAuditTests(unittest.TestCase):
     def document(self, state, revision='independent-new-revision'):
         resource = self.f.google.get_document(self.f.initial['document_id'])
         resource['revisionId'] = revision
-        resource['tabs'][0]['documentTab']['body']['content'][1]['paragraph']['elements'][0]['textRun']['content'] = queue.block(state)
+        replace_document_text(resource, queue.block(state))
         return resource
 
     def commit(self, path, result):
@@ -48,7 +49,7 @@ class AdmissionCompressionAuditTests(unittest.TestCase):
         self.assertEqual([e['kind'] for e in packet['expected_state']['events'][-2:]], ['heartbeat', 'admitted'])
         self.assertEqual(len(set(packet['operation_ids'])), 2)
         self.assertEqual(result['tool_arguments']['write_control'], {'requiredRevisionId': source.revision_id})
-        self.assertEqual(len(result['tool_arguments']['requests']), 1)
+        self.assertEqual(len(result['tool_arguments']['requests']), 2)
         before = len(self.f.google.calls)
         self.assertTrue(self.commit(path, result)['verified'])
         self.assertEqual(len(self.f.google.calls), before + 1)
@@ -160,7 +161,7 @@ class JoinCompressionAuditTests(unittest.TestCase):
 
     def document(self, state):
         value = self.f.google.get_document(self.f.initial['document_id']); value['revisionId'] = 'independent-joined'
-        value['tabs'][0]['documentTab']['body']['content'][1]['paragraph']['elements'][0]['textRun']['content'] = queue.block(state)
+        replace_document_text(value, queue.block(state))
         return value
 
     def test_real_next_tick_group_retains_join_preparation_deadline(self):
@@ -219,7 +220,7 @@ class ClaimStartupCompressionAuditTests(unittest.TestCase):
 
     def document(self, state):
         value = self.f.google.get_document(self.f.initial['document_id']); value['revisionId'] = 'independent-claim'
-        value['tabs'][0]['documentTab']['body']['content'][1]['paragraph']['elements'][0]['textRun']['content'] = queue.block(state)
+        replace_document_text(value, queue.block(state))
         return value
 
     def test_due_heartbeat_group_complete_prefix_authorizes_one_exact_native_plan(self):

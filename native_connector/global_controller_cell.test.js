@@ -136,7 +136,7 @@ function adapterFixture({writeError=null,writeResult=null,verificationError=null
     },
     async mcp__codex_apps__google_drive_batch_update_document(){
       calls.push('write');if(writeError)throw writeError;
-      return writeResult||{documentId:'synthetic-doc',replies:[],writeControl:{requiredRevisionId:'revision-next'}};
+      return writeResult||{documentId:'synthetic-doc',replies:[{},{}],writeControl:{requiredRevisionId:'revision-next'}};
     },
     async exec_command({cmd}){
       commands.push(cmd);
@@ -214,4 +214,10 @@ test('Arbitrary error fields never become private diagnostics',()=>{
       expected_event_observed:null}});
     assert.equal(JSON.stringify(detail).includes(secret),false);
   }
+});
+
+// Global indexed batches acknowledge deletion and insertion with two empty replies.
+test('Indexed response shape failure survives safe diagnostic sanitization',()=>{
+  assert.deepEqual(sanitizeGlobalControllerError({error:'global_exact_indexed_replies_required'},'local_helper_error'),
+    {category:'local_helper_error',local_code:'global_exact_indexed_replies_required'});
 });

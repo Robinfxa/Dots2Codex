@@ -5,6 +5,7 @@ import http.client
 import json
 from pathlib import Path
 import tempfile
+import threading
 import time
 import unittest
 import uuid
@@ -163,7 +164,20 @@ class LongHTTPTests(Fixture):
         self.facade=RemoteResponsesFacade(self.controller,long_session=True,request_deadline=3,
                                            poll_interval=.05,heartbeat_interval=.05).start()
         self.headers={'Content-Type':'application/json','session-id':'client','thread-id':str(uuid.uuid4())}
-    def tearDown(self):self.facade.close();super().tearDown()
+    def _close_and_drain(self):
+        self.facade.close()
+        # server_close force-closes client sockets but does not join its daemon
+        # request handlers. Client EOF can therefore precede disconnect's final
+        # journal save. The server removes each client only in the handler's
+        # finally block, after all request processing and writes have finished.
+        deadline=time.monotonic()+5
+        while True:
+            with self.facade.server.state_lock:
+                pending=bool(self.facade.server.clients)
+            if not pending:return
+            self.assertLess(time.monotonic(),deadline,'facade request handlers did not drain')
+            time.sleep(.01)
+    def tearDown(self):self._close_and_drain();super().tearDown()
     def post(self,body,path='/v1/responses'):
         conn=http.client.HTTPConnection('127.0.0.1',self.facade.server.server_port,timeout=10)
         conn.request('POST',path,body=canonical(body),headers=self.headers)
@@ -306,6 +320,37 @@ class LongHTTPTests(Fixture):
                 self.worker.complete(permit,{'kind':'function_call','name':'fixture','arguments':{'n':'invalid'}})
             self.assertEqual(len(self.drive.create_calls),before)
             self.facade.close();pending.result()
+
+    def test_fixture_drain_waits_for_late_disconnect_save_after_client_eof(self):
+        save_started=threading.Event();release_save=threading.Event()
+        drain_started=threading.Event();drain_finished=threading.Event()
+        original=self.facade.save_state
+        def delayed_save(state):
+            if self.facade.stop.is_set() and threading.current_thread() is not threading.main_thread():
+                save_started.set()
+                self.assertTrue(release_save.wait(5),'test did not release disconnect save')
+            return original(state)
+        def drain():
+            drain_started.set()
+            self._close_and_drain()
+            drain_finished.set()
+        with patch.object(self.facade,'save_state',side_effect=delayed_save), \
+             concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            pending=pool.submit(self.post,wire('shutdown while disconnect saves'))
+            try:
+                deadline=time.monotonic()+3
+                while not self.facade.read_state()['jobs'] and time.monotonic()<deadline:time.sleep(.01)
+                self.assertTrue(self.facade.read_state()['jobs'],'request was not admitted')
+                self.facade.close();pending.result(timeout=3)
+                self.assertTrue(save_started.wait(3),'disconnect save was not reached')
+                with self.facade.server.state_lock:self.assertTrue(self.facade.server.clients)
+                draining=pool.submit(drain)
+                self.assertTrue(drain_started.wait(3))
+                self.assertFalse(drain_finished.wait(.05),'drain returned before disconnect save finished')
+            finally:release_save.set()
+            draining.result(timeout=3)
+        with self.facade.server.state_lock:self.assertFalse(self.facade.server.clients)
+        self.assertTrue(self.facade.path.is_file())
 
     def test_operator_flags_are_bounded_and_do_not_execute(self):
         from remote_transport.operator import codex_command

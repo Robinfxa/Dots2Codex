@@ -17,7 +17,9 @@ function fixture(t,{proofChange,afterHelper}={}) {
       const check={dispatch_allowed:true,checked_at:now/1000,execute_before:now/1000+120};
       if(proofChange)proofChange(check);
       const packet={plan_file:'/private/approved-plan',execute_before:now/1000+120,dispatch_check:check,
-        tool_arguments:{document_id:'approved-doc',requests:[{replaceAllText:{replaceText:'approved-text'}}],
+        tool_arguments:{document_id:'approved-doc',requests:[
+          {deleteContentRange:{range:{startIndex:1,endIndex:4,tabId:'approved-tab'}}},
+          {insertText:{location:{index:1,tabId:'approved-tab'},text:'approved-text'}}],
           write_control:{requiredRevisionId:'approved-revision'}}};
       const text=JSON.stringify(packet);
       if(afterHelper)afterHelper({advance:seconds=>{now+=seconds*1000;}});
@@ -38,7 +40,7 @@ test('Audit: hidden toJSON cannot substitute different real connector arguments'
   const f=fixture(t),plan=await f.plan();
   const exact=JSON.parse(JSON.stringify(plan.tool_arguments));
   plan.tool_arguments.document_id='different-document';
-  plan.tool_arguments.requests[0].replaceAllText.replaceText='different-text';
+  plan.tool_arguments.requests[1].insertText.text='different-text';
   plan.tool_arguments.toJSON=()=>exact;
   try{await f.io.check(plan,'/private/exact-snapshot');await f.io.write(plan.tool_arguments);}
   catch(error){assert.match(error.message,/dispatch_arguments_mismatch|dispatch_permit_unavailable/);}

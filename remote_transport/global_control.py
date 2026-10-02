@@ -11,7 +11,6 @@ import re
 import secrets
 import time
 
-from .control import _document_text
 from .model import Object, ProtocolError, canonical, hash_bytes, require, valid_hash
 from .selection import validate_selection, validate_admission
 from . import router_bootstrap as child
@@ -248,22 +247,152 @@ class Snapshot:
         require(block(value)==self.text,'noncanonical_global_block');return value
 
 
+def _utf16_length(text):
+    """Google Docs offsets count UTF-16 units, not Python Unicode characters."""
+    require(isinstance(text,str),'invalid_global_document_text')
+    try:return len(text.encode('utf-16-le'))//2
+    except UnicodeError:raise ProtocolError('invalid_global_document_text') from None
+
+
+def _indexed_document_text(document,tab_id):
+    """Accept only a complete, dedicated, indexed plain-text tab.
+
+    This is intentionally Global-only. Child bootstrap/control and legacy cleanup
+    keep their existing parser and write protocol. Never infer offsets from a
+    lossy paragraph extraction or normalize provider text to fit the queue.
+    """
+    require(document.get('suggestionsViewMode')=='SUGGESTIONS_INLINE','inline_suggestions_view_required')
+    def inspect(value):
+        if isinstance(value,dict):
+            for key,item in value.items():
+                require(isinstance(key,str),'invalid_global_document_topology')
+                if key.startswith('suggested') or key=='suggestions':
+                    require(item is None or type(item) in (dict,list) and not item,'suggested_control_edit')
+                if key in {'headers','footers','footnotes','inlineObjects','positionedObjects','lists'}:
+                    require(item is None or type(item) is dict and not item,'dedicated_document_required')
+                if key=='positionedObjectIds':
+                    require(type(item) is list and not item,'dedicated_document_required')
+                if key in {'defaultHeaderId','defaultFooterId','firstPageHeaderId','firstPageFooterId',
+                           'evenPageHeaderId','evenPageFooterId'}:
+                    require(item is None or item=='','dedicated_document_required')
+                inspect(item)
+        elif isinstance(value,list):
+            for item in value:inspect(item)
+    inspect(document)
+    # The verified connector emits body:null beside flattened tabs. A content-
+    # bearing legacy body is never accepted as a second source of truth.
+    require(document.get('body') is None,'complete_document_body_required')
+    tab_content_keys={'body','headers','footers','footnotes','documentStyle',
+                      'suggestedDocumentStyleChanges','namedStyles','suggestedNamedStylesChanges',
+                      'lists','namedRanges','inlineObjects','positionedObjects','commentAnchors'}
+    property_keys={'tabId','title','parentTabId','index','nestingLevel','iconEmoji'}
+    require(set(document)<=(tab_content_keys-{'commentAnchors'})|
+            {'documentId','title','revisionId','suggestionsViewMode','commentsViewMode',
+             'tabs','comments','suggestions','document_url','url'},'invalid_global_document_topology')
+    tabs=document.get('tabs')
+    require(type(tabs) is list and len(tabs)==1,'dedicated_single_tab_required')
+    tab=tabs[0];require(isinstance(tab,dict),'control_tab_mismatch')
+    if 'childTabs' in tab:
+        require(type(tab['childTabs']) is list and not tab['childTabs'],'control_tab_mismatch')
+    if 'tabProperties' in tab or 'documentTab' in tab:
+        require(set(tab)<= {'tabProperties','documentTab','childTabs'}
+                and isinstance(tab.get('tabProperties'),dict)
+                and isinstance(tab.get('documentTab'),dict),'control_tab_mismatch')
+        properties=tab['tabProperties'];dt=tab['documentTab']
+        require(set(properties)<=property_keys and set(dt)<=tab_content_keys,'control_tab_mismatch')
+    else:
+        # The connected wrapper's verified normalized tab shape.
+        properties=tab;dt=tab
+        require(set(tab)<=tab_content_keys|property_keys|{'childTabs','documentId','document_url'},
+                'control_tab_mismatch')
+        if 'documentId' in tab:
+            require(tab['documentId']==document['documentId'],'global_document_mismatch')
+    require(properties.get('tabId')==tab_id and properties.get('parentTabId') in (None,''),
+            'control_tab_mismatch')
+    for key in ('index','nestingLevel'):
+        if key in properties:
+            if key=='nestingLevel' and properties is tab and properties[key] is None:continue
+            require(type(properties[key]) is int and properties[key]==0,'control_tab_mismatch')
+    body=dt.get('body')
+    require(isinstance(body,dict) and set(body)=={'content'} and type(body['content']) is list
+            and body['content'],'complete_document_body_required')
+    pieces=[];cursor=1
+    for number,element in enumerate(body['content']):
+        require(isinstance(element,dict),'invalid_document_element')
+        if 'sectionBreak' in element:
+            # The initial zero startIndex is legitimately omitted by the API.
+            require(number==0 and set(element)<={'startIndex','endIndex','sectionBreak'}
+                    and type(element.get('startIndex',0)) is int and element.get('startIndex',0)==0
+                    and type(element.get('endIndex')) is int and element['endIndex']==1
+                    and isinstance(element['sectionBreak'],dict),'unexpected_section_break')
+            section=element['sectionBreak']
+            require(set(section)<={'sectionStyle','suggestedInsertionIds','suggestedDeletionIds',
+                                   'suggestedSectionStyleChanges'},'unexpected_section_break')
+            if 'sectionStyle' in section:
+                require(isinstance(section['sectionStyle'],dict),'unexpected_section_break')
+            continue
+        require(set(element)=={'startIndex','endIndex','paragraph'}
+                and isinstance(element['paragraph'],dict),'plain_control_document_required')
+        require(type(element['startIndex']) is int and element['startIndex']==cursor
+                and type(element['endIndex']) is int and element['endIndex']>cursor,
+                'global_document_index_mismatch')
+        paragraph=element['paragraph']
+        require(set(paragraph)<={'elements','paragraphStyle','suggestedParagraphStyleChanges',
+                                'suggestedBulletChanges','positionedObjectIds','suggestedPositionedObjectIds'}
+                and type(paragraph.get('elements')) is list and paragraph['elements'],
+                'plain_control_document_required')
+        if 'paragraphStyle' in paragraph:
+            require(isinstance(paragraph['paragraphStyle'],dict),'plain_control_document_required')
+        runs=[]
+        for run in paragraph['elements']:
+            require(isinstance(run,dict) and set(run)=={'startIndex','endIndex','textRun'}
+                    and isinstance(run['textRun'],dict),'plain_control_document_required')
+            text_run=run['textRun']
+            require(set(text_run)<={'content','textStyle','suggestedInsertionIds','suggestedDeletionIds',
+                                   'suggestedTextStyleChanges'}
+                    and isinstance(text_run.get('content'),str) and text_run['content'],
+                    'plain_control_document_required')
+            if 'textStyle' in text_run:
+                require(isinstance(text_run['textStyle'],dict),'plain_control_document_required')
+            text=text_run['content'];length=_utf16_length(text)
+            require(type(run['startIndex']) is int and run['startIndex']==cursor
+                    and type(run['endIndex']) is int and run['endIndex']==cursor+length,
+                    'global_document_index_mismatch')
+            cursor+=length;runs.append(text)
+        text=''.join(runs)
+        require(text.endswith('\n') and '\n' not in text[:-1],'global_paragraph_newline_required')
+        require(element['endIndex']==cursor,'global_document_index_mismatch')
+        pieces.append(text)
+    text=''.join(pieces)
+    require(text and text.endswith('\n') and cursor==1+_utf16_length(text),'global_document_index_mismatch')
+    require(len(text.encode('utf-8'))<=MAX_BYTES+len(BEGIN)+len(END),'global_queue_too_large')
+    return text
+
+
 def snapshot(document,document_id,tab_id):
     require(isinstance(document,dict) and document.get('documentId')==document_id,'global_document_mismatch')
+    safe_id(document_id);safe_id(tab_id)
     revision=document.get('revisionId');require(isinstance(revision,str) and 1<=len(revision)<=1024,'global_revision_required')
-    return Snapshot(document_id,tab_id,revision,_document_text(document,tab_id))
+    return Snapshot(document_id,tab_id,revision,_indexed_document_text(document,tab_id))
+
+
+def _indexed_requests(source,new):
+    """One atomic pinned-tab delete/insert, preserving its mandatory final LF."""
+    replacement=block(new)
+    require(source.text.endswith('\n') and replacement.endswith('\n'),'invalid_global_block')
+    return [{'deleteContentRange':{'range':{'startIndex':1,
+                'endIndex':1+_utf16_length(source.text[:-1]),'tabId':source.tab_id}}},
+            {'insertText':{'location':{'index':1,'tabId':source.tab_id},'text':replacement[:-1]}}]
 
 
 def plan(source,new,code):
     old=source.state;verify(old,code,require_fresh=False);verify(new,code,expected_root=root_of(old),require_fresh=False)
     require(old['document_id']==source.document_id and old['tab_id']==source.tab_id and new['epoch']==old['epoch']+1
             and new['events'][:-1]==old['events'],'global_plan_not_one_transition')
-    request={'replaceAllText':{'containsText':{'text':source.text[:-1],'matchCase':True,'searchByRegex':False},
-             'replaceText':block(new)[:-1],'tabsCriteria':{'tabIds':[source.tab_id]}}}
     return {'contract':SINGLE_PLAN_CONTRACT,'source_block':source.text,'tab_id':source.tab_id,
             'expected_state':new,'operation_id':new['events'][-1]['operation_id'],
             'execute_before':event_deadline(old,new['events'][-1]['kind'],new['events'][-1]['at']),
-            'tool_arguments':{'document_id':source.document_id,'requests':[request],
+            'tool_arguments':{'document_id':source.document_id,'requests':_indexed_requests(source,new),
                               'write_control':{'requiredRevisionId':source.revision_id}}}
 
 
@@ -291,14 +420,12 @@ def plan_claim_begin(source,new,code):
     ids=[claim['operation_id'],begin['operation_id']]
     group_id=hash_bytes(canonical({'contract':GROUP_PLAN_CONTRACT,'root':root_hash(old),
                                   'group_kind':'claim-begin','operation_ids':ids}))
-    request={'replaceAllText':{'containsText':{'text':source.text[:-1],'matchCase':True,'searchByRegex':False},
-             'replaceText':block(new)[:-1],'tabsCriteria':{'tabIds':[source.tab_id]}}}
     return {'contract':GROUP_PLAN_CONTRACT,'group_kind':'claim-begin','group_id':group_id,
             'operation_ids':ids,'source_block':source.text,'tab_id':source.tab_id,'expected_state':new,
             'execute_before':min(event_deadline(old,'claim',claim['at']),
                                  event_deadline(middle,'begin',begin['at']),
                                  middle['logical']['demands'][claim['arguments']['route_id']]['expires']),
-            'tool_arguments':{'document_id':source.document_id,'requests':[request],
+            'tool_arguments':{'document_id':source.document_id,'requests':_indexed_requests(source,new),
                               'write_control':{'requiredRevisionId':source.revision_id}}}
 
 
@@ -327,14 +454,12 @@ def plan_heartbeat_admitted(source,new,code):
     group_id=hash_bytes(canonical({'contract':GROUP_PLAN_CONTRACT,'root':root_hash(old),
                                   'group_kind':'heartbeat-admitted','operation_ids':ids}))
     demand=middle['logical']['demands'][admitted['arguments']['route_id']]
-    request={'replaceAllText':{'containsText':{'text':source.text[:-1],'matchCase':True,'searchByRegex':False},
-             'replaceText':block(new)[:-1],'tabsCriteria':{'tabIds':[source.tab_id]}}}
     return {'contract':GROUP_PLAN_CONTRACT,'group_kind':'heartbeat-admitted','group_id':group_id,
             'operation_ids':ids,'source_block':source.text,'tab_id':source.tab_id,'expected_state':new,
             'execute_before':min(event_deadline(old,'heartbeat',heartbeat['at']),
                                  event_deadline(middle,'admitted',admitted['at']),
                                  demand['expires'],demand['child_bootstrap']['expires']),
-            'tool_arguments':{'document_id':source.document_id,'requests':[request],
+            'tool_arguments':{'document_id':source.document_id,'requests':_indexed_requests(source,new),
                               'write_control':{'requiredRevisionId':source.revision_id}}}
 
 
@@ -357,13 +482,11 @@ def plan_join_heartbeat(source,new,code):
     ids=[joined['operation_id'],heartbeat['operation_id']]
     group_id=hash_bytes(canonical({'contract':GROUP_PLAN_CONTRACT,'root':root_hash(old),
                                   'group_kind':'join-heartbeat','operation_ids':ids}))
-    request={'replaceAllText':{'containsText':{'text':source.text[:-1],'matchCase':True,'searchByRegex':False},
-             'replaceText':block(new)[:-1],'tabsCriteria':{'tabIds':[source.tab_id]}}}
     return {'contract':GROUP_PLAN_CONTRACT,'group_kind':'join-heartbeat','group_id':group_id,
             'operation_ids':ids,'source_block':source.text,'tab_id':source.tab_id,'expected_state':new,
             'execute_before':min(event_deadline(old,'join',joined['at']),
                                  event_deadline(middle,'heartbeat',heartbeat['at'])),
-            'tool_arguments':{'document_id':source.document_id,'requests':[request],
+            'tool_arguments':{'document_id':source.document_id,'requests':_indexed_requests(source,new),
                               'write_control':{'requiredRevisionId':source.revision_id}}}
 
 
@@ -389,15 +512,13 @@ def plan_heartbeat_claim_begin(source,new,code):
     ids=[heartbeat['operation_id'],claim['operation_id'],begin['operation_id']]
     group_id=hash_bytes(canonical({'contract':GROUP_PLAN_CONTRACT,'root':root_hash(old),
                                   'group_kind':'heartbeat-claim-begin','operation_ids':ids}))
-    request={'replaceAllText':{'containsText':{'text':source.text[:-1],'matchCase':True,'searchByRegex':False},
-             'replaceText':block(new)[:-1],'tabsCriteria':{'tabIds':[source.tab_id]}}}
     return {'contract':GROUP_PLAN_CONTRACT,'group_kind':'heartbeat-claim-begin','group_id':group_id,
             'operation_ids':ids,'source_block':source.text,'tab_id':source.tab_id,'expected_state':new,
             'execute_before':min(event_deadline(old,'heartbeat',heartbeat['at']),
                                  event_deadline(ticked,'claim',claim['at']),
                                  event_deadline(claimed,'begin',begin['at']),
                                  claimed['logical']['demands'][claim['arguments']['route_id']]['expires']),
-            'tool_arguments':{'document_id':source.document_id,'requests':[request],
+            'tool_arguments':{'document_id':source.document_id,'requests':_indexed_requests(source,new),
                               'write_control':{'requiredRevisionId':source.revision_id}}}
 
 
@@ -423,7 +544,9 @@ def validate_plan(packet,code):
             and isinstance(packet['source_block'],str),'invalid_global_cas_plan')
     safe_id(args['document_id']);safe_id(packet['tab_id'])
     source=Snapshot(args['document_id'],packet['tab_id'],args['write_control']['requiredRevisionId'],packet['source_block'])
-    require(packet==planner(source,packet['expected_state'],code),'global_cas_plan_changed')
+    # JSON bytes distinguish true/1 and 1.0/1, unlike Python dict equality.
+    require(canonical(packet)==canonical(planner(source,packet['expected_state'],code)),
+            'global_cas_plan_changed')
     return source
 
 
@@ -438,10 +561,11 @@ def verify_update(packet,response,readback,code,*,now=None):
     if response is not None:
         require(isinstance(response,dict) and response.get('documentId')==source.document_id,'global_response_document_mismatch')
         replies=response.get('replies');wc=response.get('writeControl')
-        require(isinstance(replies,list) and len(replies)==1 and isinstance(replies[0],dict)
-                and replies[0].get('replaceAllText',{}).get('occurrencesChanged')==1
-                and type(replies[0]['replaceAllText']['occurrencesChanged']) is int,'global_exact_replace_required')
-        require(isinstance(wc,dict) and isinstance(wc.get('requiredRevisionId'),str)
+        require(type(replies) is list and len(replies)==2
+                and all(type(reply) is dict and not reply for reply in replies),
+                'global_exact_indexed_replies_required')
+        require(isinstance(wc,dict) and set(wc)=={'requiredRevisionId'}
+                and isinstance(wc['requiredRevisionId'],str) and 1<=len(wc['requiredRevisionId'])<=1024
                 and wc['requiredRevisionId']!=source.revision_id,'global_response_revision_unverified')
     fresh=snapshot(readback,source.document_id,source.tab_id)
     expected=packet['expected_state'];verify(fresh.state,code,expected_root=root_of(expected),require_fresh=False)

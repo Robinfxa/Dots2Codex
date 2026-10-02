@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from remote_tests import test_global_heartbeat as fixtures
+from remote_tests.test_global_control import replace_document_text
 from remote_transport import global_control as q, global_native as native
 from remote_transport.global_gateway import private_write
 from remote_transport.model import ProtocolError, canonical
@@ -31,7 +32,7 @@ class GlobalClaimBeginGroupTests(unittest.TestCase):
     def document(self,state,revision='r-synthetic'):
         f=self.f;document=f.google.get_document(f.initial['document_id'])
         document['revisionId']=revision
-        document['tabs'][0]['documentTab']['body']['content'][1]['paragraph']['elements'][0]['textRun']['content']=q.block(state)
+        replace_document_text(document, q.block(state))
         return document
 
     def assertError(self,pattern,fn,*args,**kwargs):
@@ -46,7 +47,7 @@ class GlobalClaimBeginGroupTests(unittest.TestCase):
         self.assertEqual(packet['operation_ids'],[e['operation_id'] for e in packet['expected_state']['events'][-2:]])
         self.assertEqual([e['kind'] for e in packet['expected_state']['events'][-2:]],['claim','begin'])
         self.assertEqual(packet['tool_arguments']['write_control'],{'requiredRevisionId':source.revision_id})
-        self.assertEqual(len(packet['tool_arguments']['requests']),1)
+        self.assertEqual(len(packet['tool_arguments']['requests']), 2)
         saved=json.loads(f.ledger.path.read_bytes());record=saved['operations']['claim-begin:'+self.rid]
         self.assertEqual(len(saved['operations']),len(before['operations'])+1)
         self.assertEqual(record['status'],'issued_outcome_unknown');self.assertEqual(record['group_id'],packet['group_id'])
@@ -145,16 +146,23 @@ class GlobalClaimBeginGroupTests(unittest.TestCase):
         self.assertEqual(f.source().state['logical']['demands'][self.rid]['state'],'pending')
         self.assertEqual(json.loads(f.ledger.path.read_bytes())['spawns'],{})
 
-    def test_group_response_still_requires_exact_replacement_and_new_revision(self):
+    def test_group_response_requires_two_empty_replies_and_new_revision(self):
         f=self.f;_,path,out,packet=self.plan();response=f.google.batch_update_document(**out['tool_arguments'])
         readback=f.google.get_document(f.initial['document_id'])
-        for count in (0,2,True):
-            bad=copy.deepcopy(response);bad['replies'][0]['replaceAllText']['occurrencesChanged']=count
-            self.assertError('exact_replace',q.verify_update,packet,bad,readback,f.code)
+        for replies in ([], [{}], [{}, {}, {}], [{}, None],
+                        [{'replaceAllText': {'occurrencesChanged': 1}}],
+                        [{'replaceAllText': {'occurrencesChanged': 1}}, {}]):
+            bad=copy.deepcopy(response);bad['replies']=replies
+            self.assertError('repl|response',q.verify_update,packet,bad,readback,f.code)
         bad=copy.deepcopy(response);bad['documentId']='different-document'
         self.assertError('response_document',q.verify_update,packet,bad,readback,f.code)
         bad=copy.deepcopy(response);bad['writeControl']['requiredRevisionId']=packet['tool_arguments']['write_control']['requiredRevisionId']
         self.assertError('response_revision',q.verify_update,packet,bad,readback,f.code)
+        for control in ({}, {'requiredRevisionId': ''}, {'requiredRevisionId': True},
+                        {'requiredRevisionId': 'r-next', 'targetRevisionId': 'r-next'},
+                        {'requiredRevisionId': 'x'*1025}):
+            bad=copy.deepcopy(response);bad['writeControl']=control
+            self.assertError('response_revision',q.verify_update,packet,bad,readback,f.code)
         self.assertTrue(f.ledger.verify_plan(path,response,readback)['verified'])
 
     def test_verified_group_and_legacy_components_are_mutually_exclusive(self):

@@ -18,7 +18,7 @@ function fixture(t,{defer=true,changePlan=x=>x,helperMs=0,writeError=null,writeR
     async mcp__codex_apps__google_drive_batch_update_document(args){
       calls.push('write');assert.deepEqual(args.write_control,{requiredRevisionId:'r1'});
       if(writeError)throw writeError;
-      return writeResult||{documentId:'doc',replies:[{replaceAllText:{occurrencesChanged:1}}]};
+      return writeResult||{documentId:'doc',replies:[{},{}]};
     },
     async exec_command({cmd}){
       if(cmd.includes("'verify'")) {

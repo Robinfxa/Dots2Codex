@@ -24,6 +24,57 @@ from remote_transport.controlled import CASWorker
 from remote_transport.session import Journal
 
 
+def utf16_length(text):
+    """Docs locations count UTF-16 code units, not Python code points."""
+    return len(text.encode('utf-16-le')) // 2
+
+
+def indexed_body(text):
+    """A dedicated plain Docs body, with actual paragraphs and split text runs."""
+    assert isinstance(text, str) and text.endswith('\n')
+    content = [{'endIndex': 1, 'sectionBreak': {}}]
+    index = 1
+    for line in text[:-1].split('\n'):
+        paragraph_text = line + '\n'
+        start = index
+        # Split each nontrivial paragraph across several runs without splitting
+        # a Unicode scalar. A single run containing the whole protocol masks
+        # both paragraph boundaries and UTF-16 off-by-one errors.
+        cuts = sorted({0, min(17, len(paragraph_text)), len(paragraph_text)//2, len(paragraph_text)})
+        elements = []
+        for left, right in zip(cuts, cuts[1:]):
+            piece = paragraph_text[left:right]
+            end = index + utf16_length(piece)
+            elements.append({'startIndex': index, 'endIndex': end, 'textRun': {'content': piece}})
+            index = end
+        content.append({'startIndex': start, 'endIndex': index, 'paragraph': {'elements': elements}})
+    return {'content': content}
+
+
+def replace_document_text(document, text):
+    """Rebuild all structural indices when constructing a synthetic readback."""
+    tab = document['tabs'][0]
+    (tab['documentTab'] if 'documentTab' in tab else tab)['body'] = indexed_body(text)
+    return document
+
+
+def indexed_document(text, document_id='fixture-document', revision='r1'):
+    return {'documentId': document_id, 'revisionId': revision,
+            'suggestionsViewMode': 'SUGGESTIONS_INLINE',
+            'tabs': [{'tabProperties': {'tabId': 't.0'}, 'documentTab': {'body': indexed_body(text)}}]}
+
+
+def _python_offset(text, index):
+    assert type(index) is int and index >= 1, 'invalid Docs index'
+    units = index - 1
+    raw = text.encode('utf-16-le')
+    assert units <= len(raw)//2, 'Docs index out of range'
+    try:
+        return len(raw[:units*2].decode('utf-16-le'))
+    except UnicodeDecodeError:
+        raise AssertionError('Docs index splits surrogate pair') from None
+
+
 class FakeGoogle:
     capabilities=Capabilities(create_by_id=True,complete_listing=True,direct_metadata_read=True)
     def __init__(self):self.docs={};self.files={};self.counter=0;self.lock=threading.RLock();self.lose=False;self.fail_create=False;self.calls=[]
@@ -37,23 +88,47 @@ class FakeGoogle:
     def get_document(self,document_id):
         with self.lock:
             text,revision=self.docs[document_id]
-            return {'documentId':document_id,'revisionId':'r'+str(revision),'suggestionsViewMode':'SUGGESTIONS_INLINE',
-                    'tabs':[{'tabProperties':{'tabId':'t.0'},'documentTab':{'body':{'content':[
-                        {'sectionBreak':{}},{'paragraph':{'elements':[{'textRun':{'content':text}}]}}]}}}]}
+            return indexed_document(text, document_id, 'r'+str(revision))
     def batch_update_document(self,document_id,requests,write_control):
         with self.lock:
             current=self.docs[document_id]
             if write_control!={'requiredRevisionId':'r'+str(current[1])}:raise CASConflict('revision conflict')
+            assert isinstance(requests, list) and requests, 'empty Docs batch'
             self.calls.append(('cas',document_id,copy.deepcopy(requests)))
-            action=requests[0]
-            if 'insertText' in action:
-                assert current[0]=='\n';current[0]=action['insertText']['text']+'\n';reply={}
-            else:
-                r=action['replaceAllText'];old=r['containsText']['text'];count=current[0].count(old)
-                current[0]=current[0].replace(old,r['replaceText']);reply={'replaceAllText':{'occurrencesChanged':count}}
-            current[1]+=1
+            # Google validates and applies a batch atomically. Never leave the
+            # deletion committed if a later insertion is malformed or stale.
+            temporary=current[0];replies=[]
+            for action in requests:
+                assert isinstance(action, dict) and len(action)==1, 'invalid Docs request'
+                if 'deleteContentRange' in action:
+                    deletion=action['deleteContentRange']
+                    assert set(deletion)=={'range'}
+                    span=deletion['range']
+                    assert set(span)=={'startIndex','endIndex','tabId'} and span['tabId']=='t.0'
+                    start=_python_offset(temporary,span['startIndex']);end=_python_offset(temporary,span['endIndex'])
+                    assert 0<=start<end<len(temporary), 'cannot delete final Docs newline'
+                    temporary=temporary[:start]+temporary[end:];reply={}
+                elif 'insertText' in action:
+                    insertion=action['insertText']
+                    assert set(insertion)=={'location','text'}
+                    location=insertion['location']
+                    assert set(location)=={'index','tabId'} and location['tabId']=='t.0'
+                    offset=_python_offset(temporary,location['index'])
+                    assert offset<len(temporary) and isinstance(insertion['text'],str)
+                    temporary=temporary[:offset]+insertion['text']+temporary[offset:];reply={}
+                else:
+                    # Existing child JOIN/control protocols retain replaceAllText.
+                    assert 'replaceAllText' in action, 'unsupported Docs request'
+                    replacement=action['replaceAllText'];old=replacement['containsText']['text']
+                    assert replacement['tabsCriteria']=={'tabIds':['t.0']}
+                    assert old and isinstance(replacement['replaceText'],str)
+                    count=temporary.count(old);temporary=temporary.replace(old,replacement['replaceText'])
+                    reply={'replaceAllText':{'occurrencesChanged':count}}
+                replies.append(reply)
+            assert temporary.endswith('\n'), 'missing final Docs newline'
+            current[0]=temporary;current[1]+=1
             if self.lose:self.lose=False;raise TimeoutError('successful write response lost')
-            return {'documentId':document_id,'replies':[reply],'writeControl':{'requiredRevisionId':'r'+str(current[1])}}
+            return {'documentId':document_id,'replies':replies,'writeControl':{'requiredRevisionId':'r'+str(current[1])}}
     def create_bytes(self,folder,name,raw,file_id):
         with self.lock:
             if file_id in self.files:
@@ -89,6 +164,15 @@ class GlobalControlTests(unittest.TestCase):
         plan=self.path('cas.json');value=self.ledger.plan_event(self.bridge.read(),kind,plan,route_id=route_id,**kwargs)
         response=self.google.batch_update_document(**value['tool_arguments'])
         self.ledger.verify_plan(plan,response,self.google.get_document(self.initial['document_id']));return value
+    def assert_queue_indexed_updates(self):
+        updates=[call[2] for call in self.google.calls
+                 if call[0]=='cas' and call[1]==self.initial['document_id']]
+        self.assertEqual([set(action) for action in updates[0]],[{'insertText'}])
+        for requests in updates[1:]:
+            self.assertEqual([set(action) for action in requests],[{'deleteContentRange'},{'insertText'}])
+            self.assertEqual(requests[0]['deleteContentRange']['range']['startIndex'],1)
+            self.assertEqual(requests[0]['deleteContentRange']['range']['tabId'],'t.0')
+            self.assertEqual(requests[1]['insertText']['location'],{'index':1,'tabId':'t.0'})
     def demand(self,body=None,client=None):
         body=body or request('fixture');client=client or identity()
         status,raw=post(self.store,self.gen,client,body);self.assertEqual(status,409,raw)
@@ -152,7 +236,7 @@ class GlobalControlTests(unittest.TestCase):
         self.assertNotEqual(permits[0]['native_task_id'],permits[1]['native_task_id'])
         self.assertEqual(permits[0]['request']['responses_request']['input'][-1]['content'][0]['text'],'A')
         self.assertEqual(permits[1]['request']['responses_request']['input'][-1]['content'][0]['text'],'B')
-        self.assertEqual(self.store.status()['controller_mode'],'native_google_v2');self.assertFalse(self.store.status()['production_ready'])
+        self.assertEqual(self.store.status()['controller_mode'],'native_google_v2');self.assertFalse(self.store.status()['production_ready']);self.assert_queue_indexed_updates()
 
     def test_ready_route_transport_restart_keeps_native_pin_and_delivery_history(self):
         rid,body,client=self.demand();worker,pin=self.child_admit(rid,self.native(rid))
@@ -175,7 +259,7 @@ class GlobalControlTests(unittest.TestCase):
         result=self.bridge.stop();self.assertTrue(result['queue_closed']);self.assertTrue(result['controls'][rid]['authoritative'])
         self.assertFalse(result['native_children_stopped']);self.assertEqual(self.bridge.step()['state'],'closed')
         self.error('session_stopped',self.bridge.sync_heartbeat)
-        self.assertIsNone(worker.start_next())
+        self.assertIsNone(worker.start_next());self.assert_queue_indexed_updates()
 
     def test_new_generation_requires_new_native_join_without_stalling_old_queue(self):
         new=self.store.activate(select(load_catalog(),'gpt-6-astra','xhigh'))

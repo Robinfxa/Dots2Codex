@@ -12,6 +12,7 @@ const run=promisify(execFile);
 const {createNativeToolAdapter}=require('./tool_adapter');
 const {createGlobalControllerToolAdapter}=require('./global_controller_cell');
 const repo=path.resolve(__dirname,'..');
+const {reflowDocument,applyDocumentBatch}=require('./indexed_docs_test_support');
 
 test('Real combined claim and preparation uses exact accepted readback, final native check, and no second reservation',async()=>{
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'native-prepare-offline-'));fs.chmodSync(root,0o700);
@@ -21,6 +22,7 @@ test('Real combined claim and preparation uses exact accepted readback, final na
     const config=JSON.parse(fs.readFileSync(path.join(root,'fixture.json'),'utf8'));
     config.nativePlanFile=path.join(config.stateDir,'preselected-native-plan.json');
     let document=JSON.parse(fs.readFileSync(path.join(root,'document.json'),'utf8'));
+    document=reflowDocument(document,config.tabId);
     const calls=[],commands=[];
     const tools={
       async exec_command({cmd,workdir}){
@@ -32,15 +34,9 @@ test('Real combined claim and preparation uses exact accepted readback, final na
       },
       async mcp__codex_apps__google_drive_get_document(){calls.push('read');return structuredClone(document);},
       async mcp__codex_apps__google_drive_batch_update_document(args){
-        calls.push('write');assert.equal(args.document_id,document.documentId);
-        assert.deepEqual(args.write_control,{requiredRevisionId:document.revisionId});assert.equal(args.requests.length,1);
-        const replacement=args.requests[0].replaceAllText;
-        const run=document.tabs[0].documentTab.body.content[1].paragraph.elements[0].textRun;
-        assert.equal(run.content.split(replacement.containsText.text).length-1,1);
-        run.content=run.content.replace(replacement.containsText.text,replacement.replaceText);
-        document.revisionId+='-next';
-        return {documentId:document.documentId,replies:[{replaceAllText:{occurrencesChanged:1}}],
-          writeControl:{requiredRevisionId:document.revisionId}};
+        calls.push('write');
+        const applied=applyDocumentBatch(document,args,{tabId:config.tabId,allowLegacy:false});
+        document=applied.document;return applied.response;
       }
     };
     const capture=createNativeToolAdapter(tools,{cwd:repo,root:config.stateDir,nativeTaskId:config.nativeTaskId});
