@@ -440,34 +440,41 @@ def write_admission_record(path, value):
         os.close(descriptor)
 
 
-def require_clients_stopped(*, include_bridge):
-    """Conservative supplementary check, not proof of a legacy client's exit.
+def require_clients_stopped(config, settings, *, include_bridge):
+    """Supplementary current-route scan, not proof of a legacy client's exit.
 
-    Legacy markers have no PID. The owner's explicit exit confirmation is also
-    required. Command names can be disguised, so this is not authentication.
+    Legacy markers have no PID. The owner's explicit exit confirmation remains
+    required. Only this user's exact route provider/endpoint/config is relevant;
+    unrelated Codex CLI projects, app servers and helpers may keep running.
     Process arguments are inspected locally and never printed or persisted.
     """
+    provider = "dots_direct_" + hashlib.sha256(config["binding"]["route_id"].encode("utf-8")).hexdigest()[:24]
+    endpoint = f"http://127.0.0.1:{settings['http_port']}/v1"
+    bridge_config = str(Path(config["db_path"]).parent / "config.json")
+    # Match complete identities rather than broad executable names or the word
+    # 'codex' in an unrelated argument. Provider field suffixes and endpoint
+    # subpaths still identify this route; lookalike IDs and ports do not.
+    provider_pattern = re.compile(r"(?<![\w-])" + re.escape(provider) + r"(?![\w-])")
+    endpoint_pattern = re.compile(r"(?:^|[\s'\"=])" + re.escape(endpoint) + r"(?=$|[\s'\"/])")
+    config_pattern = re.compile(r"(?:^|[\s'\"=])" + re.escape(bridge_config) + r"(?=$|[\s'\"])")
     try:
-        result = subprocess.run(["/bin/ps", "-ww", "-axo", "pid=,command="],
+        result = subprocess.run(["/bin/ps", "-ww", "-axo", "uid=,pid=,command="],
             check=True, capture_output=True, text=True, env=safe_env(), timeout=10)
         lines = result.stdout.splitlines()
         if not lines:
             raise ValueError
         for line in lines:
-            pid, command = line.strip().split(None, 1)
-            if not pid.isdecimal():
+            uid, pid, command = line.strip().split(None, 2)
+            if not uid.isdecimal() or not pid.isdecimal():
                 raise ValueError
-            if int(pid) == os.getpid():
+            if int(uid) != os.getuid() or int(pid) == os.getpid():
                 continue
-            # Match CLI executable/wrapper tokens, not the Codex desktop app.
-            cli = re.search(r"(?:^|\s)(?:\S*/)?codex(?:\.js|-[\w.-]+)?(?:\s|$)", command)
-            # The admitted trial uses --no-daemon. Explicit background service
-            # subcommands are not the legacy interactive client being replaced.
-            if cli and command[cli.end():].lstrip().split()[:1] in (["app-server"], ["daemon"]):
-                cli = None
-            bridge = re.search(r"(?:^|\s)(?:\S*/)?(?:mcp_adapter|start_mcp\.sh)(?:\s|$)", command)
-            if cli or (include_bridge and bridge):
-                raise SetupError("A Codex CLI or bridge process may still be running. Exit it normally and retry; no process was killed.")
+            client = provider_pattern.search(command) or endpoint_pattern.search(command)
+            bridge = config_pattern.search(command)
+            # A same-route identity always wins, even on a process called an
+            # app-server/daemon. The restarted bridge is expected after READY.
+            if client or (include_bridge and bridge):
+                raise SetupError("A process still references this Direct route's provider, endpoint, or bridge configuration. Exit only that trial process normally and retry; no process was killed.")
     except SetupError:
         raise
     except (OSError, ValueError, subprocess.SubprocessError):
@@ -581,7 +588,7 @@ def codex_reopen_unused(state):
     initial_files = {name: hashlib.sha256((route / name).read_bytes()).hexdigest()
                      for name in ("config.json", "launcher.json")}
     with paused_ingress_guard(settings["http_port"]):
-        require_clients_stopped(include_bridge=True)
+        require_clients_stopped(config, settings, include_bridge=True)
         snapshot = unused_database_snapshot(config)
         record = {"version": 1, "prepared_at": time.time(), "launcher_pid": os.getpid(),
                   "original_marker_sha256": marker_hash, "configuration_sha256": initial_files,
@@ -598,7 +605,7 @@ def codex_reopen_unused(state):
     current_files = {name: hashlib.sha256((route / name).read_bytes()).hexdigest() for name in initial_files}
     if current_config != config or current_settings != settings or current_files != initial_files or private_json_record(original)[1] != marker_hash or private_json_record(prepared)[0] != record:
         raise SetupError("Configuration or admission history changed. Recovery is refused; all records were preserved.")
-    require_clients_stopped(include_bridge=False)
+    require_clients_stopped(config, settings, include_bridge=False)
     if port_available(settings["http_port"]):
         raise SetupError("The restarted loopback listener is missing. Recovery was not launched; the reserved attempt was preserved.")
     if unused_database_snapshot(config) != snapshot:

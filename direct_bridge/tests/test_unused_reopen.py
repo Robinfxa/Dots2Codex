@@ -133,12 +133,6 @@ class UnusedReopenTests(unittest.TestCase):
             self.launch()
         self.assertFalse(self.prepared.exists())
 
-    def test_desktop_app_server_does_not_count_as_legacy_cli(self):
-        import subprocess
-        for command in ("/Applications/Codex.app/Contents/Resources/codex app-server --stdio", "/opt/bin/codex daemon run"):
-            with self.subTest(command=command), patch.object(direct.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "999999 " + command + "\n")):
-                direct.require_clients_stopped(include_bridge=True)
-
     def test_missing_database_is_not_created(self):
         self.database.unlink()
         with self.assertRaises(direct.SetupError):
@@ -276,13 +270,62 @@ class UnusedReopenTests(unittest.TestCase):
             self.launch(inputs=answers)
         self.assertEqual(json.loads(self.consumed.read_text()), {"fixture": "competitor"})
 
-    def test_cli_and_bridge_process_names_refused_without_echo(self):
+    def process_check(self, command, *, include_bridge=True, uid=None):
         import subprocess
-        for command in ("/opt/bin/codex --fixture-secret", "node /opt/bin/codex.js", "/bin/python -m mcp_adapter --config /fixture/config"):
-            with self.subTest(command=command), patch.object(direct.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "999999 " + command + "\n")):
-                with self.assertRaises(direct.SetupError) as error:
-                    direct.require_clients_stopped(include_bridge=True)
-                self.assertNotIn(command, str(error.exception))
+        result = subprocess.CompletedProcess([], 0, f"{os.getuid() if uid is None else uid} 999999 {command}\n")
+        with patch.object(direct.subprocess, "run", return_value=result):
+            direct.require_clients_stopped(self.config, self.settings, include_bridge=include_bridge)
+
+    def provider(self):
+        return "dots_direct_" + hashlib.sha256(self.config["binding"]["route_id"].encode()).hexdigest()[:24]
+
+    def test_unrelated_cli_backends_helpers_and_argument_words_allowed(self):
+        for command in ("/opt/bin/codex --fixture-secret", "node /opt/bin/codex.js -c model_provider=other",
+                        "/Applications/ChatGPT.app/codex --global-flag app-server",
+                        "/opt/app-server-daemon/bin/codex daemon run", "/opt/bin/codex-helper",
+                        "/bin/echo codex --anything", "/bin/python -m mcp_adapter --config /other/config.json"):
+            with self.subTest(command=command):
+                self.process_check(command)
+
+    def test_same_route_provider_blocks_cli_node_and_services_in_both_phases(self):
+        for prefix in ("/opt/bin/codex", "node /opt/bin/codex.js", "/Applications/ChatGPT.app/codex --global-flag app-server", "/opt/bin/codex daemon"):
+            for include_bridge in (True, False):
+                command = prefix + ' -c model_provider="' + self.provider() + '" --fixture-secret'
+                with self.subTest(prefix=prefix, phase=include_bridge):
+                    with self.assertRaisesRegex(direct.SetupError, "this Direct route") as error:
+                        self.process_check(command, include_bridge=include_bridge)
+                    self.assertNotIn(command, str(error.exception))
+                    self.assertNotIn("fixture-secret", str(error.exception))
+
+    def test_same_endpoint_blocks_even_without_codex_name(self):
+        for include_bridge in (True, False):
+            with self.subTest(phase=include_bridge), self.assertRaises(direct.SetupError):
+                self.process_check(f'/fixture/unknown-client --url "http://127.0.0.1:{self.settings["http_port"]}/v1"', include_bridge=include_bridge)
+
+    def test_exact_bridge_config_blocks_only_stopped_phase(self):
+        command = '/bin/python -m mcp_adapter --config "' + str(self.route / "config.json") + '"'
+        with self.assertRaises(direct.SetupError):
+            self.process_check(command)
+        self.process_check(command, include_bridge=False)
+
+    def test_same_identity_under_another_user_does_not_block(self):
+        self.process_check('/fixture/codex -c model_provider="' + self.provider() + '"', uid=os.getuid() + 1)
+
+    def test_lookalike_provider_endpoint_and_config_are_not_this_route(self):
+        for command in ('/opt/codex -c model_provider="' + self.provider() + '_other"',
+                        f'/opt/codex --url "http://127.0.0.1:{self.settings["http_port"]}/v10"',
+                        '/bin/python --config "' + str(self.route / "config.json.backup") + '"',
+                        f'/opt/codex --url "prefixhttp://127.0.0.1:{self.settings["http_port"]}/v1"',
+                        '/bin/python --config "/backup' + str(self.route / "config.json") + '"'):
+            with self.subTest(command=command):
+                self.process_check(command)
+
+    def test_malformed_process_inventory_fails_closed(self):
+        import subprocess
+        for output in ("", "not-a-uid 999999 /fixture/codex", "0 not-a-pid /fixture/codex"):
+            with self.subTest(output=output), patch.object(direct.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, output)):
+                with self.assertRaisesRegex(direct.SetupError, "Could not inspect"):
+                    direct.require_clients_stopped(self.config, self.settings, include_bridge=True)
 
 
 if __name__ == "__main__":

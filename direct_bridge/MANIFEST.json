@@ -43,9 +43,9 @@
       "sha256": "941a65e2b5a1eccf26be9816b10a76c3a26138495b461108c34021b92a54c409"
     },
     "docs/CODEX_CLIENT.zh-CN.md": {
-      "bytes": 6349,
+      "bytes": 6535,
       "mode": "0644",
-      "sha256": "f59a0d8b4eab0185957f129c84d18e694928e718ffa9b649d0ae4587942d9470"
+      "sha256": "a836f2c5eb17d6daa7b125276d916c939b4b79799d93a9392e8026899dd09e56"
     },
     "docs/MAC_QUICKSTART.zh-CN.md": {
       "bytes": 10166,
@@ -148,9 +148,9 @@
       "sha256": "0c021980bd1e0d922a248e1081cbbb2e2cb0ea5c13958b5d1ce4ba85bed74440"
     },
     "scripts/direct.py": {
-      "bytes": 41305,
+      "bytes": 42064,
       "mode": "0755",
-      "sha256": "39b15e95eb036538dbddd41a9ff2dbc84386a462d02e3f7026b223c81d56135c"
+      "sha256": "7dfffcd58d10b4156e72b4fd6e7419670f1e00e04ff8c4ba86720fb9ca02ad82"
     },
     "scripts/run_focused_tests.py": {
       "bytes": 1223,
@@ -193,9 +193,9 @@
       "sha256": "559a2980edd411fec739590c58ec849d2c524480d967005aed4b30444536cb49"
     },
     "tests/test_unused_reopen.py": {
-      "bytes": 14202,
+      "bytes": 17029,
       "mode": "0644",
-      "sha256": "fec095acde1afe53410aa077a0c0031130cc4c77bc5ec531278c3c1550a01707"
+      "sha256": "2c1f8b827861b2facf7654c2b2535d56ebb33bbedf4d89edd3eba4e8fa00384f"
     },
     "transport/README.md": {
       "bytes": 8902,
@@ -281,6 +281,6 @@
     "transport/surface.py",
     "transport/test_queue.py"
   ],
-  "source_tree_sha256": "1a822cdd2e7778673bd0ba3af9362e07f6aea5a57a789a45e14fb3c13f303f82",
-  "tree_sha256": "1a822cdd2e7778673bd0ba3af9362e07f6aea5a57a789a45e14fb3c13f303f82"
+  "source_tree_sha256": "5e668267689eb95e79a118fd7d973e70cffbc025c1897d07da3ad7b43585c320",
+  "tree_sha256": "5e668267689eb95e79a118fd7d973e70cffbc025c1897d07da3ad7b43585c320"
 }

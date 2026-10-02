@@ -30,7 +30,7 @@ codex --no-daemon --sandbox read-only \
 如果旧 Codex 已经完全退出，且从未发送请求，可用 `./DIRECT.command codex-reopen-unused`。不要删除 `codex-started.json`、数据库或任何恢复记录，也不要重新 setup、init、换 route 或修改到期时间。
 
 1. 先让原生控制器暂停，确认它从未收到请求。在原隧道 Terminal 按 Ctrl-C，等隧道及 bridge 子进程完全退出；保留该 Terminal 和它的环境变量
-2. 在原 Codex Terminal 运行 `./DIRECT.command codex-reopen-unused`，阅读并输入 `REOPEN`。旧标记没有 PID，旧客户端退出及控制器暂停仍需要你明确确认；进程检查只是补充检查
+2. 在原 Codex Terminal 运行 `./DIRECT.command codex-reopen-unused`，阅读并输入 `REOPEN`。旧标记没有 PID，旧客户端退出及控制器暂停仍需要你明确确认；进程检查只是补充检查，只查看当前用户进程是否包含本 route 的唯一 provider、准确 loopback endpoint 或 bridge 配置路径，不要求退出无关的 Codex 项目、桌面后台或 helper
 3. 程序独占空闲端口并只读核对实际 SQLite（包括 WAL）：必须完全没有任何请求、执行/结果记录或 schema 活动，且原授权、绑定、有效期全部匹配。它保留旧标记，新增一次性恢复准备记录
 4. 看到提示后，在原隧道 Terminal 用原来的 `./DIRECT.command run` 和同一个已批准的 profile 重启。不要重新 setup/init，不要启动第二个 Codex 或发测试 HTTP 请求。保持原生控制器暂停
 5. 确认原隧道/bridge 已健康后，回到恢复窗口输入 `READY`。程序再次核对零活动、原配置和授权，保存消费记录，再以相同工作目录及参数启动 Codex。之后由原生控制器继续同一试用
