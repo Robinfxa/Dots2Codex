@@ -96,10 +96,19 @@ class Scenario:
         self.begin_plan = self.worker.prepare_begin(self.inbox, self.input_path)
         ack = self.provider.apply(self.begin_plan, lost=lost)
         value = self.worker.accept_begin_and_expose(ack)
+        if not lost:self.exposure=value
         if not lost: self.inference_boundary_calls += 1
         return value
 
-    def save(self): return self.worker.save_actual_result(self.route['request']['request_id'], response(function_call()))
+    def save(self):
+        if self.worker.state['phase']=='INPUT_EXPOSED':
+            binding=self.exposure['binding'];offset=0
+            while True:
+                chunk=self.worker.expose_tool_schema(binding['request_id'],binding['request_sha256'],
+                    binding['package_sha256'],self.exposure['exposure_token'],'local','read_file',offset=offset)
+                if chunk['complete']:break
+                offset=chunk['next_offset']
+        return self.worker.save_actual_result(self.route['request']['request_id'], response(function_call()))
 
     def publish(self, *, lost=False):
         self.artifact = self.save(); self.worker.record_upload_attempt()
@@ -113,7 +122,7 @@ class WorkerAudit(unittest.TestCase):
     def scenario(self, **kwargs): return Scenario(self.temp.name, **kwargs)
 
     def test_success_has_one_exposure_one_result_and_no_healthy_readbacks(self):
-        s = self.scenario(); s.admit(); self.assertEqual(s.begin(), request()); s.publish()
+        s = self.scenario(); s.admit(); self.assertEqual(s.begin()['request']['input'], request()['input']); s.publish()
         self.assertEqual(s.worker.state['phase'], 'RESULT_COMMITTED')
         self.assertEqual((s.provider.reads, s.provider.writes), (1, 4))
         self.assertEqual((s.native_boundary_calls, s.inference_boundary_calls), (1, 1))
@@ -123,7 +132,7 @@ class WorkerAudit(unittest.TestCase):
         s = self.scenario(); s.admit(); self.assertEqual(s.begin(lost=True)['status'], 'unknown')
         self.assertEqual(s.worker.state['current']['exposure'], 'INPUT_NOT_EXPOSED')
         restarted = Worker(s.state_dir, KEY, s.actual['task_name'], s.clock)
-        self.assertEqual(restarted.accept_begin_and_expose(readback=s.provider.read(s.route['outbox_id'])), request())
+        self.assertEqual(restarted.accept_begin_and_expose(readback=s.provider.read(s.route['outbox_id']))['request']['input'], request()['input'])
         with self.assertRaises(p.ProtocolError): restarted.accept_begin_and_expose(readback=s.provider.read(s.route['outbox_id']))
         self.assertEqual(s.provider.writes, 3)
 
@@ -179,7 +188,13 @@ class WorkerAudit(unittest.TestCase):
     def test_upload_retry_preserves_bytes_logical_identity_and_three_attempt_cap(self):
         s = self.scenario(); s.admit(); s.begin(); artifact=s.save()
         before=Path(artifact['path']).read_bytes()
-        for _ in range(3): self.assertEqual(s.worker.record_upload_attempt(), artifact)
+        self.assertEqual(s.worker.record_upload_attempt(),artifact)
+        for attempt in (2,3):
+            s.worker.record_upload_failure({'category':'transport_unknown','code':'lite_transport_unknown'})
+            self.assertEqual(s.worker.retry_upload(artifact['result_id'],artifact['result_sha256'],attempt,'folder-a',
+                {'decision':'same_immutable_result_upload_after_raw_and_permission_review',
+                 'controller_task_id':s.actual['task_name'],'permission_reference':'synthetic-permission',
+                 'raw_result_reference':'synthetic-result-'+str(attempt-1),'prior_disposition':'transport_unknown'}),artifact)
         with self.assertRaises(p.ProtocolError): s.worker.record_upload_attempt()
         self.assertEqual(Path(artifact['path']).read_bytes(), before)
         self.assertEqual(s.save(), artifact)
@@ -198,7 +213,7 @@ class WorkerAudit(unittest.TestCase):
 
     def test_one_route_unknown_does_not_block_independent_project(self):
         provider=StrictDocs(); a=self.scenario(provider=provider); b=self.scenario(route_id='route-b',provider=provider)
-        a.admit(); b.admit(); a.begin(lost=True); self.assertEqual(b.begin(),request()); b.publish()
+        a.admit(); b.admit(); a.begin(lost=True); self.assertEqual(b.begin()['request']['input'],request()['input']); b.publish()
         self.assertEqual(a.worker.state['phase'],'BEGIN_PREPARED')
         self.assertEqual(b.worker.state['phase'],'RESULT_COMMITTED')
         self.assertNotEqual(a.actual['task_name'],b.actual['task_name'])

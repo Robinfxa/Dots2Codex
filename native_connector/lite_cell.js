@@ -56,7 +56,9 @@ function createLiteNativeAdapter(tools, config) {
     'lite_tool_missing','lite_document_invalid','lite_request_locator_invalid','lite_metadata_invalid',
     'lite_raw_reference_invalid','lite_download_invalid','lite_response_invalid','lite_upload_invalid',
     'lite_write_unknown','lite_source_changed','lite_helper_input_too_large','lite_actor_busy',
-    'lite_capture_failed','lite_capture_sink_required','lite_approval_blocked','lite_transport_unknown']);
+    'lite_capture_failed','lite_capture_sink_required','lite_approval_blocked','lite_transport_unknown',
+    'lite_exposure_continuation_required','lite_exposure_binding_mismatch',
+    'lite_acquisition_batch_invalid','lite_acquisition_output_budget']);
   if(typeof config.captureSink!=='function')throw Error('lite_capture_sink_required');
   const captures=[]; // Bounded raw references; never text()/console/command/file output.
   let captureHealthy=true;
@@ -72,7 +74,7 @@ function createLiteNativeAdapter(tools, config) {
     'authorization_denied','user_denied','tool_approval_required','insufficient_permissions']);
   const transportCodes=new Set(['ETIMEDOUT','ECONNRESET','ECONNREFUSED','ENETUNREACH','EAI_AGAIN',
     'timeout','transport_error']);
-  function sanitized(e, category='provider_unknown') {
+  function sanitized(e, category='provider_unknown',allowInternal=false) {
     // Only structured allowlisted codes, never message-string guesses or HTTP
     // status alone, distinguish known blockers. Unknowns require raw review.
     const entries=[];let value=e;
@@ -82,9 +84,9 @@ function createLiteNativeAdapter(tools, config) {
     }
     const status=entries.flatMap(x=>[liteOwn(x,'status'),liteOwn(x,'statusCode'),liteOwn(x,'status_code')]).find(n=>Number.isInteger(n)&&n>=100&&n<=599);
     const codes=entries.map(x=>liteOwn(x,'code')),message=liteOwn(e,'message');
-    const code=safeCodes.has(message)?message:
-      codes.some(x=>approvalCodes.has(x))?'lite_approval_blocked':
-      codes.some(x=>transportCodes.has(x))?'lite_transport_unknown':'lite_response_invalid';
+    const code=codes.some(x=>approvalCodes.has(x))?'lite_approval_blocked':
+      codes.some(x=>transportCodes.has(x))?'lite_transport_unknown':
+      allowInternal && safeCodes.has(message)?message:'lite_response_invalid';
     if(code==='lite_approval_blocked')category='approval_blocked';
     else if(code==='lite_transport_unknown')category='transport_unknown';
     return {category,code,...(status?{status}:{})};
@@ -154,14 +156,38 @@ function createLiteNativeAdapter(tools, config) {
     const tool=requireTool('exec_command'),start=now();
     const timing={stage:operation,kind:'helper',outcome:'pending',duration_ms:null,clock_source:clockSource};stages.push(timing);
     let r;
-    try{r=await tool({cmd:args.map(quote).join(' '),workdir:config.cwd,max_output_tokens:20000,yield_time_ms:10000});timing.outcome='returned';}
+    try{r=await tool({cmd:args.map(quote).join(' '),workdir:config.cwd,max_output_tokens:32768,yield_time_ms:10000});timing.outcome='returned';}
     catch(error){timing.outcome='threw';throw error;}
     finally{timing.duration_ms=elapsed(start);}
     if(r.session_id || r.exit_code!==0){timing.outcome='error';throw Error('lite_helper_failed');}
     let result;try{result=JSON.parse(r.output);}catch(_){throw Error('lite_helper_output_invalid');}
     if(result && result.local_timing)timing.local=result.local_timing;
     if(!result || result.ok!==true) return result && (result.error || ['unknown','conflicting','upload_unknown'].includes(result.status)) ? result : {ok:false,error:{code:'lite_helper_output_invalid'}};
+    if(result.status==='exposed'){
+      // The clear continuation is never printed or written to a loader/file.
+      // Losing session memory cannot recreate it from a durable read marker.
+      const session=config.exposureSession,binding=result.binding,token=result.exposure_token;
+      if(!session || typeof session.load!=='function' || typeof session.store!=='function' ||
+          typeof token!=='string' || !/^[a-f0-9]{64}$/.test(token) || !binding ||
+          binding.actor_task_id!==config.actorTaskId || binding.route_id!==config.routeId)
+        throw Error('lite_exposure_continuation_required');
+      const saved={binding,token};session.store(saved);
+      if(JSON.stringify(session.load())!==JSON.stringify(saved))throw Error('lite_exposure_continuation_required');
+      delete result.exposure_token;
+      result.continuation_memory_required=true;
+    }
     return result;
+  }
+  function exposure(args,complete=false) {
+    const session=config.exposureSession,current=session && typeof session.load==='function'?session.load():null;
+    if(!current || !current.binding || typeof current.token!=='string')throw Error('lite_exposure_continuation_required');
+    const binding=current.binding;
+    if(binding.actor_task_id!==config.actorTaskId || binding.route_id!==config.routeId ||
+        binding.request_id!==args.requestId || (!complete &&
+        (binding.request_sha256!==args.requestSha256 || binding.package_sha256!==args.packageSha256)))
+      throw Error('lite_exposure_binding_mismatch');
+    return {expected_request_id:binding.request_id,expected_request_sha256:binding.request_sha256,
+      expected_package_sha256:binding.package_sha256,exposure_token:current.token};
   }
   function plainDoc(response, expectedId) {
     if(!response || response.isError)throw Error('lite_document_invalid');
@@ -185,13 +211,21 @@ function createLiteNativeAdapter(tools, config) {
       'suggestedDocumentStyleChanges','namedStyles','suggestedNamedStylesChanges','lists','namedRanges',
       'inlineObjects','positionedObjects','documentId','title','revisionId','suggestionsViewMode',
       'commentsViewMode','tabs','comments','suggestions','document_url','url']);
-    const ackFields=new Set(['documentId','replies','writeControl','revisionId']);
+    const ackFields=new Set(['documentId','replies','writeControl','revisionId','document_url']);
     let value=response;
     for(let i=0;i<4 && value && typeof value==='object';i++){
       if(liteOwn(value,'isError')===true)return value===response?response:{isError:true,error:sanitized(value)};
       if(typeof liteOwn(value,'documentId')==='string'){
         const fields=kind==='document'?documentFields:ackFields;
         if(Object.keys(value).some(key=>!fields.has(key)))return {isError:true,error:{category:'provider_unknown',code:'lite_response_invalid'}};
+        if(kind==='ack' && own(value,'document_url')){
+          // Observed connector metadata only, never a destination or authority.
+          // The complete original response was already captured in memory.
+          const url=liteOwn(value,'document_url');
+          if(typeof url!=='string' || !url || url.length>8192)return {isError:true,error:{category:'provider_unknown',code:'lite_response_invalid'}};
+          const normalized={...value};delete normalized.document_url;
+          return {structuredContent:normalized,isError:false};
+        }
         return {structuredContent:value,isError:false};
       }
       value=liteOwn(value,'structuredContent') || liteOwn(value,'result');
@@ -201,7 +235,8 @@ function createLiteNativeAdapter(tools, config) {
   const read = async id => protocolResource(await captured('mcp__codex_apps__google_drive_get_document',
     {document_id:id},id===config.inboxId?'inbox_read':'outbox_read'),'document');
   async function accept(phase,plan,response) {
-    let accepted=await helper(phase,{actual_response:response});
+    let accepted=await helper(phase,{actual_response:response,
+      ...(phase==='child-accepted' && response.isError?{write_error:response.error || sanitized(response)}:{})});
     if(accepted.ok && accepted.status!=='unknown')return accepted;
     if(accepted.status!=='unknown')return accepted;
     const resource=await read(plan.document_id || plan.documentId || plan.tool_arguments.document_id);
@@ -283,8 +318,30 @@ function createLiteNativeAdapter(tools, config) {
     return write('child-expose',prepared);
   }
   async function childSave({requestId,outputFile}) {
-    const saved=await helper('child-save',{request_id:requestId,output_file:outputFile});
+    const current=exposure({requestId},true);
+    const saved=await helper('child-save',{request_id:requestId,output_file:outputFile,exposure_token:current.exposure_token});
     return saved.ok ? childPublish({artifact:saved.artifact}) : saved;
+  }
+  async function acquire(action,args) {
+    const count=args.maxChunks??4,size=args.maxBytes??4096;
+    if(!Number.isInteger(count) || count<1 || count>4 || !Number.isInteger(size) || size<4 || size>4096)
+      throw Error('lite_acquisition_batch_invalid');
+    const current=exposure(args),chunks=[];let offset=args.offset??0,last;
+    for(let i=0;i<count;i++){
+      try {last=await helper(action,{...current,offset,max_bytes:size,
+        ...(action==='child-tool-schema'?{namespace:args.namespace??null,name:args.name,reference:args.reference??null}:{})});}
+      catch(error){last={ok:false,error:sanitized(error,'provider_unknown',true)};}
+      if(!last.ok)break;
+      // Emit each exact raw text chunk separately. Never flatten the request or
+      // silently skip an earlier chunk when a later helper fails.
+      const {text,offset:start,next_offset,total_bytes,sha256,complete,binding,reference,replayed}=last;
+      chunks.push({text,offset:start,next_offset,total_bytes,sha256,complete,binding,
+        ...(reference?{reference}:{}),...(replayed?{replayed:true}:{})});
+      offset=next_offset;if(complete)break;
+    }
+    const {text:ignored,local_timing:ignoredTiming,...summary}=last;
+    return {...summary,offset:chunks.length?chunks[0].offset:(args.offset??0),next_offset:offset,acquisition_chunks:chunks,
+      acquisition_chunk_count:chunks.length,acquisition_bytes:chunks.reduce((n,x)=>n+x.next_offset-x.offset,0)};
   }
   async function childPublish({artifact}) {
     if(!artifact || typeof artifact.path!=='string' || artifact.folder_id!==config.folderId)throw Error('lite_upload_invalid');
@@ -308,29 +365,52 @@ function createLiteNativeAdapter(tools, config) {
       if(action==='parent-prepare')return await parentPrepare();
       if(action==='parent-admit')return await parentAdmit(args);
       if(action==='child-begin')return await childBegin();
+      if(action==='child-view-read' || action==='child-tool-schema')return await acquire(action,args);
       if(action==='child-complete')return await childSave(args);
       if(action==='reconcile')return await reconcile(args);
       if(action==='child-takeover')return await helper('child-takeover',args);
-      if(action==='child-retry-upload'){const saved=await helper('child-retry-upload',{retry_decision:args.retryDecision});return saved.ok?await childPublish({artifact:saved.artifact}):saved;}
+      if(action==='child-upload-retry-status')return await helper('child-upload-retry-status');
+      if(action==='child-retry-upload'){const saved=await helper('child-retry-upload',{
+        expected_result_id:args.expectedResultId,expected_result_sha256:args.expectedResultSha256,
+        expected_attempt:args.expectedAttempt,expected_folder_id:args.expectedFolderId,review:args.review});
+        return saved.ok?await childPublish({artifact:saved.artifact}):saved;}
       if(action==='child-result-retry-status')return await helper('child-result-retry-status');
       if(action==='child-retry-result')return await write('child-accepted',await helper('child-retry-result',{
-        retry_decision:args.retryDecision,expected_operation_id:args.expectedOperationId,expected_attempt:args.expectedAttempt}));
+        expected_operation_id:args.expectedOperationId,expected_attempt:args.expectedAttempt,
+        expected_plan_sha256:args.expectedPlanSha256,expected_document_id:args.expectedDocumentId,
+        expected_required_revision_id:args.expectedRequiredRevisionId,review:args.review}));
       if(action==='child-refresh')return await helper('child-refresh',{resource:await read(config.outboxId)});
       if(action==='parent-recover-handoff')return await helper('parent-admitted');
       if(action==='status')return await helper('status');
       throw Error('lite_config_required');
-    }catch(e){return {ok:false,error:sanitized(e)};}
+    }catch(e){return {ok:false,error:sanitized(e,'provider_unknown',true)};}
   }
   async function run(action,args={}) {
     const start=now(),offset=stages.length;
     const outcome=await dispatch(action,args),measured=stages.slice(offset);
-    const safeAction=new Set(['parent-prepare','parent-admit','child-begin','child-complete','reconcile','child-takeover','child-retry-upload','child-result-retry-status','child-retry-result','child-refresh','parent-recover-handoff','status']).has(action)?action:'unknown';
+    const safeAction=new Set(['parent-prepare','parent-admit','child-begin','child-view-read','child-tool-schema','child-complete','reconcile','child-takeover','child-upload-retry-status','child-retry-upload','child-result-retry-status','child-retry-result','child-refresh','parent-recover-handoff','status']).has(action)?action:'unknown';
     return {...outcome,diagnostics:{action:safeAction,clock_source:clockSource,duration_ms:elapsed(start),
       provider_calls:measured.filter(x=>x.kind==='provider').length,
       helper_calls:measured.filter(x=>x.kind==='helper').length,stages:measured,
       request_file_read_ms:null,native_inference_ms:null}};
   }
-  return {run,parentPrepare,parentAdmit,childBegin,childSave,reconcile,callCaptured,
+  function present(outcome,emit) {
+    if(!Array.isArray(outcome.acquisition_chunks)){emit(outcome);return;}
+    const {acquisition_chunks:chunks,...summary}=outcome,blocks=[];
+    for(const chunk of chunks){const {text,...metadata}=chunk;
+      blocks.push({kind:'dots-lite-acquisition-chunk',...metadata},text);}
+    blocks.push(summary);
+    // Bound the actual model-visible UTF-8, including all metadata/diagnostics,
+    // independently of source bytes or hopeful token-compression ratios. The
+    // 32,768-token outer budget reserves 4,096 units for block/framing overhead.
+    let bytes=0;for(const block of blocks)for(const ch of typeof block==='string'?block:JSON.stringify(block)){
+      const cp=ch.codePointAt(0);bytes+=cp<128?1:cp<2048?2:cp<65536?3:4;}
+    if(bytes>28672){emit({ok:false,error:{category:'provider_unknown',code:'lite_acquisition_output_budget'},
+      acquisition_retry:{offset:chunks[0]?.offset??summary.offset,maxChunks:1,maxBytes:2048},
+      content_emitted:false,execution_permit:false});return;}
+    for(const block of blocks)emit(block);
+  }
+  return {run,present,parentPrepare,parentAdmit,childBegin,childSave,reconcile,callCaptured,
     getCaptures:()=>captures.slice(),captureHealthy:()=>captureHealthy};
 }
 if(typeof module!=='undefined')module.exports={createLiteNativeAdapter,createLiteMemoryCaptureSink};

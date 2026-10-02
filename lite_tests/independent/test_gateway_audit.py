@@ -77,7 +77,16 @@ class GatewayAudit(unittest.TestCase):
         result=worker.accept_begin_and_expose(ack)
         if lose_begin:return result
         self.exposures[rid]=self.exposures.get(rid,0)+1
-        self.assertEqual(result,p.strict_json(raw))
+        self.assertEqual(result['request']['input'],p.strict_json(raw)['input'])
+        binding=result['binding']
+        for item in output['output']:
+            if item['type'] not in {'function_call','custom_tool_call'}:continue
+            offset=0
+            while True:
+                chunk=worker.expose_tool_schema(binding['request_id'],binding['request_sha256'],
+                    binding['package_sha256'],result['exposure_token'],item.get('namespace'),item['name'],offset=offset)
+                if chunk['complete']:break
+                offset=chunk['next_offset']
         artifact=worker.save_actual_result(ticket['request_id'],output);worker.record_upload_attempt()
         fid=self.google.create_bytes('folder-a','result.json',Path(artifact['path']).read_bytes())
         plan=worker.publish_result({'file_id':fid,'folder_id':'folder-a','byte_length':artifact['byte_length']})

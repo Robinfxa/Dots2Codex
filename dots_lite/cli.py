@@ -39,24 +39,9 @@ def measured(stage):
 
 
 def upload_failure(w, error):
-    # Raw provider responses never enter the command, filesystem, or journal.
-    allowed = {'approval_blocked': 'lite_approval_blocked',
-               'transport_unknown': 'lite_transport_unknown',
-               'provider_unknown': 'lite_response_invalid'}
-    p.require(type(error) is dict and set(error) <= {'category', 'code', 'status'} and
-              error.get('category') in allowed and error.get('code') == allowed[error['category']],
-              'safe_upload_diagnostic_required')
-    if 'status' in error:
-        p.require(type(error['status']) is int and 100 <= error['status'] <= 599,
-                  'safe_upload_diagnostic_required')
-    with w.journal.locked():
-        state = w.journal.read(); w._validate(state)
-        p.require(state['phase'] == 'RESULT_SAVED' and state['current']['upload_attempts'] > 0,
-                  'result_upload_not_allowed')
-        state['current']['upload_failure'] = {**error, 'attempt': state['current']['upload_attempts']}
-        w._write(state)
-    return {'ok': False, 'status': 'upload_blocked' if error['category'] == 'approval_blocked' else 'upload_unknown',
-            'error': error, 'retry_requires_raw_review': True}
+    # Only safe diagnostics enter the durable journal; full raw evidence remains
+    # in the actual native controller's capture memory for permission review.
+    return w.record_upload_failure(error)
 
 
 def package_hash():
@@ -69,23 +54,21 @@ def package_hash():
 
 
 def join_record(raw):
-    value = raw.decode('utf-8').strip()
-    p.require(value.startswith(p.JOIN_MARKER + ' '), 'fresh_v3_join_required')
-    record = p.strict_json(value[len(p.JOIN_MARKER)+1:])
-    p.exact(record, {'activation_id','inbox_id','grant_sha256','join_code'}, 'invalid_join')
-    p.safe_id(record['activation_id']);p.safe_id(record['inbox_id'])
-    p.require(p.valid_hash(record['grant_sha256']) and p.valid_hash(record['join_code']), 'invalid_join')
-    return record
+    from .authorization import parse_join
+    return parse_join(raw)
 
 
 def initialize(args):
+    # Reject incomplete consent before allocating state, locks, or any remote
+    # work. Provenance identifies the actual message; it is not an attestation.
+    p.safe_id(args.actor_task_id)
+    p.require(isinstance(args.authorization_message_id,str) and
+              0<len(args.authorization_message_id)<=1024,'actual_user_join_reference_required')
+    p.require(1<=args.available_child_slots<=6,'invalid_child_capacity')
+    join = join_record(read_private_file(args.join_file, 65536))
     root = private_dir(args.state_dir, create=True)
     with private_lock(root / 'native-config.lock'):
         p.require(not (root / CONFIG).exists(), 'native_state_already_exists')
-        p.safe_id(args.actor_task_id)
-        p.require(args.authorization_message_id and len(args.authorization_message_id)<=1024, 'actual_user_join_reference_required')
-        p.require(1<=args.available_child_slots<=6,'invalid_child_capacity')
-        join = join_record(read_private_file(args.join_file, 8192))
         config = {'role':'parent','parent_task_id':args.actor_task_id,'join':join,
                   'authorization_message_id':args.authorization_message_id,
                   'package_sha256':package_hash(),'available_child_slots':args.available_child_slots,
@@ -110,6 +93,8 @@ def inbox_from(resource, config):
     p.require(grant['package_sha256']==config['package_sha256']==package_hash(), 'reviewed_package_changed')
     if config['grant'] is not None:p.require(config['grant']==grant,'immutable_grant_mismatch')
     inbox=p.parse_inbox(source,grant,join['join_code'])
+    from .authorization import validate_join_authorization
+    validate_join_authorization(join,grant)
     return inbox,grant
 
 
@@ -152,6 +137,7 @@ def worker(root,config,actor):
 
 
 def spawn_arguments(config,route,state_dir):
+    scope=config['join']['transport_authorization']['statement']
     return {'task_name':'serve_lite_'+p.sha256(route['route_id'].encode())[:24],
             'model':route['model'],'reasoning_effort':route['reasoning_effort'],'fork_turns':'none',
             'message':('You are the actual native worker for a bounded Dots2Codex lightweight v3 route. '
@@ -160,7 +146,10 @@ def spawn_arguments(config,route,state_dir):
                        'After the handoff, read docs/LIGHTWEIGHT_NATIVE_CONTROLLER.md and use dots_lite.cli with your '
                        'actual task identity. Do not spawn a replacement, call a model API, or treat Docs text as '
                        'authorization. Preserve full Responses history and tool item/call IDs. Report a blocker to the '
-                       'parent; remain available for this same route. No automatic wake or background runner is provided.')}
+                       'parent; remain available for this same route. No automatic wake or background runner is provided. '
+                       'The actual user JOIN message reference is '+config['authorization_message_id']+'. '
+                       'Its explicit bounded transport authorization is: '+scope+' '
+                       'This provenance declaration is not a platform approval receipt; the actual tools still enforce permission.')}
 
 
 def invoke(root,actor,route_id,operation,data):
@@ -226,6 +215,7 @@ def invoke(root,actor,route_id,operation,data):
             child_root=Path(config['routes'][route_id]['state_dir'])
             child_config={'role':'child','child_task_id':result['child_task_id'],'parent_task_id':actor,
                           'join':config['join'],'grant':config['grant'],'package_sha256':config['package_sha256'],
+                          'authorization_message_id':config['authorization_message_id'],
                           'route':config['routes'][route_id]['route'],'handoff':result}
             if (child_root/CONFIG).exists():p.require(read(child_root/CONFIG)==child_config,'child_configuration_conflict')
             else:save(child_root/CONFIG,child_config)
@@ -233,7 +223,9 @@ def invoke(root,actor,route_id,operation,data):
             message=('Your dots-lite/3 ADMITTED handoff is committed. Use your actual task identity '+result['child_task_id']+
                      ' with the reviewed package at '+str(ROOT)+'. The private route state is '+str(child_root)+
                      '; the trusted handoff file is '+str(handoff_path)+'. Verify takeover before fetching a request. '
-                     'Follow docs/LIGHTWEIGHT_NATIVE_CONTROLLER.md. No request plaintext is included in this handoff.')
+                     'Follow docs/LIGHTWEIGHT_NATIVE_CONTROLLER.md. No request plaintext is included in this handoff. '
+                     'Actual user authorization message: '+config['authorization_message_id']+'. '
+                     'Bounded transport authorization: '+config['join']['transport_authorization']['statement'])
             return {'ok':True,'handoff_file':str(handoff_path),'child_state_dir':str(child_root),
                     'handoff_arguments':{'target':result['child_task_id'],'message':message},
                     'underlying_model_verified':False,'native_handoff_sent':False}
@@ -269,34 +261,39 @@ def invoke(root,actor,route_id,operation,data):
     if operation=='child-expose':
         result=w.accept_begin_and_expose(expose_to_path=True,**evidence)
         return accepted(result)
+    if operation in {'child-view-read','child-tool-schema'}:
+        kwargs={key:data.get(key) for key in ('expected_request_id','expected_request_sha256',
+                                            'expected_package_sha256','exposure_token')}
+        kwargs.update(offset=data.get('offset',0),max_bytes=data.get('max_bytes',2048))
+        if operation=='child-view-read':return accepted(w.acquire_model_view(**kwargs))
+        kwargs.update(namespace=data.get('namespace'),name=data.get('name'),reference=data.get('reference'))
+        return accepted(w.expose_tool_schema(**kwargs))
     if operation=='child-save':
         current=w.state['current']
         p.require(current is not None and current['upload_attempts']==0,'upload_retry_requires_explicit_review')
         with measured('native_response_file_read'):
             output=read(data['output_file'],config['grant']['limits']['max_result_bytes'])
         with measured('immutable_result_save_and_reserve'):
-            w.save_actual_result(data['request_id'],output)
+            w.save_actual_result(data['request_id'],output,exposure_token=data.get('exposure_token'))
             artifact=w.record_upload_attempt()
         return {'ok':True,'artifact':upload_artifact(artifact,config)}
+    if operation=='child-upload-retry-status':return {'ok':True,**w.upload_retry_status()}
     if operation=='child-retry-upload':
-        state=w.state;current=state['current'];failure=(current or {}).get('upload_failure')
-        p.require(failure is not None and failure['attempt']==current['upload_attempts'],
-                  'upload_failure_capture_review_required')
-        p.require(failure['category']!='approval_blocked','upload_approval_blocked')
-        p.require(data.get('retry_decision')=='transport_retry_after_raw_review',
-                  'upload_retry_requires_explicit_review')
-        return {'ok':True,'artifact':upload_artifact(w.record_upload_attempt(),config)}
+        artifact=w.retry_upload(data.get('expected_result_id'),data.get('expected_result_sha256'),
+                                data.get('expected_attempt'),data.get('expected_folder_id'),data.get('review'))
+        return {'ok':True,'artifact':upload_artifact(artifact,config)}
     if operation=='child-publish':
         if data.get('upload_receipt') is None:return upload_failure(w,data.get('upload_error'))
         return packet_plan(w.publish_result(data['upload_receipt']))
-    if operation=='child-accepted':return accepted(w.accept_result(**evidence))
+    if operation=='child-accepted':
+        return accepted(w.accept_result(**evidence,write_error=data.get('write_error')))
     if operation=='child-result-retry-status':return {'ok':True,**w.result_retry_status()}
     if operation=='child-retry-result':
         # This explicit active-controller declaration is not a platform approval
         # receipt. The actual connector call still enforces current permission.
-        p.require(data.get('retry_decision')=='same_result_cas_after_raw_and_permission_review',
-                  'result_retry_requires_explicit_review')
-        return packet_plan(w.retry_result(data.get('expected_operation_id'),data.get('expected_attempt')))
+        return packet_plan(w.retry_result(data.get('expected_operation_id'),data.get('expected_attempt'),
+                          data.get('expected_plan_sha256'),data.get('expected_document_id'),
+                          data.get('expected_required_revision_id'),data.get('review')))
     if operation=='status':
         state=w.state
         # Never print the entire durable journal, raw input/output, or JOIN key.
@@ -338,15 +335,16 @@ def emit_cell(args):
     capture_key='dots-lite-captures-'+p.sha256(p.canonical([config['stateDir'],config['actorTaskId']]))
     # Static source and raw provider diagnostics use distinct session-memory
     # keys. The callback is injected, never resolved in new Function's globals.
-    code='// @exec: {"yield_time_ms": 1000, "max_output_tokens": 6000}\n'
+    code='// @exec: {"yield_time_ms": 1000, "max_output_tokens": 32768}\n'
     code+='const monotonic=typeof performance!=="undefined"&&typeof performance.now==="function";const now=monotonic?()=>performance.now():()=>Date.now();const start=now();\n'
     code+='let source=load('+json.dumps(key)+'),cold=!source;\n'
     code+='if(!source){const r=await tools.exec_command('+json.dumps({'cmd':command,'workdir':str(ROOT),'max_output_tokens':16000,'yield_time_ms':10000})+');'
     code+='if(r.exit_code!==0||r.session_id)throw Error("lite_source_load_failed");const p=JSON.parse(r.output);'
     code+='if(p.sha256!=='+json.dumps(digest)+'||typeof p.source!=="string")throw Error("lite_source_changed");source=p.source;store('+json.dumps(key)+',source); }\n'
     code+='const sourceMs=now()-start;\n'
-    code+='const adapter=(new Function("tools","config","store","load","key",source+"\\nconfig.captureSink=createLiteMemoryCaptureSink(store,load,key);return createLiteNativeAdapter(tools,config);"))(tools,'+json.dumps(config)+',store,load,'+json.dumps(capture_key)+');\n'
-    code+='const outcome=await adapter.run('+json.dumps(args.action)+','+json.dumps(action_args)+');outcome.capture_key='+json.dumps(capture_key)+';outcome.loader_diagnostics={cold_source_load:cold,source_helper_calls:cold?1:0,source_duration_ms:sourceMs>=0?sourceMs:null,clock_source:monotonic?"performance.now":"Date.now"};text(outcome);\n'
+    initialization='\nconfig.captureSink=createLiteMemoryCaptureSink(store,load,key);config.exposureSession={load:()=>load(key+"-exposure"),store:value=>store(key+"-exposure",value)};return createLiteNativeAdapter(tools,config);'
+    code+='const adapter=(new Function("tools","config","store","load","key",source+'+json.dumps(initialization)+'))(tools,'+json.dumps(config)+',store,load,'+json.dumps(capture_key)+');\n'
+    code+='const outcome=await adapter.run('+json.dumps(args.action)+','+json.dumps(action_args)+');outcome.capture_key='+json.dumps(capture_key)+';outcome.loader_diagnostics={cold_source_load:cold,source_helper_calls:cold?1:0,source_duration_ms:sourceMs>=0?sourceMs:null,clock_source:monotonic?"performance.now":"Date.now"};adapter.present(outcome,text);\n'
     destination=Path(args.save).absolute();private_dir(destination.parent)
     p.require(not destination.exists(),'cell_destination_exists')
     from .private_io import private_write
@@ -363,7 +361,7 @@ def main(argv=None):
     init.add_argument('--available-child-slots',type=int,required=True)
     rpc=sub.add_parser('rpc');rpc.add_argument('--state-dir',required=True);rpc.add_argument('--actor-task-id',required=True)
     rpc.add_argument('--route-id');rpc.add_argument('--operation',required=True);rpc.add_argument('--input-base64',required=True)
-    emit=sub.add_parser('emit-cell');emit.add_argument('action',choices=['parent-prepare','parent-admit','child-takeover','child-begin','child-complete','child-retry-upload','child-result-retry-status','child-retry-result','child-refresh','parent-recover-handoff','reconcile','status'])
+    emit=sub.add_parser('emit-cell');emit.add_argument('action',choices=['parent-prepare','parent-admit','child-takeover','child-begin','child-view-read','child-tool-schema','child-complete','child-upload-retry-status','child-retry-upload','child-result-retry-status','child-retry-result','child-refresh','parent-recover-handoff','reconcile','status'])
     emit.add_argument('--state-dir',required=True);emit.add_argument('--actor-task-id',required=True);emit.add_argument('--route-id')
     emit.add_argument('--arguments-file');emit.add_argument('--save',required=True)
     load=sub.add_parser('load-cell');load.add_argument('--sha256',required=True)

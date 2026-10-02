@@ -19,19 +19,23 @@
     },
     {
       "path": "docs/LIGHTWEIGHT_NATIVE_CONTROLLER.md",
-      "sha256": "4d7d09bd2591670c675fd54c8f5915080db5dc99a1cd3ea2eae8765b93b9df3e"
+      "sha256": "d2834607598114c9576a7fe47dd182f9da4bc7aba5d6e4094a8557b1be396bf2"
     },
     {
       "path": "docs/LIGHTWEIGHT_QUICKSTART.zh-CN.md",
-      "sha256": "8e63f45a285346cde5a70fb9a917cb4d66e74a26f81781933c687c5fab7019af"
+      "sha256": "6cd6bbd36f7f4f4aaa2129a3166e6c5f2a3cf0751f96117a72e59f01830355a6"
     },
     {
       "path": "dots_lite/__init__.py",
       "sha256": "b94783fe314e0ce26ad089203f68062153cf1d88240a1d5a83bf4c2bdaff81f2"
     },
     {
+      "path": "dots_lite/authorization.py",
+      "sha256": "e537a9d7be3625f99ae6826efb873552a610adb26f75518536a94a1bb8778f62"
+    },
+    {
       "path": "dots_lite/cli.py",
-      "sha256": "49a5309bc3090e1f217083b84ad611f9e450dc7009b21525b9b44a50e328497b"
+      "sha256": "f44858a0a150ad39109b9a1b9ef560b719efef37f93101d7ad55b9c9536350aa"
     },
     {
       "path": "dots_lite/client_catalog.py",
@@ -63,7 +67,7 @@
     },
     {
       "path": "dots_lite/launcher.py",
-      "sha256": "528d29e6de763e25eb493e6a42463ed5f2c7b9324da31ebd9c4a4fab8bc88e20"
+      "sha256": "f74733a395f8ef108d4e85bf202b83097288bb174e6343fc24ae20eab64a373f"
     },
     {
       "path": "dots_lite/native_capabilities.json",
@@ -86,6 +90,10 @@
       "sha256": "6a21540b8e93ab2bb4b95f89b2dd67d3ddc57ece8b0adae1c464da2d1ab387a8"
     },
     {
+      "path": "dots_lite/request_view.py",
+      "sha256": "9aa79d0082fa88aecd1e7815e1c72288b1879d0884a5a5159344eb5c22afbabc"
+    },
+    {
       "path": "dots_lite/storage.py",
       "sha256": "bd45c705d90f7b786c7d63c041fb3f95cc577116502636323416debbd3b5f3ae"
     },
@@ -95,15 +103,15 @@
     },
     {
       "path": "dots_lite/wire.py",
-      "sha256": "447573d399fa8072e62c442cfc274fe7146f0411ebd114d5732d23c957b891c5"
+      "sha256": "b8272c531b22c130d1974be7797092a95227e3e97506bbf2a032402e5b40dbaa"
     },
     {
       "path": "dots_lite/worker.py",
-      "sha256": "66fe50571ecb47b6d4619e87d02b0e7c0e4ee3fdad6375c9322680b026c80cec"
+      "sha256": "9ea133f0d730f100dd60cf05ec7e372e10cea1c88531f451e9c99045468ac07f"
     },
     {
       "path": "native_connector/lite_cell.js",
-      "sha256": "d8f91d4c6ef83b93b29197feb223c1ab47accb2e501c4227767afc837e5c71dc"
+      "sha256": "1e0fa3764301d9aec7d58284a35c0eec165097a81fd83eb843bb894fe40c8bfb"
     },
     {
       "path": "requirements-global.txt",

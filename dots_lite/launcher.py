@@ -28,6 +28,8 @@ from .client_catalog import load_catalog, select, validate_selection, write_cata
 from . import config_transaction as config_tx
 from .package import package_identity
 from .ui import UI, Cancelled
+from .authorization import (CONTRACT as AUTHORIZATION_CONTRACT, authorization_scope,
+                            TRANSPORT_PERMISSIONS)
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_STATE = Path.home() / '.config/dots2codex-launcher/lightweight-v3'
@@ -183,7 +185,8 @@ def legacy_inspection(legacy_state, router_active, codex_home=None):
 def join_text(grant, key):
     require(isinstance(key, str) and re.fullmatch('[0-9a-f]{64}', key), 'invalid_join_key')
     return JOIN_MARKER + ' ' + canonical({'activation_id': grant['activation_id'],
-        'inbox_id': grant['inbox_id'], 'grant_sha256': grant_hash(grant), 'join_code': key}).decode()
+        'inbox_id': grant['inbox_id'], 'grant_sha256': grant_hash(grant), 'join_code': key,
+        'transport_authorization': authorization_scope(grant)}).decode()
 
 
 def health(base_url):
@@ -371,9 +374,12 @@ class Launcher:
         message = ('Start the explicitly selected lightweight v3 first-use trial?\n'
             f"Google folder: {settings['folder_id']}\nCODEX_HOME: {settings['codex_home']}\n"
             f"Model/effort: {settings['selection']['model']} / {settings['selection']['reasoning_effort']}\n"
+            f"Reviewed package SHA-256: {package_hash}\n"
             f"Reuse existing credential file: {settings['authorized_user_file']}\n"
             'Uses the existing drive.file and drive.readonly authorization; read access can extend beyond this folder. '
-            'No new OAuth or scopes. Creates one fresh Inbox Doc and later one Outbox per route plus actual request/result files. '
+            'No new OAuth or scopes. The local launcher creates/updates one fresh Inbox Doc and uploads actual request files. '
+            + TRANSPORT_PERMISSIONS +
+            'The separately copied JOIN will state the exact activation, Inbox, folder, grant/package hashes, expiry and limits. '
             'Up to 4 hours, 3 independent project routes/children, 128 requests per route, 1 MiB each input/output. '
             'No synthetic probe. Expiry prevents new BEGIN; already-begun work may publish its result. '
             'Old roots and unresolved requests are preserved, never replayed. Native tasks may still require an explicit stop in dot. '
@@ -391,6 +397,7 @@ class Launcher:
             settings = {**settings, 'credential_evidence': credential}
             spec = {'contract': CONTRACT, 'run_id': run_id, 'runtime': str(runtime),
                     'created_at': int(self.ports.now()), 'package_sha256': package_hash,
+                    'transport_authorization_contract': AUTHORIZATION_CONTRACT,
                     'settings': settings, 'stop_epoch': stop_epoch}
             save(runtime / 'spec.json', spec)
             private_write(runtime / 'join-key', secrets.token_hex(32).encode())
@@ -523,12 +530,27 @@ class Launcher:
         require(active is not None, 'v3_not_started')
         self._ready(active)
         runtime = Path(active['runtime'])
-        grant = read(runtime / 'grant.json')
-        require(time.time() < grant['expires_at'], 'grant_expired')
-        if not self.ui.confirm('Copy this activation’s private JOIN to the clipboard?\n'
-            'Paste it once into your current dot conversation. It authorizes this bounded v3 activation and exact model/effort. '
+        grant = validate_grant(read(runtime / 'grant.json'))
+        spec = read(runtime / 'spec.json')
+        require(spec.get('transport_authorization_contract') == AUTHORIZATION_CONTRACT,
+                'fresh_transport_authorization_activation_required')
+        require(grant['package_sha256'] == spec['package_sha256'] == self.ports.package(self.root),
+                'lightweight_package_changed_since_start')
+        require(self.ports.now() < grant['expires_at'], 'grant_expired')
+        scope = authorization_scope(grant)
+        if not self.ui.confirm('Copy this explicit authorization and private JOIN to the clipboard?\n'
+            + scope['statement'] + '\n\n'
+            'Paste it once into your current dot conversation only if you approve BOTH result uploads and control-Doc writes. '
+            'Copying alone does not send it or prove owner approval to dot. '
             'The private code is not printed or logged. Clipboard managers may retain it. Continue?'):
             raise Cancelled()
+        # Recheck the activation/expiry after the dialog, before exposing its key.
+        current = self.active()
+        require(current is not None and current['run_id'] == active['run_id'], 'v3_activation_changed')
+        self._ready(current)
+        require(read(runtime / 'grant.json') == grant, 'immutable_grant_mismatch')
+        require(self.ports.package(self.root) == grant['package_sha256'],
+                'lightweight_package_changed_since_start')
         self.ports.copy(join_text(grant, read_private_file(runtime / 'join-key', 64).decode()))
         return {'copied': True, 'join_sent': False, 'native_admission_verified': False}
 

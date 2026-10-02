@@ -374,6 +374,10 @@ def validate_response(response, request, *, max_bytes=MAX_BYTES):
             require(all(isinstance(p, dict) and p.get('type') == 'output_text' and isinstance(p.get('text'), str)
                         for p in item['content']), 'text_response_required')
         elif kind in {'function_call', 'custom_tool_call'}:
+            # The pinned Codex client splits response item IDs at the first
+            # underscore. Preserve the ID verbatim; never rewrite call_id.
+            prefix, separator, suffix = item['id'].partition('_')
+            require(prefix and separator and suffix, 'tool_item_id_prefix_suffix_required')
             cid = item.get('call_id')
             require(isinstance(cid, str) and cid and cid not in calls and cid not in old_calls, 'duplicate_or_invalid_response_call_id')
             calls.add(cid)

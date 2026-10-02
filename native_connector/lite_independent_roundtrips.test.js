@@ -20,12 +20,13 @@ import json,os,sys,time
 from pathlib import Path
 from dots_lite import protocol as p
 from dots_lite.package_identity import verify_package
+from dots_lite.authorization import authorization_scope
 root=Path(sys.argv[1]); key='19'*32; now=int(time.time())
 g={'protocol':p.PROTOCOL,'activation_id':'audit-activation','folder_id':'fixture-folder','inbox_id':'audit-inbox','created_at':now-1,'expires_at':now+900,'allowed_pairs':[{'model':'gpt-6.1-sol','reasoning_effort':'xhigh'}],'limits':dict(p.DEFAULT_LIMITS),'package_sha256':verify_package()}
 request={'stream':True,'model':'gpt-6.1-sol','reasoning':{'effort':'xhigh'},'input':[{'role':'user','content':'Synthetic Unicode 😀 task'}],'tools':[]}
 raw=p.canonical(request); desc={'seq':1,'request_id':'request-a1','request_sha256':p.sha256(raw),'byte_length':len(raw),'file_id':'fixture-request-file','folder_id':'fixture-folder','previous_result_ack':None,'begin_before':g['expires_at']}
 route={'route_id':'route_a','identity_sha256':'a'*64,'model':'gpt-6.1-sol','reasoning_effort':'xhigh','outbox_id':'audit-outbox','request':desc,'stop':False}
-join={'activation_id':g['activation_id'],'inbox_id':g['inbox_id'],'grant_sha256':p.grant_hash(g),'join_code':key}
+join={'activation_id':g['activation_id'],'inbox_id':g['inbox_id'],'grant_sha256':p.grant_hash(g),'join_code':key,'transport_authorization':authorization_scope(g)}
 (root/'join.txt').write_text(p.JOIN_MARKER+' '+p.canonical(join).decode());os.chmod(root/'join.txt',0o600)
 print(json.dumps({'inbox':p.make_inbox(g,[route],key,'inbox-op1'),'raw':raw.decode(),'grant':g}))
 `;
@@ -59,18 +60,19 @@ async function main(){
  };
  const cache=new Map();async function execute(action,stateDir=parent,actor='/root',args={}){
   counts.cell_emission++;const file=path.join(tmp,'cell-'+(++cell)+'.js'),argFile=json(path.join(tmp,'args-'+cell+'.json'),args);
-  const emitted=run(['-m','dots_lite.cli','emit-cell',action,'--state-dir',stateDir,'--actor-task-id',actor,'--route-id','route_a','--arguments-file',argFile,'--save',file]);assert.equal(emitted.ok,true,JSON.stringify(emitted));let result;
-  await new AsyncFunction('tools','load','store','text',fs.readFileSync(file,'utf8'))(tools,k=>cache.get(k),(k,v)=>cache.set(k,v),v=>{result=v});assert.equal(result.ok,true,JSON.stringify(result));return result;
+  const emitted=run(['-m','dots_lite.cli','emit-cell',action,'--state-dir',stateDir,'--actor-task-id',actor,'--route-id','route_a','--arguments-file',argFile,'--save',file]);assert.equal(emitted.ok,true,JSON.stringify(emitted));let result;const emittedBlocks=[];
+  await new AsyncFunction('tools','load','store','text',fs.readFileSync(file,'utf8'))(tools,k=>cache.get(k),(k,v)=>cache.set(k,v),v=>{emittedBlocks.push(v);result=v});if(result.acquisition_chunk_count!==undefined)result.text=emittedBlocks.filter(x=>typeof x==='string').join('');assert.equal(result.ok,true,JSON.stringify(result));return result;
  }
  const reserved=await execute('parent-prepare');assert.equal(reserved.spawn_arguments.fork_turns,'none');assert.equal(reserved.spawn_arguments.reasoning_effort,'xhigh');
  nativeBoundary++;const actual={task_name:'/root/'+reserved.spawn_arguments.task_name,agent_id:'synthetic-actual-boundary-1'};
  const admitted=await execute('parent-admit',parent,'/root',{actualArgumentsFile:json(path.join(tmp,'actual-args.json'),reserved.spawn_arguments),nativeResultFile:json(path.join(tmp,'actual-result.json'),actual)});
  const child=admitted.child_state_dir;nativeBoundary++;await execute('child-takeover',child,actual.task_name,{handoff_file:admitted.handoff_file});
- const before=structuredClone(counts),begin=await execute('child-begin',child,actual.task_name);assert.equal(begin.status,'exposed');
+ async function acquire(begin){let offset=0,parts=[],last;do{last=await execute('child-view-read',child,actual.task_name,{requestId:begin.request_id,requestSha256:begin.request_sha256,packageSha256:begin.binding.package_sha256,offset,maxBytes:4096});assert.equal(last.offset,offset);parts.push(last.text);offset=last.next_offset;}while(!last.complete);const raw=Buffer.from(parts.join(''));assert.equal(raw.length,last.total_bytes);assert.equal(crypto.createHash('sha256').update(raw).digest('hex'),last.sha256);return JSON.parse(raw);}
+ const before=structuredClone(counts),begin=await execute('child-begin',child,actual.task_name);assert.equal(begin.status,'exposed');await acquire(begin);
  const output={id:'response-a',object:'response',status:'completed',model:'gpt-6.1-sol',output:[{type:'message',id:'msg-a',role:'assistant',content:[{type:'output_text',text:'Synthetic answer'}]}]};
  const result=await execute('child-complete',child,actual.task_name,{requestId:begin.request_id,outputFile:json(path.join(tmp,'native-output.json'),output)});assert.equal(result.status,'accepted');
  const first=Object.fromEntries(Object.keys(counts).map(k=>[k,counts[k]-before[k]]));
- assert.deepEqual(first,{helper:5,source_load:0,docs_get:1,docs_write:2,metadata:1,raw_fetch:1,materialize:1,upload:1,cell_emission:2});
+ assert.deepEqual(first,{helper:6,source_load:0,docs_get:1,docs_write:2,metadata:1,raw_fetch:1,materialize:1,upload:1,cell_emission:3});
  assert.deepEqual(phases,['SPAWN_RESERVED','ADMITTED','BEGIN','RESULT']);assert.equal(nativeBoundary,2);
  const artifact=JSON.parse(blobs.get('fixture-result-file'));assert.deepEqual(artifact.output,output);assert.equal(artifact.child_task_id,actual.task_name);
  const cold=structuredClone(counts);
@@ -87,11 +89,12 @@ print(json.dumps({'inbox':p.make_inbox(inbox['grant'],[route],'19'*32,'inbox-op2
 `,JSON.stringify(seed.inbox),seed.raw,JSON.stringify(output),JSON.stringify(artifact)]);
  activeRequestId='fixture-request-file-2';blobs.set(activeRequestId,Buffer.from(continuation.raw));records.set('audit-inbox',document('audit-inbox',canon(continuation.inbox)+'\n','inbox-r2'));
  const warmBefore=structuredClone(counts),warmBegin=await execute('child-begin',child,actual.task_name);
+ await acquire(warmBegin);
  const warmOutput=structuredClone(output);warmOutput.id='response-b';warmOutput.output[0].id='msg-b';
  await execute('child-complete',child,actual.task_name,{requestId:warmBegin.request_id,outputFile:json(path.join(tmp,'native-output-2.json'),warmOutput)});
  const warm=Object.fromEntries(Object.keys(counts).map(k=>[k,counts[k]-warmBefore[k]]));assert.deepEqual(warm,first);
  assert.equal(nativeBoundary,2);assert.deepEqual(phases,['SPAWN_RESERVED','ADMITTED','BEGIN','RESULT','BEGIN','RESULT']);
- console.log(JSON.stringify({status:'passed',classification:'offline real JS+Python helpers with synthetic connector and native boundaries',cold_from_prepared_inbox:cold,warm_second_request_same_child:warm,actual_native_platform_calls:0,synthetic_spawn_and_handoff_boundaries:nativeBoundary,helper_operations:operations,control_phases:phases,additional_accounting:{parent_initialize:1,actual_argument_result_capture:'not measured: in-process test file write',model_input_read:'not measured: fixture validates file path only',actual_output_file_write:'not measured: in-process synthetic output',google_and_mac_latency:'not measured'}},null,2));
+ console.log(JSON.stringify({status:'passed',classification:'offline real JS+Python helpers with synthetic connector and native boundaries',cold_from_prepared_inbox:cold,warm_second_request_same_child:warm,actual_native_platform_calls:0,synthetic_spawn_and_handoff_boundaries:nativeBoundary,helper_operations:operations,control_phases:phases,additional_accounting:{parent_initialize:1,actual_argument_result_capture:'not measured: in-process test file write',model_input_read:'bounded helper chunk acquisition measured; actual LLM reading not measured',actual_output_file_write:'not measured: in-process synthetic output',google_and_mac_latency:'not measured'}},null,2));
 }
 require('node:test')('independent real-helper normalized connector operation ledger', async()=>{
  try{await main();}finally{if(tmp)fs.rmSync(tmp,{recursive:true,force:true});}

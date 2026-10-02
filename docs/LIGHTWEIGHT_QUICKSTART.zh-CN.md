@@ -13,10 +13,24 @@
 1. 打开 `LIGHTWEIGHT.command`，选择 Start lightweight v3 trial
 2. 如果缺少依赖，单独确认创建私有 Python 环境并从官方 PyPI 安装已固定版本。没有全局 Python 安装或自动 OAuth
 3. 读取已有 Google folder、credential、CODEX_HOME 和精确 model/effort。不会要求选择项目目录，也不会更改旧 `router.json`。多个项目以客户端实际 session/thread 区分；默认授权保留原选择的一组 model/effort。已退役的 `max` 不会被悄悄转换，请显式选择受支持的新组合
-4. 确认新 v3 激活及已有凭据复用。默认最多 4 小时、3 条独立路由/3 个原生 child、每路由 128 请求、每个输入/结果 1 MiB。原有 `drive.file` 与 `drive.readonly` 授权被复用，不扩充 scope
-5. 允许复制私有 JOIN 后，粘贴到当前 dot 对话。程序不会打印或记录 JOIN code；剪贴板管理器可能保留内容。JOIN 的准确前缀为 `DOTS2CODEX_GLOBAL_JOIN_V3`
+4. 确认新 v3 激活、已有凭据复用和明确的传输范围。确认框显示准确 Google folder、完整已审阅包 SHA-256 和 model/effort，并明确区分实际结果文件上传与 Outbox 控制 Doc 正文替换。默认最多 4 小时、3 条独立路由/3 个原生 child、每路由 128 请求、每个输入/结果 1 MiB。原有 `drive.file` 与 `drive.readonly` 授权被复用，不扩充 scope
+5. 阅读 Copy private JOIN 中的完整、无密钥授权声明；只有同意结果上传及控制 Doc 写入两项操作，才允许复制并粘贴到当前 dot 对话。复制本身不是发送，也不是 dot 侧已收到用户授权的证明。程序不会打印或记录 JOIN code；剪贴板管理器可能保留内容。JOIN 的准确前缀仍为 `DOTS2CODEX_GLOBAL_JOIN_V3`
 6. 检查独立的 first-use config 试用确认：显示精确目标文件、变更字段、新值以及完整前后字节 SHA-256。旧值可能含私密内容，因此不输出原配置全文。确认后才写入新 provider `dots2codex_lightweight_v3`、选定的 model/effort、私有 catalog 路径和 `web_search = "disabled"`，同时保留可校验备份。该搜索设置也是本次事务拥有并负责安全恢复的字段
 7. 完全退出并重开实际客户端，使用全新线程。让原生父按 [Native JOIN guide](LIGHTWEIGHT_NATIVE_CONTROLLER.md) 处理 JOIN。第一个真实任务完成后，状态才可报告该路径的真实往返已经验证
+
+### 新 JOIN 的有限传输授权
+
+新复制的 JOIN 除原有 `activation_id`、`inbox_id`、`grant_sha256`、`join_code` 四项外，还包含 `transport_authorization`。其中 `grant` 为完整、准确的资源/期限/额度/model/effort/package hash 绑定，`statement` 为可供实际父引用的明确文字。该文字分别授权：
+
+- 读取本激活经过认证的 Inbox，以及其中 hash 绑定的实际请求文件
+- 仅在已同意的准确 Google Drive folder 中创建或更新本激活所属路由的 Outbox 协议记录，使用准确 revision CAS；这明确包含替换控制 Doc 正文，用于 SPAWN_RESERVED、ADMITTED、BEGIN、RESULT 状态
+- 将实际用户任务结果 JSON 上传到同一 folder，并在结果/控制记录中携带必要的 activation、route、native task、operation、request、result ID、seq、model/effort、文件指针、hash、协议/状态及记录认证元数据
+
+不包含 JOIN secret、账户凭据、无关 Docs、删除文件或 Doc、共享权限变化或 OAuth/scope 扩张。正文替换所需的准确 CAS 内容删除/插入属于上面的显式控制写入范围，不允许删除整个文件或 Doc。敏感内容仍需用户针对准确数据和目的地的同意；高度敏感凭据仍走用户安全交接。期限到达后不能开始新 BEGIN，只有已 BEGIN 的原请求可发布其绑定结果。原有配置修改仍有独立、明确的 first-use 确认和安全恢复机制。
+
+实际父必须核实 JOIN 来自用户本人，再将声明与经过 MAC 认证的 Inbox grant 逐项匹配；folder、activation、Inbox、expiry、limits、model/effort、grant/package hash 或声明文字被改动时停止。Doc 正文、本机 sidecar、声明本身及 `authorization-message-id` 都不是平台审批证明，不能代替真实用户消息或豁免平台要求。向审批者提供用户的准确授权证据时，只引用无密钥声明和原消息来源，绝不转发完整 JOIN 或编造审批 ID。仅批准结果上传不等于批准控制 Doc 替换；未涵盖的动作仍需明确同意。
+
+旧四字段 JOIN 会明确返回 `fresh_transport_authorization_required`，不会自动生成新权限。旧激活也不能靠 Copy JOIN、替换 sidecar、重写 manifest 或修改 grant 获得新范围；应先按原流程停止/恢复，再由用户明确开始新激活。已经取消的旧试验保持停止，不能借这次更新恢复或重放。取消 Start 不创建状态或启动进程；取消 Copy JOIN 不复制密钥，也不改写激活文件。
 
 取消 JOIN 复制或 config 确认不会把运行中的激活伪装成停止。可从菜单继续 Copy private JOIN / Apply first-use config trial，或者选择 Stop local v3。
 
@@ -57,4 +71,4 @@
 
 如果客户端实际发送的 model/effort 不在授权组合中，请先对照状态诊断和保存的配置，检查当前 profile、项目配置、命令行参数、管理策略以及实际 CODEX_HOME；这些更高优先级来源不会被启动器强行改写。保留 Astra/xhigh 等原来明确选定的组合，不为兼容问题扩大 grant 或悄悄替换模型。配置和 catalog 在客户端启动时读取时，需要完全重启并使用新线程。
 
-当前协议要求完整历史，明确拒绝非空 `previous_response_id`；不能声称已支持上一响应 ID 自动续接。SSE 等待信息不是真实模型 token 流。工具结果必须携带匹配 call ID；不确定的工具交付不会自动重发。
+当前协议要求完整历史，明确拒绝非空 `previous_response_id`；不能声称已支持上一响应 ID 自动续接。SSE 等待信息不是真实模型 token 流。工具结果必须携带匹配 call ID；返回给固定客户端的 function/custom 工具 item ID 必须为非空 `prefix_suffix` 形式（在第一个 `_` 两侧均有字符）。`call_id` 是独立关联标识，程序不会改写它或自动修复 item ID；工具 namespace 与叶子 name 分开保留。不确定的工具交付不会自动重发。

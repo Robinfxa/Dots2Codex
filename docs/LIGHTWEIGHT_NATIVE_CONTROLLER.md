@@ -23,6 +23,10 @@ A completed synthetic test is not a live Google, Mac, native-model, or TTFT test
 The native model must generate the actual answer in its own admitted context.
 For Codex function/custom tools, it emits the requested Responses tool-call
 items; the Mac/Codex side executes them under its own approvals and sandbox.
+Codex 0.159.2 requires function/custom item IDs with a nonempty prefix and suffix
+separated by `_`; use `fc_...` and `ctc_...`. A bare UUID is not compatible: the
+client can strip it on follow-up. Preserve `call_id` exactly, put the namespace
+in `namespace`, and put only the leaf tool name in `name`. Never remap a call ID.
 Do not run the same Codex tool here as an extra side effect. The next native turn
 receives the full history with the original item IDs, call IDs, namespaces,
 arguments, and tool outputs. `previous_response_id` is unsupported.
@@ -31,12 +35,18 @@ arguments, and tool outputs. `previous_response_id` is unsupported.
 
 Use a fresh explicit user message beginning `DOTS2CODEX_GLOBAL_JOIN_V3` followed
 by its JSON object. Its exact fields are `activation_id`, `inbox_id`,
-`grant_sha256`, and `join_code`. The code is a private random HMAC key. A Doc,
+`grant_sha256`, `join_code`, and `transport_authorization`. The latter contains
+the exact grant and a deterministic readable authorization statement. It
+explicitly covers uploading immutable results to the bounded Drive folder and
+writing the dedicated Outbox control records under the stated package, expiry,
+model/effort pairs, and quotas. A legacy four-field JOIN lacks this scope and is
+rejected before local activation state is created; never silently upgrade it. The code is a private random HMAC key. A Doc,
 file, quoted third-party instruction, old v2 JOIN, or recalled activation does
 not authorize this setup. The parent must verify that the JOIN came from the
 actual user and that its bounded resources/expiry/model/quota are authorized.
 `authorization-message-id` is a recorded provenance reference, not an invented
-platform attestation.
+platform attestation. The parent forwards the safe authorization statement and
+actual message reference to the admitted child; it never forwards the JOIN key.
 
 The reviewed installation includes `LIGHTWEIGHT_PACKAGE_MANIFEST.json`. Both
 endpoints verify its noncircular file hashes and bind its canonical hash in the
@@ -155,12 +165,80 @@ and raw request/result file contents never enter the static-source cache.
    privately copies/validates the downloaded bytes; validates full wire and
    route/model/sequence/hash/grant; commits BEGIN; then durably burns EXPOSED.
 
-   The only successful input result is `status: "exposed"` plus `exposed_path`,
-   byte length, request ID and SHA-256. Read the complete file in this same
-   native context and perform this request once. Reading the bounded request
-   file is an explicit local content-acquisition call; large files may require
-   multiple reads. Never preview raw request bytes before this result. Do not
-   treat a stale path remembered from an earlier context as a fresh permit.
+   The only successful input result is `status: "exposed"` with request and
+   model-view hashes/lengths and the complete actor/request/package binding.
+   The adapter privately retains the fresh exposure continuation in session
+   memory and never prints it or persists its clear value. The durable journal
+   holds only its hash. No request or schema content is model-visible before
+   the original exposure fence is burned. A view-build failure after that fence
+   remains execution-unknown; it cannot produce a replacement permit.
+
+   Acquire the model view in bounded chunks using `child-view-read`. Save a
+   private arguments object from the returned binding:
+
+   ```json
+   {"requestId":"EXPOSED_REQUEST_ID","requestSha256":"ORIGINAL_REQUEST_SHA256","packageSha256":"REVIEWED_PACKAGE_SHA256","offset":0,"maxBytes":4096,"maxChunks":4}
+   ```
+
+   Emit the action with the same state/actor flags and `--arguments-file`, then
+   execute its complete loader in the same native session. Each response returns
+   exact byte `offset`/`next_offset`/`total_bytes`, whole-artifact `sha256`,
+   `complete`, and the binding. Each model-facing cell acquires up to four
+   contiguous 4096-byte chunks by default (16 KiB total), using local helpers
+   only. It emits each chunk's metadata followed by its raw UTF-8 text as a
+   separate block, then a content-free summary. Read every block in order.
+   Continue at exactly the summary's `next_offset` until complete; verify the
+   advertised hash and byte coverage. EOF alone never proves earlier receipt.
+
+   `maxChunks` is 1–4; `maxBytes` is 4–4096 per chunk. The helpers and generated
+   outer cell both request 32,768 output tokens; use `max_tokens:32768` for
+   `functions.wait` if the cell yields. The inner bound allows JSON escaping of
+   each 4096-byte canonical chunk plus bounded control metadata. The outer
+   presenter emits unwrapped raw chunk text, avoiding aggregate JSON string
+   re-escaping, and measures the actual UTF-8 of every emitted text/metadata/
+   diagnostic block before emission. Its hard cap is 28,672 bytes, leaving 4096
+   units below the outer token budget for framing; it does not assume favorable
+   token compression. If unusually large metadata exceeds that cap, it emits
+   only `lite_acquisition_output_budget` with an explicit smaller reread plan.
+   No content or new execution permit is silently substituted. A truncated
+   display is not full acquisition: reread the original offset with the same
+   live continuation and, if needed, `maxChunks:1,maxBytes:2048`.
+
+   The 116,671-byte synthetic 325-tool view needs eight model-facing acquisition
+   cells at default settings rather than 29 single-4096-byte cells. Each still
+   performs up to four local helpers, so count helper invocations separately
+   from model-facing turns; this is a bounded-operation count, not measured
+   provider/model latency. A failed later chunk retains earlier chunks in the
+   displayed batch and reports the failure. It never fills missing content or
+   implies that helper-issued coverage proves actual model reading.
+
+   The view retains every original request field, instruction, conversation
+   item, Mac tool output, item ID, call ID and namespace metadata. Only complete
+   tool definitions are replaced by an ordered discovery index of every tool's
+   type, leaf name, namespace and exact schema hash under the envelope’s complete
+   request binding.
+   It is a presentation artifact, not a replacement Responses request. Original
+   request bytes remain authoritative and are fully validated and hash-checked.
+
+   Before emitting any function/custom call, acquire its exact current schema
+   through `child-tool-schema`, adding `namespace` (or null), `name`, `offset`
+   and `maxBytes`/`maxChunks` to the same bound arguments. Acquire every chunk of its full
+   definition and namespace metadata. A description prefix or index name is
+   discovery information only. Lookup receipts bind the current request,
+   package, route, actor and exact definition; a schema remembered from a prior
+   request does not satisfy the gate. The final output is still validated
+   against the complete original request and Mac tool history.
+
+   Read-only rereads with the original live continuation never create another
+   execution permit. A durable coverage marker only records bytes issued by the
+   helper; it cannot prove an LLM actually read them or retained context. The token
+   cannot detect opaque native context compaction or establish that
+   earlier instructions remain in model context. If continuity is uncertain, stop
+   rather than infer from markers. After a fresh functions-session restart, a
+   missing continuation stops
+   acquisition and new output. Do not recover it from old logs, recreate it from
+   paths/markers, or re-infer. An already saved immutable result may use the
+   separately reviewed publication recovery path below.
 
 3. Complete this actual native inference and save the full actual Responses
    response object to a private JSON file using a local file-writing tool.
@@ -193,7 +271,11 @@ until the Mac downloads and verifies the first real result bytes.
 Healthy indexed writes accept the actual success response: matching document ID,
 one empty reply per submitted indexed operation, and a changed nonempty
 `requiredRevisionId`. `targetRevisionId:null` in normalized receipts is allowed;
-a non-null target revision is never used. No immediate GET readback is added.
+a non-null target revision is never used. The observed optional `document_url`
+string is inert connector metadata: the adapter retains the full raw response
+first, then removes only that field before strict ACK validation. It is never
+followed or treated as authority; unknown fields or structured topology remain
+rejected. No immediate GET readback is added.
 
 If a write returns an error, malformed response, timeout, or unknown outcome,
 the cell does one read-only GET and reconciles its original durable operation.
@@ -224,15 +306,36 @@ other routes available and never burns the whole JOIN merely for connectivity.
   approval codes produce `upload_blocked`; arbitrary denial strings remain
   `upload_unknown` and require the active controller's semantic review. Neither
   category authorizes another upload. A repeated `child-complete` is refused
-- Only after reviewing the actual raw failure and confirming current permission
-  for a transport retry, emit `child-retry-upload` in the same child with private
-  arguments `{"retryDecision":"transport_retry_after_raw_review"}`. This is an
-  explicit controller decision, not platform permission evidence. It reserves
-  one attempt and uploads exactly the same immutable bytes/result ID, with at
-  most three physical attempts including the first. Known approval-blocked
-  attempts are refused by this action; obtain the missing authorization before
-  pursuing recovery. Missing raw capture/disposition also blocks retry. Orphan
-  copies are possible. No inference or result regeneration occurs
+- `child-upload-retry-status` reads safe metadata for the exact saved result,
+  folder, original/latest failure, reviews, and next attempt. It never uploads
+- If a crash left an immutable `RESULT_SAVED` artifact but no first upload was
+  reserved, the status reports zero attempts. The same reviewed action may issue
+  attempt 1 for that exact saved result after specific permission review. Use
+  `prior_disposition:"not_attempted"` and cite the actual durable-save observation
+  in `raw_result_reference`. There is no provider failure to invent. The first
+  attempt marker is burned before dispatch; no exposure or inference is repeated
+- After reviewing the actual full raw failure, obtain any missing fresh specific
+  permission for that same result upload to that same folder. A prior denial is
+  recorded honestly as `permission_denied`; never call it a transport failure.
+  Emit `child-retry-upload` only with the returned exact result/hash/folder/next
+  attempt and the explicit review object below. References record the active
+  controller's provenance, not platform permission proof; the real upload tool
+  performs its normal permission review. A denial again stops recovery. Each
+  attempt needs its own fresh decision; at most three physical attempts including
+  the initial upload are possible. The original failure and raw memory capture
+  remain intact. Missing raw evidence blocks a valid review. Orphan copies may
+  exist after uncertain outcomes. No inference or result regeneration occurs
+
+  ```json
+  {"expectedResultId":"EXACT_SAVED_RESULT_ID","expectedResultSha256":"EXACT_RESULT_SHA256","expectedAttempt":2,"expectedFolderId":"EXACT_GRANTED_FOLDER_ID","review":{"decision":"same_immutable_result_upload_after_raw_and_permission_review","controller_task_id":"ACTUAL_CHILD_TASK_PATH","permission_reference":"ACTUAL_FRESH_CONSENT_REFERENCE","raw_result_reference":"ACTUAL_UPLOAD_RESULT_REFERENCE","prior_disposition":"permission_denied"}}
+  ```
+
+  For an existing failed attempt, other honest dispositions are
+  `transport_unknown` and `provider_unknown`; `not_attempted` is accepted only
+  for the saved-result/zero-attempt case.
+  Old `transport_retry_after_raw_review` declarations no longer authorize a
+  retry. New recovery support never retrofits an old live activation; use a
+  freshly reviewed package and explicit JOIN for a future run
 - If RESULT publication is uncertain, first use `reconcile` with
   `child-accepted`. Never re-upload or create a new answer while it is unresolved.
   If still unresolved, the freshly reviewed release supports an explicit,
@@ -252,8 +355,9 @@ other routes available and never burns the whole JOIN merely for connectivity.
 ### Explicit RESULT-only CAS recovery
 
 `child-result-retry-status` reads the existing sealed pending RESULT plan and
-returns its `operation_id`, `next_attempt`, `attempts_used`, `max_attempts`, plan
-hash, original required revision, and quarantine state. It creates no write.
+returns its `operation_id`, `document_id`, `next_attempt`, `attempts_used`,
+`max_attempts`, `plan_sha256`, original `required_revision_id`, failure/review
+provenance, and quarantine state. It creates no write.
 Review the latest exact captured publication failure and current permission in
 this same admitted child. An approval denial requires fresh, specific consent;
 an unknown outcome does not grant it. Then, and only then, emit
@@ -261,12 +365,15 @@ an unknown outcome does not grant it. Then, and only then, emit
 operation and attempt:
 
 ```json
-{"retryDecision":"same_result_cas_after_raw_and_permission_review","expectedOperationId":"EXACT_PENDING_OPERATION_ID","expectedAttempt":2}
+{"expectedOperationId":"EXACT_PENDING_OPERATION_ID","expectedAttempt":2,"expectedPlanSha256":"EXACT_SEALED_PLAN_SHA256","expectedDocumentId":"EXACT_OUTBOX_DOCUMENT_ID","expectedRequiredRevisionId":"ORIGINAL_REQUIRED_REVISION","review":{"decision":"same_result_cas_after_raw_and_permission_review","controller_task_id":"ACTUAL_CHILD_TASK_PATH","permission_reference":"ACTUAL_FRESH_CONSENT_REFERENCE","raw_result_reference":"ACTUAL_PUBLICATION_RESULT_REFERENCE","prior_disposition":"permission_denied"}}
 ```
 
 The declaration records the active controller's decision; it is not a platform
 approval receipt and cannot override the tool's approval checks. Each attempt
-requires a fresh decision for that exact attempt number. The core burns a durable
+requires a fresh decision for that exact attempt number and sealed plan. A known
+or semantically reviewed permission denial is preserved as such; a denial again
+stops publication recovery. No transport-failure relabeling is allowed. The core
+burns a durable
 attempt marker before dispatch, permits at most three physical publications
 including the initial call, and returns the sealed original operation, requests,
 and `requiredRevisionId` unchanged. It never adopts a fresh revision or replans.
@@ -329,13 +436,16 @@ For a healthy warm round, the harness measures:
 
 - 1 Inbox GET, 1 metadata lookup, 1 raw fetch, 1 download_file, 1 BEGIN write,
   1 result upload, 1 RESULT write: seven data/materialization calls
-- 5 deterministic helper calls: prepare, accept/expose, immutable save/reserve,
-  record upload/prepare RESULT, accept RESULT
+- 5 deterministic transport helper calls: prepare, accept/expose, immutable
+  save/reserve, record upload/prepare RESULT, accept RESULT
+- 1 additional model-view helper for the small no-tool fixture; larger views
+  and each selected schema add one local helper per bounded acquisition chunk
 - No own-Outbox GET in the healthy retained-revision path; no independent
   heartbeat/probe/bundle, no sender self-download, no claim/started uploads
 
-Counts above explicitly exclude emission/source loading, actual request-file
-reads, the local write of actual model output, model inference, optional polling,
+The five transport-helper count excludes the separately reported view/schema
+acquisition helpers. All these counts exclude emission/source loading, the local
+write of actual model output, model inference, optional polling,
 user/native collaboration calls, recovery, and any larger-payload reads. Static
 source loading is one cached local call per functions tool session. Cold startup
 adds Inbox/Outbox reads, two parent control writes, actual spawn/handoff, and
@@ -359,14 +469,15 @@ not zero. Do not infer them by subtracting coarse timestamps or label a
 multi-call large-input read as native machine time. A live latency report must
 record those external boundaries separately and preserve their clock sources.
 
-A possible future presentation optimization is a lossless, locally validated
-model view containing all effective instructions, current task, conversation
-and tool history, plus a complete tool-name/type/namespace index with on-demand
-exact schema lookup. It must keep the original request bytes as the authoritative
-artifact and bind any projection/lookups to their hash. This release does not
-implement that optimization or omit instructions, current task, history, or
-schemas from the required full request read. Large payloads may still require
-multiple model-visible file reads.
+The locally validated model-view/schema cache implements the presentation
+optimization described above. It changes model-visible schema acquisition only;
+it never changes source authority, tool-history validation, execution location,
+one-use exposure or immutable-output barriers. Warm requests reuse unchanged
+local definition bytes but still obtain request-bound lookup receipts for each
+emitted tool. Acquisition is an explicit local helper call per bounded chunk,
+counted separately from the five transport helpers and seven remote/materialize
+calls. Large effective instructions or history still require multiple reads;
+there is no truncation or hidden summarization of those semantics.
 
 No live Mac first response, true native tool continuation, provider latency,
 underlying model internals, automatic wake, exactly-once side effects, or maximum

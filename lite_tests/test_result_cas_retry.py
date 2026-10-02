@@ -18,6 +18,20 @@ ack=fixtures.ack
 resource=fixtures.resource
 
 
+def reviewed_retry(worker,operation,attempt,*,disposition='transport_unknown',**overrides):
+    """Synthetic controller declaration, never an external approval receipt."""
+    plan=worker.state.get('pending_plan') or {}
+    arguments={'expected_operation_id':operation,'expected_attempt':attempt,
+               'expected_plan_sha256':plan.get('plan_sha256'),
+               'expected_document_id':plan.get('document_id'),
+               'expected_required_revision_id':plan.get('body',{}).get('writeControl',{}).get('requiredRevisionId'),
+               'review':{'decision':'same_result_cas_after_raw_and_permission_review',
+                         'controller_task_id':worker.identity,'permission_reference':'synthetic-existing-permission',
+                         'raw_result_reference':'synthetic-result-review','prior_disposition':disposition}}
+    arguments.update(overrides)
+    return worker.retry_result(**arguments)
+
+
 class AtomicDocs:
     """Required-revision semantics only, not a claim of live Google proof."""
     def __init__(self, plan):
@@ -54,7 +68,7 @@ class ResultCASRetry(unittest.TestCase):
     def test_first_committed_lost_reply_repeated_cas_cannot_apply_twice(self):
         worker,plan=self.ready();provider=AtomicDocs(plan)
         self.assertEqual(worker.accept_result(provider.dispatch(plan,drop_reply=True))['status'],'unknown')
-        worker=self.restart();retry=worker.retry_result(plan['operation_id'],2)
+        worker=self.restart();retry=reviewed_retry(worker,plan['operation_id'],2)
         self.assertEqual(worker.accept_result(provider.dispatch(retry))['status'],'unknown')
         accepted=worker.accept_result(readback=provider.read())
         self.assertEqual(accepted['status'],'applied');self.assertEqual(accepted['revision_id'],provider.revision)
@@ -65,7 +79,7 @@ class ResultCASRetry(unittest.TestCase):
     def test_first_did_not_commit_retry_uses_exact_original_requests_revision_operation(self):
         worker,plan=self.ready();provider=AtomicDocs(plan)
         worker.accept_result(provider.dispatch(plan,fail_before_commit=True))
-        retry=self.restart().retry_result(plan['operation_id'],2)
+        retry=reviewed_retry(self.restart(),plan['operation_id'],2)
         self.assertEqual(p.canonical(retry),p.canonical(plan))
         self.assertEqual(worker.accept_result(provider.dispatch(retry))['status'],'accepted')
         self.assertEqual(provider.commits,1)
@@ -75,7 +89,7 @@ class ResultCASRetry(unittest.TestCase):
     def test_restart_before_first_dispatch_burns_attempt_not_inference(self):
         worker,plan=self.ready();provider=AtomicDocs(plan)
         self.assertEqual(self.restart().result_retry_status()['attempts_used'],1)
-        retry=self.restart().retry_result(plan['operation_id'],2)
+        retry=reviewed_retry(self.restart(),plan['operation_id'],2)
         self.assertEqual(worker.accept_result(provider.dispatch(retry))['status'],'accepted')
         self.assertEqual(provider.commits,1)
         self.assertEqual(len(list((self.base/'route').glob('exposure-*.once'))),1)
@@ -87,7 +101,7 @@ class ResultCASRetry(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'crash'):worker.publish_result(receipt)
         resumed=self.restart();status=resumed.result_retry_status()
         self.assertEqual(status['attempts_used'],0);self.assertEqual(status['next_attempt'],1)
-        original=resumed.state['pending_plan'];retry=resumed.retry_result(status['operation_id'],1)
+        original=resumed.state['pending_plan'];retry=reviewed_retry(resumed,status['operation_id'],1)
         self.assertEqual(p.canonical(retry),p.canonical(original))
 
     def test_crash_after_initial_marker_before_counter_commit_consumes_attempt(self):
@@ -101,40 +115,40 @@ class ResultCASRetry(unittest.TestCase):
         resumed=self.restart();status=resumed.result_retry_status()
         self.assertEqual(resumed.state['current']['result_publication']['attempts'],0)
         self.assertEqual(status['attempts_used'],1)
-        retry=resumed.retry_result(status['operation_id'],2)
+        retry=reviewed_retry(resumed,status['operation_id'],2)
         self.assertEqual(retry['body']['writeControl']['requiredRevisionId'],'rev3')
 
     def test_repeated_stale_remains_unknown_and_exhausts_three_attempts(self):
         worker,plan=self.ready();provider=AtomicDocs(plan);provider.revision='unrelated-revision'
         for attempt in (1,2,3):
-            packet=plan if attempt==1 else self.restart().retry_result(plan['operation_id'],attempt)
+            packet=plan if attempt==1 else reviewed_retry(self.restart(),plan['operation_id'],attempt)
             self.assertEqual(worker.accept_result(provider.dispatch(packet))['status'],'unknown')
             result=worker.accept_result(readback=provider.read())
             self.assertEqual(result['status'],'unknown');self.assertFalse(result['quarantined'])
         self.assertEqual(provider.commits,0);self.assertEqual(provider.requests,[p.canonical(plan['body'])]*3)
-        with self.assertRaisesRegex(p.ProtocolError,'budget_exhausted'):worker.retry_result(plan['operation_id'],4)
+        with self.assertRaisesRegex(p.ProtocolError,'budget_exhausted'):reviewed_retry(worker,plan['operation_id'],4)
         self.assertIsNone(worker.result_retry_status()['next_attempt'])
         self.assertEqual(worker.state['phase'],'RESULT_PREPARED')
 
     def test_old_attempt_review_cannot_be_reused_for_next_attempt(self):
-        worker,plan=self.ready();worker.retry_result(plan['operation_id'],2)
-        with self.assertRaisesRegex(p.ProtocolError,'attempt_mismatch'):worker.retry_result(plan['operation_id'],2)
+        worker,plan=self.ready();reviewed_retry(worker,plan['operation_id'],2)
+        with self.assertRaisesRegex(p.ProtocolError,'attempt_mismatch'):reviewed_retry(worker,plan['operation_id'],2)
         for invalid in (True,'3',None):
-            with self.assertRaises(p.ProtocolError):worker.retry_result(plan['operation_id'],invalid)
+            with self.assertRaises(p.ProtocolError):reviewed_retry(worker,plan['operation_id'],invalid)
         self.assertEqual(worker.result_retry_status()['attempts_used'],2)
 
     def test_wrong_operation_no_attempt_consumed(self):
         worker,plan=self.ready()
-        with self.assertRaisesRegex(p.ProtocolError,'operation_mismatch'):worker.retry_result('different-operation',2)
+        with self.assertRaisesRegex(p.ProtocolError,'operation_mismatch'):reviewed_retry(worker,'different-operation',2)
         self.assertEqual(worker.result_retry_status()['attempts_used'],1)
 
     def test_journal_rollback_cannot_refund_retry_budget(self):
         worker,plan=self.ready();journal=self.base/'route'/'journal.json';before=private_read(journal)
-        worker.retry_result(plan['operation_id'],2);private_write(journal,before)
+        reviewed_retry(worker,plan['operation_id'],2);private_write(journal,before)
         self.assertEqual(self.restart().result_retry_status()['attempts_used'],2)
-        with self.assertRaisesRegex(p.ProtocolError,'attempt_mismatch'):worker.retry_result(plan['operation_id'],2)
-        worker.retry_result(plan['operation_id'],3);private_write(journal,before)
-        with self.assertRaisesRegex(p.ProtocolError,'budget_exhausted'):self.restart().retry_result(plan['operation_id'],4)
+        with self.assertRaisesRegex(p.ProtocolError,'attempt_mismatch'):reviewed_retry(worker,plan['operation_id'],2)
+        reviewed_retry(worker,plan['operation_id'],3);private_write(journal,before)
+        with self.assertRaisesRegex(p.ProtocolError,'budget_exhausted'):reviewed_retry(self.restart(),plan['operation_id'],4)
 
     def test_newer_authenticated_request_quarantines_without_overwrite(self):
         worker,plan=self.ready();before=worker.state['outbox'];newer=copy.deepcopy(plan['record'])
@@ -143,7 +157,7 @@ class ResultCASRetry(unittest.TestCase):
         newer=p.sign_record(newer,KEY)
         result=worker.accept_result(readback=resource(p.canonical(newer).decode()+'\n','rev-new'))
         self.assertEqual(result['status'],'unknown');self.assertTrue(result['quarantined'])
-        with self.assertRaisesRegex(p.ProtocolError,'quarantined'):worker.retry_result(plan['operation_id'],2)
+        with self.assertRaisesRegex(p.ProtocolError,'quarantined'):reviewed_retry(worker,plan['operation_id'],2)
         self.assertEqual(worker.state['outbox'],before)
         self.assertEqual(worker.accept_result(ack(plan,'late-reply'))['reason'],'result_publication_quarantined')
         self.assertEqual(worker.state['phase'],'RESULT_PREPARED')
@@ -153,21 +167,21 @@ class ResultCASRetry(unittest.TestCase):
         other['result']['file_id']='other-file';other=p.sign_record(other,KEY)
         result=worker.accept_result(readback=resource(p.canonical(other).decode()+'\n','rev-other'))
         self.assertTrue(result['quarantined'])
-        with self.assertRaisesRegex(p.ProtocolError,'quarantined'):self.restart().retry_result(plan['operation_id'],2)
+        with self.assertRaisesRegex(p.ProtocolError,'quarantined'):reviewed_retry(self.restart(),plan['operation_id'],2)
 
     def test_unverified_readback_conflict_is_unknown_not_success(self):
         worker,plan=self.ready()
         result=worker.accept_result(readback=resource('untrusted text\n','new-revision'))
         self.assertEqual(result['status'],'unknown');self.assertFalse(result['quarantined'])
         self.assertEqual(worker.state['record']['phase'],'BEGIN')
-        self.assertEqual(worker.retry_result(plan['operation_id'],2),plan)
+        self.assertEqual(reviewed_retry(worker,plan['operation_id'],2),plan)
 
     def test_quarantine_survives_journal_only_rollback(self):
         worker,plan=self.ready();journal=self.base/'route'/'journal.json';before=private_read(journal)
         other=copy.deepcopy(plan['record']);other['operation_id']='other-result';other=p.sign_record(other,KEY)
         worker.accept_result(readback=resource(p.canonical(other).decode()+'\n','new'))
         private_write(journal,before)
-        with self.assertRaisesRegex(p.ProtocolError,'quarantined'):self.restart().retry_result(plan['operation_id'],2)
+        with self.assertRaisesRegex(p.ProtocolError,'quarantined'):reviewed_retry(self.restart(),plan['operation_id'],2)
 
     def test_no_retry_upload_exposure_or_result_regeneration_path(self):
         worker,plan=self.ready()
@@ -176,22 +190,22 @@ class ResultCASRetry(unittest.TestCase):
              mock.patch.object(worker,'save_actual_result',side_effect=AssertionError('inference')), \
              mock.patch.object(worker,'publish_result',side_effect=AssertionError('new plan')), \
              mock.patch('dots_lite.worker.plan_write',side_effect=AssertionError('replan')):
-            retry=worker.retry_result(plan['operation_id'],2)
+            retry=reviewed_retry(worker,plan['operation_id'],2)
         self.assertEqual(retry,plan)
         self.assertEqual(worker.state['current']['upload_attempts'],1)
 
     def test_other_phases_never_gain_result_retry(self):
         worker=self.worker()
-        with self.assertRaisesRegex(p.ProtocolError,'result_not_pending'):worker.retry_result('op',2)
+        with self.assertRaisesRegex(p.ProtocolError,'result_not_pending'):reviewed_retry(worker,'op',2)
         inbox,path,_=self.request(worker);plan=worker.prepare_begin(inbox,path)
-        with self.assertRaisesRegex(p.ProtocolError,'result_not_pending'):worker.retry_result(plan['operation_id'],2)
+        with self.assertRaisesRegex(p.ProtocolError,'result_not_pending'):reviewed_retry(worker,plan['operation_id'],2)
         self.assertEqual(worker.state['current']['exposure'],'INPUT_NOT_EXPOSED')
 
     def test_legacy_result_plan_is_not_retroactively_sealed(self):
         worker,plan=self.ready();state=worker.state
         seal=worker._result_seal_path(plan['operation_id']);seal.unlink()
         del state['current']['result_publication'];worker.journal.write(state)
-        with self.assertRaisesRegex(p.ProtocolError,'seal_required_new_release'):self.restart().retry_result(plan['operation_id'],2)
+        with self.assertRaisesRegex(p.ProtocolError,'seal_required_new_release'):reviewed_retry(self.restart(),plan['operation_id'],2)
         # Existing exact reconciliation still works, without granting a retry.
         self.assertEqual(worker.accept_result(readback=resource(plan['text'],'real-revision'))['status'],'applied')
 
@@ -199,7 +213,7 @@ class ResultCASRetry(unittest.TestCase):
         worker,plan=self.ready();state=worker.state
         changed=copy.deepcopy(plan['source']);changed['revision_id']='fresh-but-forbidden'
         state['pending_plan']=docs.plan_write(changed,plan['record'],plan['operation_id']);worker.journal.write(state)
-        with self.assertRaisesRegex(p.ProtocolError,'plan_changed'):self.restart().retry_result(plan['operation_id'],2)
+        with self.assertRaisesRegex(p.ProtocolError,'plan_changed'):reviewed_retry(self.restart(),plan['operation_id'],2)
         with self.assertRaisesRegex(p.ProtocolError,'plan_changed'):worker.accept_result(ack(plan,'reply'))
 
     def test_modified_seal_and_rehashed_journal_still_need_original_hmac(self):
@@ -207,16 +221,16 @@ class ResultCASRetry(unittest.TestCase):
         seal=p.strict_json(private_read(path));seal['binding']['plan']['source']['revision_id']='forged'
         raw=p.canonical(seal);private_write(path,raw);state['current']['result_publication']['seal_sha256']=p.sha256(raw)
         worker.journal.write(state)
-        with self.assertRaisesRegex(p.ProtocolError,'seal_authentication_failed'):worker.retry_result(plan['operation_id'],2)
+        with self.assertRaisesRegex(p.ProtocolError,'seal_authentication_failed'):reviewed_retry(worker,plan['operation_id'],2)
 
     def test_payload_changed_after_upload_blocks_retry(self):
         worker,plan=self.ready();private_write(worker.state['current']['artifact']['path'],b'{}')
-        with self.assertRaisesRegex(p.ProtocolError,'immutable_result_changed'):worker.retry_result(plan['operation_id'],2)
+        with self.assertRaisesRegex(p.ProtocolError,'immutable_result_changed'):reviewed_retry(worker,plan['operation_id'],2)
 
     def test_missing_or_partial_attempt_marker_fails_closed(self):
         worker,plan=self.ready();path=self.base/'route'/('result-cas-'+plan['operation_id']+'-1.once')
         private_write(path,b'')
-        with self.assertRaisesRegex(p.ProtocolError,'attempt_history_corrupt'):worker.retry_result(plan['operation_id'],2)
+        with self.assertRaisesRegex(p.ProtocolError,'attempt_history_corrupt'):reviewed_retry(worker,plan['operation_id'],2)
 
     def test_unknown_result_never_releases_new_begin_or_upload(self):
         worker,plan=self.ready();worker.accept_result(None)
@@ -234,14 +248,18 @@ class ResultCASRetry(unittest.TestCase):
         from dots_lite import cli
         worker,plan=self.ready();root=self.base/'route'
         config={'role':'child','child_task_id':worker.identity,'route':self.r}
+        decision={'expected_operation_id':plan['operation_id'],'expected_attempt':2,
+                  'expected_plan_sha256':plan['plan_sha256'],'expected_document_id':plan['document_id'],
+                  'expected_required_revision_id':plan['body']['writeControl']['requiredRevisionId'],
+                  'review':{'decision':'same_result_cas_after_raw_and_permission_review',
+                            'controller_task_id':worker.identity,'permission_reference':'synthetic-existing-permission',
+                            'raw_result_reference':'synthetic-result-review','prior_disposition':'provider_unknown'}}
         with mock.patch.object(cli,'config_at',return_value=config),mock.patch.object(cli,'worker',return_value=worker):
-            for decision in (None,False,True,'approved','transport_retry_after_raw_review'):
+            for bad in (None,False,True,'approved','transport_retry_after_raw_review'):
+                altered=copy.deepcopy(decision);altered['review']=bad
                 with self.assertRaisesRegex(p.ProtocolError,'requires_explicit_review'):
-                    cli.invoke(root,worker.identity,None,'child-retry-result',
-                               {'retry_decision':decision,'expected_operation_id':plan['operation_id'],'expected_attempt':2})
+                    cli.invoke(root,worker.identity,None,'child-retry-result',altered)
             self.assertEqual(worker.result_retry_status()['attempts_used'],1)
-            decision={'retry_decision':'same_result_cas_after_raw_and_permission_review',
-                      'expected_operation_id':plan['operation_id'],'expected_attempt':2}
             status=cli.invoke(root,worker.identity,None,'child-result-retry-status',{})
             self.assertEqual(status['operation_id'],plan['operation_id']);self.assertEqual(status['next_attempt'],2)
             packet=cli.invoke(root,worker.identity,None,'child-retry-result',decision)
@@ -252,6 +270,58 @@ class ResultCASRetry(unittest.TestCase):
             with self.assertRaisesRegex(p.ProtocolError,'operation_mismatch'):
                 cli.invoke(root,worker.identity,None,'child-retry-result',decision)
             self.assertEqual(worker.result_retry_status()['attempts_used'],2)
+
+    def test_known_permission_denial_preserved_and_explicit_review_allows_exact_cas(self):
+        worker,plan=self.ready();original=p.canonical(plan)
+        error={'category':'approval_blocked','code':'lite_approval_blocked'}
+        worker.accept_result({'isError':True},write_error=error)
+        failure=copy.deepcopy(worker.state['current']['result_failure'])
+        with self.assertRaisesRegex(p.ProtocolError,'denial_cannot_be_reclassified'):
+            reviewed_retry(worker,plan['operation_id'],2)
+        retry=reviewed_retry(worker,plan['operation_id'],2,disposition='permission_denied')
+        self.assertEqual(p.canonical(retry),original)
+        status=worker.result_retry_status();self.assertEqual(status['original_failure'],failure)
+        self.assertEqual(status['reviews'][0]['prior_disposition'],'permission_denied')
+        self.assertEqual(status['reviews'][0]['authority'],'controller_declaration_only_actual_tool_review_required')
+        self.assertEqual(status['reviews'][0]['document_id'],plan['document_id'])
+
+    def test_semantically_reviewed_denial_never_relabels_original_provider_unknown(self):
+        worker,plan=self.ready();worker.accept_result({'isError':True})
+        reviewed_retry(worker,plan['operation_id'],2,disposition='permission_denied')
+        self.assertEqual(worker.result_retry_status()['original_failure']['category'],'provider_unknown')
+        worker.accept_result({'isError':True})
+        with self.assertRaisesRegex(p.ProtocolError,'denied_again_stop'):
+            reviewed_retry(worker,plan['operation_id'],3,disposition='permission_denied')
+        status=worker.result_retry_status();self.assertTrue(status['retry_blocked']);self.assertIsNone(status['next_attempt'])
+        self.assertEqual(status['reviews'][-1]['outcome'],'denied_again_stop')
+        self.assertEqual(status['attempts_used'],2)
+
+    def test_structured_second_denial_burns_stop_across_journal_rollback(self):
+        worker,plan=self.ready();worker.accept_result(None)
+        reviewed_retry(worker,plan['operation_id'],2)
+        before=private_read(self.base/'route'/'journal.json')
+        worker.accept_result({'isError':True},write_error={'category':'approval_blocked','code':'lite_approval_blocked'})
+        private_write(self.base/'route'/'journal.json',before)
+        with self.assertRaisesRegex(p.ProtocolError,'denied_again_stop'):
+            reviewed_retry(worker,plan['operation_id'],3)
+        self.assertTrue(worker.result_retry_status()['retry_blocked'])
+
+    def test_review_must_bind_exact_document_plan_and_original_revision(self):
+        worker,plan=self.ready()
+        for key,value in (('expected_plan_sha256','0'*64),('expected_document_id','other-document'),
+                          ('expected_required_revision_id','fresh-revision')):
+            with self.subTest(key=key),self.assertRaisesRegex(p.ProtocolError,'review_binding_mismatch'):
+                reviewed_retry(worker,plan['operation_id'],2,**{key:value})
+        self.assertEqual(worker.result_retry_status()['attempts_used'],1)
+
+    def test_old_live_result_retry_not_given_new_review_contract(self):
+        worker,plan=self.ready()
+        with worker.journal.locked():
+            state=worker.journal.read();del state['current']['result_recovery'];worker._write(state)
+        before=private_read(self.base/'route'/'journal.json')
+        with self.assertRaisesRegex(p.ProtocolError,'result_review_contract_required_new_release'):
+            reviewed_retry(worker,plan['operation_id'],2)
+        self.assertEqual(private_read(self.base/'route'/'journal.json'),before)
 
     def test_ack_cleanup_keeps_only_current_seal_and_all_bounded_fences(self):
         worker,plan=self.ready();worker.accept_result(ack(plan,'rev4'))

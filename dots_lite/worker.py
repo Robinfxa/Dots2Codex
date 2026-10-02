@@ -18,6 +18,9 @@ from .storage import Journal, private_read, private_write, fsync_dir, burn_fence
 
 RESULT_CAS_CONTRACT = 'dots-lite-result-cas/1'
 RESULT_CAS_MAX_ATTEMPTS = 3
+UPLOAD_REVIEW_CONTRACT = 'dots-lite-reviewed-upload/1'
+UPLOAD_MAX_ATTEMPTS = 3
+RESULT_REVIEW_CONTRACT = 'dots-lite-reviewed-result/1'
 
 
 def _clock():
@@ -174,9 +177,11 @@ class Worker(_Actor):
         if current is not None:
             keep.add(Path(current['input_path']))
             if current['artifact'] is not None:keep.add(Path(current['artifact']['path']))
+            if type(current.get('request_view')) is dict:keep.add(Path(current['request_view']['path']))
         changed=False
         for item in state['history']:
             paths=[self.journal.directory/('input-'+item['request_sha256']+'.json'),
+                   self.journal.directory/('view-'+item['request_sha256']+'.json'),
                    self.journal.directory/('result-'+item['result_id']+'.json')]
             if item.get('result_publication_operation_id'):
                 paths.append(self._result_seal_path(item['result_publication_operation_id']))
@@ -235,11 +240,13 @@ class Worker(_Actor):
                     require(str(metadata.get('size'))==str(desc['byte_length']) and metadata.get('trashed',False) is False,'request_metadata_size_mismatch')
             raw=private_read(raw_path,state['grant']['limits']['max_request_bytes'])
             require(len(raw)==desc['byte_length'] and sha256(raw)==desc['request_sha256'],'request_bytes_mismatch')
-            request=strict_json(raw);require(type(request) is dict,'invalid_request')
-            from .wire import validate_request
-            validate_request(request)
+            from .request_view import validate_source,preflight
+            request=validate_source(raw,max_request_bytes=state['grant']['limits']['max_request_bytes'])
             require(request.get('model')==route['model'] and type(request.get('reasoning')) is dict and request['reasoning'].get('effort')==route['reasoning_effort'],'request_pair_mismatch')
             require('reasoning_effort' not in request and 'model_reasoning_effort' not in request,'ambiguous_reasoning_effort')
+            preflight(raw,binding={'actor_task_id':self.identity,'request_id':desc['request_id'],
+                                  'request_sha256':desc['request_sha256'],'package_sha256':state['grant']['package_sha256'],
+                                  'route_id':route['route_id']},max_request_bytes=state['grant']['limits']['max_request_bytes'])
             path=self.journal.directory/('input-'+desc['request_sha256']+'.json');private_write(path,raw,immutable=True)
             op=secrets.token_hex(16);record=copy.deepcopy(state['record'])
             record.update(phase='BEGIN',operation_id=op,consumed_seq=desc['seq'],request=copy.deepcopy(desc),begin_operation_id=op,result=None)
@@ -252,12 +259,27 @@ class Worker(_Actor):
                                             if previous.get('result_publication') else {})})
             state.update(phase='BEGIN_PREPARED',route=copy.deepcopy(route),pending_plan=plan,write_status='prepared',
                          current={'descriptor':copy.deepcopy(desc),'input_path':str(path.resolve()),'exposure':'INPUT_NOT_EXPOSED',
-                                  'artifact':None,'upload_attempts':0,'upload_receipt':None})
+                                  'artifact':None,'upload_attempts':0,'upload_receipt':None,
+                                  'upload_recovery':{'contract':UPLOAD_REVIEW_CONTRACT,'failures':[],'reviews':[]}})
             self._write(state)
             # Payloads are disposable only after the next authenticated ACK;
             # compact identity/fence history remains in the bounded journal.
             self._cleanup_acknowledged(state)
             return copy.deepcopy(plan)
+
+    def _view_binding(self,state):
+        return {'actor_task_id':self.identity,'request_id':state['current']['descriptor']['request_id'],
+                'request_sha256':state['current']['descriptor']['request_sha256'],
+                'package_sha256':state['grant']['package_sha256'],'route_id':state['route']['route_id']}
+
+    def _build_view(self,state):
+        from .request_view import RequestViewStore
+        current=state['current'];desc=current['descriptor']
+        raw=private_read(current['input_path'],state['grant']['limits']['max_request_bytes'])
+        require(sha256(raw)==desc['request_sha256'] and len(raw)==desc['byte_length'],'durable_input_changed')
+        store=RequestViewStore(self.journal.directory/'request-view-cache',
+                               max_request_bytes=state['grant']['limits']['max_request_bytes'])
+        return store.prepare(raw,binding=self._view_binding(state))
 
     def accept_begin_and_expose(self,actual_response=None,readback=None,expose_to_path=False):
         with self.journal.locked():
@@ -268,15 +290,149 @@ class Worker(_Actor):
             if result['status'] not in {'accepted','applied'}:return result
             current=state['current'];raw=private_read(current['input_path'],state['grant']['limits']['max_request_bytes'])
             require(sha256(raw)==current['descriptor']['request_sha256'] and len(raw)==current['descriptor']['byte_length'],'durable_input_changed')
-            request=strict_json(raw)
+            token=secrets.token_hex(32)
             burn_fence(self.journal.directory,'exposure-'+str(current['descriptor']['seq'])+'.once',
                        {'request_id':current['descriptor']['request_id'],'request_sha256':current['descriptor']['request_sha256'],
-                        'begin_operation_id':state['record']['begin_operation_id'],'child_task_id':self.identity})
-            state['phase']='INPUT_EXPOSED';current['exposure']='EXPOSED';self._write(state)
-            if expose_to_path:return {'status':'exposed','exposed_path':current['input_path'],'request_sha256':current['descriptor']['request_sha256'],'byte_length':len(raw),'request_id':current['descriptor']['request_id']}
-            return request
+                        'begin_operation_id':state['record']['begin_operation_id'],'child_task_id':self.identity,
+                        'continuation_token_sha256':sha256(token.encode())})
+            # Burn the ORIGINAL exposure gate before building even a derivative.
+            # Build failure/lost return never restores exposure on restart.
+            state['phase']='INPUT_EXPOSED';current['exposure']='EXPOSED'
+            current['request_view']=None;self._write(state)
+            view=self._build_view(state);model_raw=view.model_view_bytes()
+            path=self.journal.directory/('view-'+current['descriptor']['request_sha256']+'.json')
+            private_write(path,model_raw,immutable=True)
+            current['request_view']={'binding':self._view_binding(state),'path':str(path.resolve()),
+                'sha256':sha256(model_raw),'byte_length':len(model_raw),'next_offset':0,
+                'complete':False,'token_sha256':sha256(token.encode()),'schema_deliveries':[],'schema_receipts':[]}
+            if not expose_to_path:
+                burn_fence(self.journal.directory,'view-read-'+sha256(canonical(self._view_binding(state)))+'-0.once',
+                           {'binding_sha256':sha256(canonical(self._view_binding(state))),'sha256':sha256(model_raw),
+                            'offset':0,'next_offset':len(model_raw)})
+                current['request_view'].update(next_offset=len(model_raw),complete=True)
+            self._write(state)
+            self._exposure_token=token
+            if expose_to_path:
+                return {'status':'exposed','binding':self._view_binding(state),'exposure_token':token,
+                        'request_sha256':current['descriptor']['request_sha256'],
+                        'request_id':current['descriptor']['request_id'],
+                        'model_view_sha256':sha256(model_raw),'model_view_byte_length':len(model_raw)}
+            return {**view.model_view(),'exposure_token':token}
 
-    def save_actual_result(self,request_id,actual_output):
+    def _view_delivery(self,state,expected_request_id,expected_request_sha256,expected_package_sha256,exposure_token):
+        current=state['current']
+        require(state['phase']=='INPUT_EXPOSED' and current is not None and current['exposure']=='EXPOSED',
+                'request_view_requires_current_exposure')
+        delivery=current.get('request_view')
+        require(type(delivery) is dict,'request_view_original_exposure_required')
+        require(state['record']['phase']=='BEGIN' and state['record']['request']==current['descriptor'],
+                'request_view_current_request_mismatch')
+        binding=self._view_binding(state)
+        require(delivery['binding']==binding and expected_request_id==binding['request_id'] and
+                expected_request_sha256==binding['request_sha256'] and expected_package_sha256==binding['package_sha256'],
+                'request_view_binding_mismatch')
+        original=private_read(self.journal.directory/('exposure-'+str(current['descriptor']['seq'])+'.once'),8192)
+        require(original==canonical({'request_id':binding['request_id'],'request_sha256':binding['request_sha256'],
+                'begin_operation_id':state['record']['begin_operation_id'],'child_task_id':self.identity,
+                'continuation_token_sha256':delivery['token_sha256']}),'request_view_exposure_binding_changed')
+        # This is possession of the initial one-use exposure continuation, not
+        # an attestation that an LLM read or retained any content. Never persist
+        # or recover the clear token in the adapter. A fresh adapter runtime
+        # stops; opaque model compaction cannot be detected by this token.
+        require(isinstance(exposure_token,str) and re.fullmatch('[0-9a-f]{64}',exposure_token) is not None and hmac.compare_digest(sha256(exposure_token.encode()),delivery['token_sha256']),
+                'request_view_exposure_continuation_required')
+        return delivery
+
+    def _issued_view_coverage(self,prefix,total,evidence):
+        """Independent immutable ranges own coverage, never mutable booleans."""
+        offset=0
+        while offset<total:
+            path=self.journal.directory/(prefix+str(offset)+'.once')
+            if not path.exists() and not path.is_symlink():break
+            raw=private_read(path,8192);record=strict_json(raw)
+            require(type(record) is dict,'request_view_exposure_history_corrupt')
+            end=record.get('next_offset')
+            require(type(end) is int and offset<end<=total and
+                    raw==canonical({**evidence,'offset':offset,'next_offset':end}),
+                    'request_view_exposure_history_corrupt')
+            offset=end
+        return offset
+
+    def _deliver_view_chunk(self,prefix,raw,evidence,offset,max_bytes):
+        from .request_view import chunk_bytes
+        coverage=self._issued_view_coverage(prefix,len(raw),evidence)
+        require(type(offset) is int and 0<=offset<=coverage,'request_view_noncontiguous_exposure')
+        replayed=offset<coverage or coverage==len(raw)
+        # A reread stops at the already-issued boundary even when the requested
+        # maximum is larger; it cannot accidentally issue additional bytes.
+        chunk=chunk_bytes(raw[:coverage] if replayed else raw,offset,max_bytes)
+        chunk.update(total_bytes=len(raw),sha256=sha256(raw),complete=chunk['next_offset']==len(raw))
+        if not replayed:
+            burn_fence(self.journal.directory,prefix+str(offset)+'.once',
+                       {**evidence,'offset':offset,'next_offset':chunk['next_offset']})
+            coverage=chunk['next_offset']
+        return {**chunk,'replayed':replayed},coverage
+
+    def acquire_model_view(self,expected_request_id,expected_request_sha256,expected_package_sha256,exposure_token,
+                           offset=0,max_bytes=2048):
+        with self.journal.locked():
+            state=self.journal.read();self._validate(state)
+            delivery=self._view_delivery(state,expected_request_id,expected_request_sha256,expected_package_sha256,exposure_token)
+            require(type(max_bytes) is int and 4<=max_bytes<=4096,'invalid_request_view_chunk_limit')
+            path=self.journal.directory/('view-'+expected_request_sha256+'.json')
+            require(Path(delivery['path'])==path.resolve(),'request_view_path_changed')
+            raw=private_read(path,8*1024*1024)
+            require(len(raw)==delivery['byte_length'] and sha256(raw)==delivery['sha256'],'request_view_changed')
+            # Hash-check authoritative original bytes too; a derivative cache
+            # never becomes authority for a different current request.
+            current=state['current'];source=private_read(current['input_path'],state['grant']['limits']['max_request_bytes'])
+            require(sha256(source)==expected_request_sha256 and len(source)==current['descriptor']['byte_length'],'durable_input_changed')
+            evidence={'binding_sha256':sha256(canonical(delivery['binding'])),'sha256':sha256(raw)}
+            chunk,coverage=self._deliver_view_chunk('view-read-'+sha256(canonical(delivery['binding']))+'-',raw,evidence,offset,max_bytes)
+            if delivery['next_offset']!=coverage or delivery['complete']!=(coverage==len(raw)):
+                delivery.update(next_offset=coverage,complete=coverage==len(raw));self._write(state)
+            return {**chunk,'binding':copy.deepcopy(delivery['binding'])}
+
+    def expose_tool_schema(self,expected_request_id,expected_request_sha256,expected_package_sha256,exposure_token,
+                           namespace,name,reference=None,offset=0,max_bytes=2048):
+        with self.journal.locked():
+            state=self.journal.read();self._validate(state)
+            delivery=self._view_delivery(state,expected_request_id,expected_request_sha256,expected_package_sha256,exposure_token)
+            require(delivery['complete'],'request_view_incomplete')
+            require(type(max_bytes) is int and 4<=max_bytes<=4096,'invalid_request_view_chunk_limit')
+            view=self._build_view(state);model_raw=view.model_view_bytes()
+            require(self._issued_view_coverage('view-read-'+sha256(canonical(delivery['binding']))+'-',len(model_raw),
+                {'binding_sha256':sha256(canonical(delivery['binding'])),'sha256':sha256(model_raw)})==len(model_raw),
+                'request_view_incomplete')
+            bundle=view.exact_schema(namespace,name,reference=reference)
+            receipt=view.schema_receipt(namespace,name);raw=canonical(bundle)
+            entries=delivery['schema_deliveries'];entry=next((x for x in entries if x['reference']==receipt),None)
+            if entry is None:
+                entry={'reference':receipt,'next_offset':0,'sha256':sha256(raw),'complete':False};entries.append(entry)
+            require(entry['sha256']==sha256(raw),'request_view_schema_changed')
+            evidence={'reference':receipt,'sha256':sha256(raw)}
+            chunk,coverage=self._deliver_view_chunk('schema-read-'+sha256(canonical(receipt))+'-',raw,evidence,offset,max_bytes)
+            changed=entry['next_offset']!=coverage or entry['complete']!=(coverage==len(raw))
+            entry.update(next_offset=coverage,complete=coverage==len(raw))
+            if entry['complete'] and receipt not in delivery['schema_receipts']:
+                delivery['schema_receipts'].append(receipt);changed=True
+            if changed:self._write(state)
+            return {**chunk,'binding':copy.deepcopy(delivery['binding']),'reference':receipt}
+
+    def _verify_view_acquisition(self,state,view,delivery):
+        raw=view.model_view_bytes()
+        require(delivery['complete'] and delivery['sha256']==sha256(raw) and delivery['byte_length']==len(raw) and
+                self._issued_view_coverage('view-read-'+sha256(canonical(delivery['binding']))+'-',len(raw),
+                    {'binding_sha256':sha256(canonical(delivery['binding'])),'sha256':sha256(raw)})==len(raw),
+                'request_view_incomplete')
+        for receipt in delivery['schema_receipts']:
+            bundle=view.exact_schema(receipt.get('namespace'),receipt.get('name'),reference=receipt)
+            schema_raw=canonical(bundle)
+            require(self._issued_view_coverage('schema-read-'+sha256(canonical(receipt))+'-',len(schema_raw),
+                    {'reference':receipt,'sha256':sha256(schema_raw)})==len(schema_raw),
+                    'request_view_schema_not_exposed')
+
+    def save_actual_result(self,request_id,actual_output,exposure_token=None):
         with self.journal.locked():
             state=self.journal.read();self._validate(state)
             require(state['current'] is not None and state['current']['exposure']=='EXPOSED','result_requires_original_exposure')
@@ -286,9 +442,14 @@ class Worker(_Actor):
                 require(sha256(raw)==artifact['result_sha256'] and strict_json(raw)['output']==actual_output,'immutable_result_conflict')
                 return copy.deepcopy(artifact)
             require(state['phase']=='INPUT_EXPOSED','result_requires_original_exposure')
-            from .wire import validate_response
-            request=strict_json(private_read(current['input_path'],state['grant']['limits']['max_request_bytes']))
-            validate_response(actual_output,request)
+            self._view_delivery(state,request_id,desc['request_sha256'],state['grant']['package_sha256'],
+                                exposure_token if exposure_token is not None else getattr(self,'_exposure_token',None))
+            delivery=current.get('request_view')
+            require(type(delivery) is dict and delivery['binding']==self._view_binding(state),
+                    'request_view_original_exposure_required')
+            require(delivery['complete'],'request_view_incomplete')
+            view=self._build_view(state);self._verify_view_acquisition(state,view,delivery)
+            view.validate_exposed(actual_output,delivery['schema_receipts'])
             record=state['record'];result_id=secrets.token_hex(16)
             payload={'protocol':PROTOCOL,'kind':'result','result_id':result_id,'output':copy.deepcopy(actual_output),
                      **{k:record[k] for k in ('activation_id','route_id','begin_operation_id','child_task_id','model','reasoning_effort')},
@@ -298,15 +459,161 @@ class Worker(_Actor):
             artifact={'path':str(path.resolve()),'result_id':result_id,'result_sha256':sha256(raw),'byte_length':len(raw)}
             current['artifact']=artifact;state['phase']='RESULT_SAVED';self._write(state);return copy.deepcopy(artifact)
 
+    def _upload_artifact(self,state):
+        require(state['phase']=='RESULT_SAVED' and state['pending_plan'] is None,
+                'result_upload_not_allowed')
+        current=state['current'];artifact=current['artifact']
+        require(current.get('upload_receipt') is None,'upload_receipt_already_accepted')
+        recovery=current.get('upload_recovery')
+        # A newer binary never retrofits recovery authority onto an old live run.
+        require(type(recovery) is dict and set(recovery)=={'contract','failures','reviews'} and
+                recovery.get('contract')==UPLOAD_REVIEW_CONTRACT and
+                type(recovery['failures']) is list and type(recovery['reviews']) is list,
+                'upload_review_contract_required_new_release')
+        expected=self.journal.directory/('result-'+artifact['result_id']+'.json')
+        require(Path(artifact['path'])==expected.resolve(),'immutable_result_path_changed')
+        raw=private_read(expected,state['grant']['limits']['max_result_bytes'])
+        require(len(raw)==artifact['byte_length'] and sha256(raw)==artifact['result_sha256'],
+                'immutable_result_changed')
+        return artifact
+
+    def _upload_attempt_evidence(self,state,artifact,attempt):
+        return {'contract':UPLOAD_REVIEW_CONTRACT,'journal_id':state['journal_id'],
+                'actor_task_id':self.identity,'result_id':artifact['result_id'],
+                'result_sha256':artifact['result_sha256'],'folder_id':state['grant']['folder_id'],
+                'attempt':attempt}
+
+    def _upload_attempts(self,state,artifact):
+        count=0;gap=False
+        for attempt in range(1,UPLOAD_MAX_ATTEMPTS+1):
+            path=self.journal.directory/('result-upload-'+artifact['result_id']+'-'+str(attempt)+'.once')
+            if not path.exists() and not path.is_symlink():gap=True;continue
+            require(not gap,'upload_attempt_history_corrupt')
+            require(private_read(path,8192)==canonical(self._upload_attempt_evidence(state,artifact,attempt)),
+                    'upload_attempt_history_corrupt')
+            count=attempt
+        recorded=state['current']['upload_attempts']
+        require(type(recorded) is int and 0<=recorded<=count,'upload_attempt_history_corrupt')
+        return count
+
+    def _upload_denial_path(self,artifact):
+        return self.journal.directory/('result-upload-'+artifact['result_id']+'-denied-again.once')
+
+    def _stop_denied_upload(self,state,artifact,attempt):
+        path=self._upload_denial_path(artifact)
+        if not path.exists() and not path.is_symlink():
+            burn_fence(self.journal.directory,path.name,self._upload_attempt_evidence(state,artifact,attempt))
+
+    def _issue_upload_attempt(self,state,artifact,expected_attempt):
+        count=self._upload_attempts(state,artifact)
+        require(count<UPLOAD_MAX_ATTEMPTS,'upload_attempt_budget_exhausted')
+        require(type(expected_attempt) is int and expected_attempt==count+1,'upload_attempt_mismatch')
+        denied=self._upload_denial_path(artifact)
+        require(not denied.exists() and not denied.is_symlink(),'upload_denied_again_stop')
+        burn_fence(self.journal.directory,'result-upload-'+artifact['result_id']+'-'+str(expected_attempt)+'.once',
+                   self._upload_attempt_evidence(state,artifact,expected_attempt))
+        state['current']['upload_attempts']=expected_attempt;self._write(state)
+        return copy.deepcopy(artifact)
+
     def record_upload_attempt(self):
+        """Reserve the first upload only; retries require a distinct review."""
         with self.journal.locked():
-            state=self.journal.read();self._validate(state)
-            require(state['phase']=='RESULT_SAVED' and state['pending_plan'] is None,'result_upload_not_allowed')
-            current=state['current'];artifact=current['artifact']
-            require(current['upload_attempts']<3,'upload_attempt_budget_exhausted')
-            raw=private_read(artifact['path'],state['grant']['limits']['max_result_bytes'])
-            require(len(raw)==artifact['byte_length'] and sha256(raw)==artifact['result_sha256'],'immutable_result_changed')
-            current['upload_attempts']+=1;self._write(state);return copy.deepcopy(artifact)
+            state=self.journal.read();self._validate(state);artifact=self._upload_artifact(state)
+            require(self._upload_attempts(state,artifact)==0,'upload_retry_requires_explicit_review')
+            return self._issue_upload_attempt(state,artifact,1)
+
+    def record_upload_failure(self,error):
+        """Capture bounded diagnostics without relabeling provider/permission failures."""
+        allowed={'approval_blocked':'lite_approval_blocked','transport_unknown':'lite_transport_unknown',
+                 'provider_unknown':'lite_response_invalid'}
+        require(type(error) is dict and set(error)<={'category','code','status'} and
+                error.get('category') in allowed and error.get('code')==allowed[error['category']],
+                'safe_upload_diagnostic_required')
+        if 'status' in error:
+            require(type(error['status']) is int and 100<=error['status']<=599,'safe_upload_diagnostic_required')
+        with self.journal.locked():
+            state=self.journal.read();self._validate(state);artifact=self._upload_artifact(state)
+            current=state['current'];attempt=self._upload_attempts(state,artifact)
+            require(attempt>0,'result_upload_not_allowed')
+            failure={**error,'attempt':attempt};failures=current['upload_recovery']['failures']
+            previous=[item for item in failures if item['attempt']==attempt]
+            require(not previous or previous==[failure],'upload_failure_already_recorded')
+            if not previous:failures.append(copy.deepcopy(failure))
+            # Preserve the first original machine disposition, including an
+            # unrecognized denial originally captured as provider_unknown.
+            current.setdefault('upload_failure',copy.deepcopy(failure))
+            if attempt>=2 and error['category']=='approval_blocked':
+                self._stop_denied_upload(state,artifact,attempt)
+            current['upload_attempts']=attempt;self._write(state)
+            return {'ok':False,'status':'upload_blocked' if error['category']=='approval_blocked' else 'upload_unknown',
+                    'error':copy.deepcopy(error),'retry_requires_raw_review':True,
+                    'retry_requires_permission_review':True,
+                    'retry_blocked':self._upload_denial_path(artifact).exists()}
+
+    def upload_retry_status(self):
+        """Read-only metadata; these references never confer tool permission."""
+        with self.journal.locked():
+            state=self.journal.read();self._validate(state);artifact=self._upload_artifact(state)
+            count=self._upload_attempts(state,artifact);recovery=state['current']['upload_recovery']
+            denied=self._upload_denial_path(artifact)
+            blocked=denied.exists() or denied.is_symlink()
+            failures=recovery['failures']
+            return {'result_id':artifact['result_id'],'result_sha256':artifact['result_sha256'],
+                    'folder_id':state['grant']['folder_id'],'byte_length':artifact['byte_length'],
+                    'attempts_used':count,'next_attempt':count+1 if count<UPLOAD_MAX_ATTEMPTS and not blocked else None,
+                    'max_attempts':UPLOAD_MAX_ATTEMPTS,'retry_blocked':blocked,
+                    'original_failure':copy.deepcopy(state['current'].get('upload_failure')),
+                    'latest_failure':copy.deepcopy(failures[-1]) if failures else None,
+                    'reviews':copy.deepcopy(recovery['reviews'])}
+
+    def retry_upload(self,expected_result_id,expected_result_sha256,expected_attempt,expected_folder_id,review):
+        """Issue the exact saved upload after an active controller declaration.
+
+        A message ID and disposition are provenance, NOT cryptographic user or
+        platform approval. The actual upload tool's permission review remains
+        authoritative. A second permission denial always stops this workflow.
+        An already-saved result with zero attempts can reserve its first upload
+        after explicit not_attempted review, without fabricating a failure.
+        """
+        with self.journal.locked():
+            state=self.journal.read();self._validate(state);artifact=self._upload_artifact(state)
+            require(expected_result_id==artifact['result_id'] and expected_result_sha256==artifact['result_sha256'],
+                    'upload_result_binding_mismatch')
+            require(expected_folder_id==state['grant']['folder_id'],'upload_folder_binding_mismatch')
+            count=self._upload_attempts(state,artifact)
+            require(type(expected_attempt) is int and expected_attempt==count+1,'upload_attempt_mismatch')
+            require(count<UPLOAD_MAX_ATTEMPTS,'upload_attempt_budget_exhausted')
+            current=state['current'];recovery=current['upload_recovery'];failures=recovery['failures']
+            require((count==0 and not failures and current.get('upload_failure') is None) or
+                    (count>0 and failures and failures[-1]['attempt']==count),'upload_failure_capture_review_required')
+            failure=failures[-1] if failures else None
+            required={'decision','controller_task_id','permission_reference','raw_result_reference','prior_disposition'}
+            require(type(review) is dict and set(review)==required and
+                    review.get('decision')=='same_immutable_result_upload_after_raw_and_permission_review',
+                    'upload_retry_requires_explicit_review')
+            require(review['controller_task_id']==self.identity,'upload_review_actor_mismatch')
+            for field in ('permission_reference','raw_result_reference'):
+                value=review[field]
+                require(isinstance(value,str) and 0<len(value)<=1024 and
+                        not any(ord(ch)<32 or ord(ch)==127 for ch in value),'upload_review_provenance_required')
+            require(review['prior_disposition'] in ({'not_attempted'} if count==0 else
+                    {'permission_denied','transport_unknown','provider_unknown'}),'upload_review_disposition_required')
+            require(failure is None or failure['category']!='approval_blocked' or review['prior_disposition']=='permission_denied',
+                    'upload_denial_cannot_be_reclassified')
+            denied_again=count>=2 and review['prior_disposition']=='permission_denied'
+            evidence={**copy.deepcopy(review),**self._upload_attempt_evidence(state,artifact,expected_attempt),
+                      'previous_attempt':count,'failure_sha256':sha256(canonical(failure)) if failure else None,
+                      'authority':'controller_declaration_only_actual_tool_review_required',
+                      'outcome':'denied_again_stop' if denied_again else ('initial_dispatch_declared' if count==0 else 'retry_declared')}
+            # Persist review separately before the one-use dispatch marker. A
+            # crash may consume a dispatch but can never invent new output.
+            prior=[item for item in recovery['reviews'] if item['attempt']==expected_attempt]
+            require(not prior or prior==[evidence],'upload_review_already_recorded')
+            if not prior:recovery['reviews'].append(evidence)
+            if denied_again:self._stop_denied_upload(state,artifact,count)
+            state=self._write(state)
+            if denied_again:raise ProtocolError('upload_denied_again_stop')
+            return self._issue_upload_attempt(state,artifact,expected_attempt)
 
     def _result_seal_mac(self,value):
         key=bytes.fromhex(self.key) if isinstance(self.key,str) else self.key
@@ -414,6 +721,7 @@ class Worker(_Actor):
             seal=canonical({'binding':binding,'mac':self._result_seal_mac(binding)})
             private_write(self._result_seal_path(plan['operation_id']),seal,immutable=True)
             state['current']['upload_receipt']=copy.deepcopy(receipt)
+            state['current']['result_recovery']={'contract':RESULT_REVIEW_CONTRACT,'failures':[],'reviews':[]}
             state['current']['result_publication']={'operation_id':plan['operation_id'],'seal_sha256':sha256(seal),
                                                     'attempts':0,'quarantined':False}
             state.update(phase='RESULT_PREPARED',pending_plan=plan,write_status='prepared')
@@ -424,32 +732,107 @@ class Worker(_Actor):
             plan=self._saved_result_plan(state)
             return self._issue_result_attempt(state,plan,1)
 
+    def _result_denial_path(self,plan):
+        return self.journal.directory/('result-cas-'+plan['operation_id']+'-denied-again.once')
+
+    def _result_review_state(self,state):
+        recovery=state['current'].get('result_recovery')
+        require(type(recovery) is dict and set(recovery)=={'contract','failures','reviews'} and
+                recovery.get('contract')==RESULT_REVIEW_CONTRACT and
+                type(recovery['failures']) is list and type(recovery['reviews']) is list,
+                'result_review_contract_required_new_release')
+        return recovery
+
+    def _stop_denied_result(self,state,plan,attempt):
+        path=self._result_denial_path(plan)
+        if not path.exists() and not path.is_symlink():
+            burn_fence(self.journal.directory,path.name,self._result_attempt_evidence(state,plan,attempt))
+
+    def _record_result_failure(self,state,plan,result,error):
+        recovery=self._result_review_state(state)
+        allowed={'approval_blocked':'lite_approval_blocked','transport_unknown':'lite_transport_unknown',
+                 'provider_unknown':'lite_response_invalid'}
+        require(type(error) is dict and set(error)<={'category','code','status'} and
+                error.get('category') in allowed and error.get('code')==allowed[error['category']],
+                'safe_result_diagnostic_required')
+        if 'status' in error:
+            require(type(error['status']) is int and 100<=error['status']<=599,'safe_result_diagnostic_required')
+        attempt=self._result_attempts(state,plan)
+        failure={**copy.deepcopy(error),'attempt':attempt,'reason':result.get('reason')}
+        failures=recovery['failures'];previous=[item for item in failures if item['attempt']==attempt]
+        # Later reconciliation/ambiguous responses do not erase original cause.
+        if failure not in previous:failures.append(failure)
+        state['current'].setdefault('result_failure',copy.deepcopy(failure))
+        if attempt>=2 and error['category']=='approval_blocked':self._stop_denied_result(state,plan,attempt)
+
     def result_retry_status(self):
         """Read-only metadata for the active controller's permission review."""
         with self.journal.locked():
             state=self.journal.read();self._validate(state);plan=self._saved_result_plan(state)
-            count=self._result_attempts(state,plan)
+            count=self._result_attempts(state,plan);recovery=self._result_review_state(state)
+            denied=self._result_denial_path(plan);blocked=denied.exists() or denied.is_symlink()
+            failures=recovery['failures']
             return {'operation_id':plan['operation_id'],'attempts_used':count,
-                    'next_attempt':count+1 if count<RESULT_CAS_MAX_ATTEMPTS else None,
+                    'next_attempt':count+1 if count<RESULT_CAS_MAX_ATTEMPTS and not blocked else None,
                     'max_attempts':RESULT_CAS_MAX_ATTEMPTS,'write_status':state['write_status'],
                     'quarantined':self._result_quarantined(state,plan),'plan_sha256':plan['plan_sha256'],
-                    'required_revision_id':plan['body']['writeControl']['requiredRevisionId']}
+                    'document_id':plan['document_id'],'body_sha256':sha256(canonical(plan['body'])),
+                    'required_revision_id':plan['body']['writeControl']['requiredRevisionId'],
+                    'retry_blocked':blocked,'original_failure':copy.deepcopy(state['current'].get('result_failure')),
+                    'latest_failure':copy.deepcopy(failures[-1]) if failures else None,
+                    'reviews':copy.deepcopy(recovery['reviews'])}
 
-    def retry_result(self,expected_operation_id,expected_attempt):
-        """Issue one exact RESULT-only CAS after explicit controller review.
+    def retry_result(self,expected_operation_id,expected_attempt,expected_plan_sha256=None,
+                     expected_document_id=None,expected_required_revision_id=None,review=None):
+        """Issue one exact sealed RESULT CAS after current raw/permission review.
 
-        This local protocol primitive is not a permission attestation. The
-        active native controller must review the actual prior outcome and its
-        current authority before calling; neither Docs nor saved booleans grant
-        permission. The explicit operation AND attempt prevent an old review
-        being reused for a subsequent dispatch. No automatic retry calls this.
+        Review references record an active controller declaration, not user or
+        platform approval. The connector's actual permission review remains
+        authoritative. Existing adequate user authority may be re-presented;
+        fresh chat confirmation is not mechanically required by this primitive.
         """
         with self.journal.locked():
             state=self.journal.read();self._validate(state);plan=self._saved_result_plan(state)
             require(expected_operation_id==plan['operation_id'],'result_publication_operation_mismatch')
+            count=self._result_attempts(state,plan)
+            require(not self._result_quarantined(state,plan),'result_publication_quarantined')
+            require(count<RESULT_CAS_MAX_ATTEMPTS,'result_publication_attempt_budget_exhausted')
+            require(type(expected_attempt) is int and expected_attempt==count+1,'result_publication_attempt_mismatch')
+            require(expected_plan_sha256==plan['plan_sha256'] and expected_document_id==plan['document_id'] and
+                    expected_required_revision_id==plan['body']['writeControl']['requiredRevisionId'],
+                    'result_review_binding_mismatch')
+            recovery=self._result_review_state(state)
+            required={'decision','controller_task_id','permission_reference','raw_result_reference','prior_disposition'}
+            require(type(review) is dict and set(review)==required and
+                    review.get('decision')=='same_result_cas_after_raw_and_permission_review',
+                    'result_retry_requires_explicit_review')
+            require(review['controller_task_id']==self.identity,'result_review_actor_mismatch')
+            for field in ('permission_reference','raw_result_reference'):
+                value=review[field]
+                require(isinstance(value,str) and 0<len(value)<=1024 and
+                        not any(ord(ch)<32 or ord(ch)==127 for ch in value),'result_review_provenance_required')
+            require(review['prior_disposition'] in {'permission_denied','transport_unknown','provider_unknown'},
+                    'result_review_disposition_required')
+            failures=[item for item in recovery['failures'] if item['attempt']==count]
+            failure=failures[-1] if failures else None
+            require(not any(item['category']=='approval_blocked' for item in failures) or
+                    review['prior_disposition']=='permission_denied','result_denial_cannot_be_reclassified')
+            denied_again=count>=2 and review['prior_disposition']=='permission_denied'
+            evidence={**copy.deepcopy(review),**self._result_attempt_evidence(state,plan,expected_attempt),
+                      'document_id':plan['document_id'],'required_revision_id':expected_required_revision_id,
+                      'previous_attempt':count,'failure_sha256':sha256(canonical(failure)) if failure else None,
+                      'authority':'controller_declaration_only_actual_tool_review_required',
+                      'outcome':'denied_again_stop' if denied_again else 'retry_declared'}
+            prior=[item for item in recovery['reviews'] if item['attempt']==expected_attempt]
+            require(not prior or prior==[evidence],'result_review_already_recorded')
+            if not prior:recovery['reviews'].append(evidence)
+            if denied_again:self._stop_denied_result(state,plan,count)
+            state=self._write(state)
+            denied=self._result_denial_path(plan)
+            require(not denied.exists() and not denied.is_symlink(),'result_denied_again_stop')
             return self._issue_result_attempt(state,plan,expected_attempt)
 
-    def accept_result(self,actual_response=None,readback=None):
+    def accept_result(self,actual_response=None,readback=None,write_error=None):
         with self.journal.locked():
             state=self.journal.read();self._validate(state);require(state['phase']=='RESULT_PREPARED','result_not_pending')
             # Existing journals retain read-only exact acceptance/reconciliation;
@@ -477,6 +860,13 @@ class Worker(_Actor):
                         state['current']['result_publication']['quarantined']=True
                 if sealed:
                     result={**result,'status':'unknown','quarantined':self._result_quarantined(state,plan)}
+                    if readback is None and state['current'].get('result_recovery') is not None:
+                        diagnostic=write_error if write_error is not None else (
+                            {'category':'transport_unknown','code':'lite_transport_unknown'} if actual_response is None else
+                            {'category':'provider_unknown','code':'lite_response_invalid'})
+                        self._record_result_failure(state,plan,result,diagnostic)
+                    denied=self._result_denial_path(plan)
+                    result['retry_blocked']=denied.exists() or denied.is_symlink()
                 state['write_status']=result['status'];self._write(state);return result
             state['outbox']=result['snapshot'];state['record']=plan['record']
             state.update(pending_plan=None,write_status='accepted',phase='RESULT_COMMITTED')

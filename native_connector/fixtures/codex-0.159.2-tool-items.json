@@ -1,0 +1,19 @@
+{
+  "classification": "synthetic compatibility fixture from observed Codex 0.159.2 item-ID requirements; not a live-client execution",
+  "client_version": "0.159.2",
+  "tools": [
+    {"type":"namespace","name":"functions","tools":[
+      {"type":"function","name":"exec_command","description":"Execute a command on the Mac under its own approvals and sandbox","parameters":{"type":"object","properties":{"cmd":{"type":"string"},"workdir":{"type":"string"}},"required":["cmd"],"additionalProperties":false}},
+      {"type":"custom","name":"apply_patch","description":"Apply a patch on the Mac","format":{"type":"text"}}
+    ]}
+  ],
+  "items": [
+    {"id":"fc_3dd67237a1b24c40a61fc97c1be360e1","type":"function_call","call_id":"call_6ca047e4a4d442ffaf8eaf707f044c45","namespace":"functions","name":"exec_command","arguments":"{\"cmd\":\"pwd\",\"workdir\":\"/Users/example/project\"}"},
+    {"id":"ctc_9b38a1d19cfc4933b295e24f63a3e590","type":"custom_tool_call","call_id":"call_bdf4bf7b4b5b4b698ff71635748dc947","namespace":"functions","name":"apply_patch","input":"*** Begin Patch\n*** Add File: fixture.txt\n+fixture\n*** End Patch"}
+  ],
+  "outputs": [
+    {"type":"function_call_output","call_id":"call_6ca047e4a4d442ffaf8eaf707f044c45","output":"/Users/example/project\n"},
+    {"type":"custom_tool_call_output","call_id":"call_bdf4bf7b4b5b4b698ff71635748dc947","output":"Success. Updated fixture.txt"}
+  ],
+  "incompatible_id": "3dd67237-a1b2-4c40-a61f-c97c1be360e1"
+}

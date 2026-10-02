@@ -18,6 +18,7 @@ from dots_lite.launcher import (Launcher, CONTRACT, legacy_inspection, join_text
                                 stop_owned, resolve_codex_home, safe_error)
 from dots_lite.private_io import private_dir, save, private_write
 from dots_lite.protocol import ProtocolError, DEFAULT_LIMITS, PROTOCOL, grant_hash
+from dots_lite.authorization import CONTRACT as AUTHORIZATION_CONTRACT, authorization_scope
 
 
 class ConfigTransactions(unittest.TestCase):
@@ -211,7 +212,8 @@ class MigrationAndLifecycle(unittest.TestCase):
         self.assertEqual(output.getvalue(),'')
         marker,raw=value.split(' ',1)
         self.assertEqual(marker,'DOTS2CODEX_GLOBAL_JOIN_V3')
-        self.assertEqual(json.loads(raw),{'activation_id':'a'*32,'inbox_id':'inbox','grant_sha256':grant_hash(grant),'join_code':'c'*64})
+        self.assertEqual(json.loads(raw),{'activation_id':'a'*32,'inbox_id':'inbox','grant_sha256':grant_hash(grant),'join_code':'c'*64,
+            'transport_authorization':authorization_scope(grant)})
 
     def test_v3_import_does_not_import_legacy_graph(self):
         result=subprocess.run([sys.executable,'-c',
@@ -243,7 +245,7 @@ class SupervisorIntegration(unittest.TestCase):
             'folder_id': 'folder', 'seconds': 14400, 'limits': dict(DEFAULT_LIMITS), 'wait_seconds': 900, 'port': 0}
         save(self.runtime / 'spec.json', {'contract': CONTRACT, 'run_id': self.run_id,
             'runtime': str(self.runtime), 'created_at': int(time.time()), 'package_sha256': 'b'*64,
-            'settings': self.settings})
+            'transport_authorization_contract': AUTHORIZATION_CONTRACT, 'settings': self.settings})
         private_write(self.runtime / 'join-key', b'c'*64)
         from lite_tests.gateway_fixtures import FakeGoogle
         class Google(FakeGoogle):
@@ -371,7 +373,7 @@ class SupervisorIntegration(unittest.TestCase):
         save(self.state/'current.json', {'contract':CONTRACT,'run_id':self.run_id,
             'runtime':str(self.runtime),'pid':None,'process_identity':None})
         ui=mock.Mock();ui.confirm.return_value=False
-        ports=mock.Mock()
+        ports=mock.Mock();ports.package.return_value='b'*64;ports.now.return_value=time.time()
         launcher=Launcher(root=self.root,state=self.state,ui=ui,ports=ports)
         from dots_lite.ui import Cancelled
         with mock.patch.object(launcher,'_ready',return_value={}):
