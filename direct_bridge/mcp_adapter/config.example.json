@@ -1,0 +1,20 @@
+{
+  "trust_mode": "single_owner_stdio",
+  "db_path": "REPLACE_WITH_ABSOLUTE_STATE_DATABASE_PATH",
+  "binding": {
+    "grant_id": "REPLACE_WITH_USER_APPROVED_GRANT",
+    "route_id": "REPLACE_WITH_UNIQUE_ROUTE",
+    "session_id": "REPLACE_WITH_MAC_SESSION",
+    "thread_id": "REPLACE_WITH_LOGICAL_NATIVE_THREAD",
+    "model": "REPLACE_WITH_CONFIGURED_MODEL",
+    "reasoning_effort": "xhigh"
+  },
+  "client_actor": "REPLACE_WITH_LOGICAL_MAC_CLIENT",
+  "worker_actor": "REPLACE_WITH_LOGICAL_NATIVE_CHILD",
+  "context_epoch": "REPLACE_WITH_CONTEXT_EPOCH",
+  "approval_ref": "REPLACE_WITH_EXPLICIT_USER_APPROVAL_REFERENCE",
+  "not_before": 0,
+  "expires_at": 1,
+  "max_wait_ms": 5000,
+  "http_wait_ms": 30000
+}

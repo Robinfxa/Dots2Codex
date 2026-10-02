@@ -1,0 +1,46 @@
+{
+  "scope": "synthetic IPv4 loopback HTTP + JSON + SQLite FULL commits; no inference, TLS, tunnel or native model",
+  "http_requests_per_roundtrip": 4,
+  "internal_execution_permits_per_roundtrip": 1,
+  "database": "SQLite rollback journal; synchronous=FULL; temporary local filesystem",
+  "cases": [
+    {
+      "case": "small_delta",
+      "turns": 40,
+      "request_payload_bytes": 1035,
+      "roundtrip": {
+        "min_ms": 3.306,
+        "median_ms": 3.886,
+        "p95_ms": 4.783,
+        "max_ms": 5.988
+      },
+      "stage_median_ms": {
+        "enqueue": 0.97,
+        "claim": 0.929,
+        "permit": 0.299,
+        "submit": 0.855,
+        "get_result": 0.743
+      },
+      "http_json_body_bytes_total": 143916
+    },
+    {
+      "case": "legacy_sized_request",
+      "turns": 40,
+      "request_payload_bytes": 527371,
+      "roundtrip": {
+        "min_ms": 15.392,
+        "median_ms": 17.242,
+        "p95_ms": 21.646,
+        "max_ms": 33.202
+      },
+      "stage_median_ms": {
+        "enqueue": 7.692,
+        "claim": 5.196,
+        "permit": 0.745,
+        "submit": 2.151,
+        "get_result": 1.321
+      },
+      "http_json_body_bytes_total": 42254036
+    }
+  ]
+}

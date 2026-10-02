@@ -1,0 +1,3 @@
+# Official Python MCP SDK version already available in the build workspace.
+# DIRECT.command may prepare a private environment only after local INSTALL approval.
+mcp==1.29.0

@@ -1,0 +1,103 @@
+{
+  "fixture": "synthetic only; 320 function tools; exact text, no model calls",
+  "baseline": "Published frozen RequestView projection, 16KiB per read return",
+  "token_estimate_warning": "bytes/4 heuristic only; no tokenizer installed or downloaded",
+  "rows": [
+    {
+      "round": 0,
+      "kind": "full",
+      "full_http_request": {
+        "bytes": 515000,
+        "estimated_tokens_bytes_div_4": 128750
+      },
+      "legacy_repeated_model_view": {
+        "bytes": 196000,
+        "estimated_tokens_bytes_div_4": 49000
+      },
+      "incremental_model_delivery": {
+        "bytes": 83507,
+        "estimated_tokens_bytes_div_4": 20877
+      },
+      "legacy_16KiB_read_returns": 12,
+      "incremental_context_returns": 1
+    },
+    {
+      "round": 1,
+      "kind": "delta",
+      "full_http_request": {
+        "bytes": 515216,
+        "estimated_tokens_bytes_div_4": 128804
+      },
+      "legacy_repeated_model_view": {
+        "bytes": 196216,
+        "estimated_tokens_bytes_div_4": 49054
+      },
+      "incremental_model_delivery": {
+        "bytes": 947,
+        "estimated_tokens_bytes_div_4": 237
+      },
+      "legacy_16KiB_read_returns": 12,
+      "incremental_context_returns": 1
+    },
+    {
+      "round": 2,
+      "kind": "delta",
+      "full_http_request": {
+        "bytes": 515432,
+        "estimated_tokens_bytes_div_4": 128858
+      },
+      "legacy_repeated_model_view": {
+        "bytes": 196432,
+        "estimated_tokens_bytes_div_4": 49108
+      },
+      "incremental_model_delivery": {
+        "bytes": 947,
+        "estimated_tokens_bytes_div_4": 237
+      },
+      "legacy_16KiB_read_returns": 12,
+      "incremental_context_returns": 1
+    },
+    {
+      "round": 3,
+      "kind": "delta",
+      "full_http_request": {
+        "bytes": 515648,
+        "estimated_tokens_bytes_div_4": 128912
+      },
+      "legacy_repeated_model_view": {
+        "bytes": 196648,
+        "estimated_tokens_bytes_div_4": 49162
+      },
+      "incremental_model_delivery": {
+        "bytes": 947,
+        "estimated_tokens_bytes_div_4": 237
+      },
+      "legacy_16KiB_read_returns": 13,
+      "incremental_context_returns": 1
+    }
+  ],
+  "on_demand_first_tool": {
+    "discovery_bytes": 312,
+    "exact_schema_bytes": 1531,
+    "extra_returns": 2
+  },
+  "totals": {
+    "legacy_model_view_bytes": 785296,
+    "incremental_context_bytes": 86348,
+    "incremental_with_first_discovery_and_schema_bytes": 88191,
+    "context_byte_reduction_percent": 89.0,
+    "legacy_context_read_returns": 49,
+    "incremental_context_returns": 4,
+    "warm_callback_byte_reduction_percent": 99.52
+  },
+  "not_measured": [
+    "actual model tokens",
+    "model turns",
+    "latency/TTFT",
+    "native context injection",
+    "native compaction events",
+    "Secure MCP Tunnel",
+    "Mac execution",
+    "live authorization"
+  ]
+}

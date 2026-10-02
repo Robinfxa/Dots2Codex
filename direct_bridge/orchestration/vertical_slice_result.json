@@ -1,0 +1,76 @@
+{
+  "fixture": "synthetic-native-and-Mac-driver",
+  "real_local_http": true,
+  "real_mcp_stdio_pipe": true,
+  "protocol_version": "2025-06-18",
+  "successive_callbacks": 3,
+  "native_platform_verified": false,
+  "actual_mac_tools_executed": false,
+  "external_model_api_used": false,
+  "context_kinds": [
+    "full",
+    "delta",
+    "delta",
+    "delta"
+  ],
+  "model_visible_context_bytes": [
+    28824,
+    981,
+    981,
+    981
+  ],
+  "logical_actor_bindings": 1,
+  "exact_schema_lookups": 1,
+  "runtime_diagnostics": {
+    "logical_actor_bindings": 1,
+    "full_context_returns": 1,
+    "delta_context_returns": 3,
+    "response_commits": 4,
+    "http_response_emissions_started": 4,
+    "context_payload_bytes": [
+      28772,
+      918,
+      918,
+      918
+    ]
+  },
+  "tool_calls": [
+    {
+      "name": "get_request",
+      "elapsed_ms": 2.434587
+    },
+    {
+      "name": "get_request",
+      "elapsed_ms": 8.728871
+    },
+    {
+      "name": "discover_tools",
+      "elapsed_ms": 2.550177
+    },
+    {
+      "name": "lookup_schema",
+      "elapsed_ms": 2.422465
+    },
+    {
+      "name": "submit_action_and_wait_result",
+      "elapsed_ms": 12.974645
+    },
+    {
+      "name": "submit_action_and_wait_result",
+      "elapsed_ms": 15.456792
+    },
+    {
+      "name": "submit_action_and_wait_result",
+      "elapsed_ms": 12.108595
+    },
+    {
+      "name": "finish_request",
+      "elapsed_ms": 4.681557
+    },
+    {
+      "name": "bridge_status",
+      "elapsed_ms": 1.543931
+    }
+  ],
+  "timing_scope": "local synthetic fixture only; excludes native inference, tunnel and Mac execution"
+}

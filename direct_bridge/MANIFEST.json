@@ -1,0 +1,280 @@
+{
+  "contract": "dots2codex-direct-bridge-trial/1",
+  "excluded_source_files": [],
+  "files": {
+    "LICENSE": {
+      "bytes": 1080,
+      "mode": "0644",
+      "sha256": "9246d18641b9e8294e4ef4a06213d5d8dab43ac1685b58cafe1383c5f055def1"
+    },
+    "README.md": {
+      "bytes": 6639,
+      "mode": "0644",
+      "sha256": "6eabf389d86bdf78c363b08549f27a8e84cbdc550ad910d29e94190ef66e9f75"
+    },
+    "START_HERE.zh-CN.md": {
+      "bytes": 2923,
+      "mode": "0644",
+      "sha256": "7b52d0c7cffe928890599e5ddcba966e7f614dd6db26b67056ca31c2865d131e"
+    },
+    "THIRD_PARTY_NOTICES.md": {
+      "bytes": 1559,
+      "mode": "0644",
+      "sha256": "4adac12b59ac4a80a97bde34eabb2d07c2873244bfead8c34d4145cb5712ccef"
+    },
+    "context/README.md": {
+      "bytes": 12331,
+      "mode": "0644",
+      "sha256": "60d916681bb1a11bf9c46e07a029886a036cf4836659d0819fbcd4e9cc5e0597"
+    },
+    "context/benchmark-results.json": {
+      "bytes": 2840,
+      "mode": "0644",
+      "sha256": "49f38bfe875a0e1a18b3291e63731c5f9234d47c8bbc712c9721944f41e1f0cb"
+    },
+    "context/incremental.py": {
+      "bytes": 16744,
+      "mode": "0644",
+      "sha256": "dea40dbfe32573e046c56229ba8bec1836f8e0d8a2f1d33fe8077270d313caa6"
+    },
+    "context/test_incremental.py": {
+      "bytes": 14277,
+      "mode": "0644",
+      "sha256": "941a65e2b5a1eccf26be9816b10a76c3a26138495b461108c34021b92a54c409"
+    },
+    "docs/CODEX_CLIENT.zh-CN.md": {
+      "bytes": 4464,
+      "mode": "0644",
+      "sha256": "bda99a9b03c9a8ed299785d35d5c593a69ea684dde40f6cafff49a9bedbdccc3"
+    },
+    "docs/MAC_QUICKSTART.zh-CN.md": {
+      "bytes": 10166,
+      "mode": "0644",
+      "sha256": "c98585912d2b0413aebc7fdc084b647956b6d75b4fbbd1759701120aadfa225c"
+    },
+    "docs/MCP_AND_TUNNEL.md": {
+      "bytes": 12807,
+      "mode": "0644",
+      "sha256": "5c49f4aa3d8d7794f9c474b189bce2622a43fb86854038c63e0fa7d7ba6e2c96"
+    },
+    "docs/NATIVE_CONTROLLER.zh-CN.md": {
+      "bytes": 3367,
+      "mode": "0644",
+      "sha256": "cb10321a551a4a7b8897a7a093b4a203e8baeeb9c3b999cb5e093ee5c106d4a1"
+    },
+    "facade/README.md": {
+      "bytes": 5416,
+      "mode": "0644",
+      "sha256": "87b311a486e8b5bf0344e6ff30bd6de37908cbb7694aee8210cbb8e5c92304fd"
+    },
+    "facade/__init__.py": {
+      "bytes": 0,
+      "mode": "0644",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "facade/runtime.py": {
+      "bytes": 20933,
+      "mode": "0644",
+      "sha256": "d3523e585efad95b6385dd994800cbcbe0e1fb68673b8e3b5e6f483ec2f38396"
+    },
+    "facade/test_runtime.py": {
+      "bytes": 15059,
+      "mode": "0644",
+      "sha256": "34d8a49af16ee35870f8f2cc1f217a49290c8add96c79f3feb053ead0087f8e4"
+    },
+    "facade/wire.py": {
+      "bytes": 23157,
+      "mode": "0644",
+      "sha256": "4e0c5079147f64a4c869d27918c200060db21f7a745282a8b9cbf0ecf6135539"
+    },
+    "facade/wire_support.py": {
+      "bytes": 584,
+      "mode": "0644",
+      "sha256": "526cd94a52f05b2aa044a46e24c8ebcce3afa053f5fb9ec0db630bdc6f12a152"
+    },
+    "mcp_adapter/__init__.py": {
+      "bytes": 77,
+      "mode": "0644",
+      "sha256": "38a0a7653d0059e6562ad7573248f9a84d604e0bd857e0e0b9f84f109931cb54"
+    },
+    "mcp_adapter/__main__.py": {
+      "bytes": 2099,
+      "mode": "0644",
+      "sha256": "889dc52597a36623b328cf698d55bb2cd2e9000c40559c60ed56935bf5d35e74"
+    },
+    "mcp_adapter/config.example.json": {
+      "bytes": 705,
+      "mode": "0644",
+      "sha256": "76c8a18e491e47a13d8e0598f2d6a4ba4f9a5837b864c31133277d6574f0afed"
+    },
+    "mcp_adapter/config.py": {
+      "bytes": 2983,
+      "mode": "0644",
+      "sha256": "7b824387684261306663a1d001c038db0b6b7b7eaf4f2afc779bb20d609b9be2"
+    },
+    "mcp_adapter/server.py": {
+      "bytes": 8921,
+      "mode": "0644",
+      "sha256": "3c4894ef5c3dee72334b6be5a529ee91f36e32c052ebdc95289615d329447989"
+    },
+    "mcp_adapter/tools.py": {
+      "bytes": 3008,
+      "mode": "0644",
+      "sha256": "d5e23a95e9cb2d0fddfabaf0bac5304ae63b9dfb8da7c687b7cd1ba22b20f8c2"
+    },
+    "orchestration/README.md": {
+      "bytes": 6660,
+      "mode": "0644",
+      "sha256": "4519211af8ad616d16393fdb5fc083c25d848b5d1116a6d4e86db1db629595ae"
+    },
+    "orchestration/test_vertical_slice.py": {
+      "bytes": 545,
+      "mode": "0644",
+      "sha256": "787c958af638a95d38749c18be37ef86c619cbd78e34c3e41d9858360af562d4"
+    },
+    "orchestration/vertical_slice.py": {
+      "bytes": 8286,
+      "mode": "0644",
+      "sha256": "15ecb75fcde25d52ad8751eb2e81ac96289d289aa5b09ad9a94460cd4bc7f184"
+    },
+    "orchestration/vertical_slice_result.json": {
+      "bytes": 1608,
+      "mode": "0644",
+      "sha256": "2c0c1a662f178f0606403f7ee51123ae752cd6ac84d3a58ef01e7a5c17bfadd6"
+    },
+    "requirements-mcp.txt": {
+      "bytes": 174,
+      "mode": "0644",
+      "sha256": "0c021980bd1e0d922a248e1081cbbb2e2cb0ea5c13958b5d1ce4ba85bed74440"
+    },
+    "scripts/direct.py": {
+      "bytes": 27339,
+      "mode": "0755",
+      "sha256": "7470447d37afd94938c90d89f73511744e1aa260285d96ed344c747ca88c7c3c"
+    },
+    "scripts/run_focused_tests.py": {
+      "bytes": 1223,
+      "mode": "0644",
+      "sha256": "1b49ad13a355577efe765f73c30117cdeafb0a4bd257108333fb3fa3f8f9c768"
+    },
+    "scripts/start_mcp.sh": {
+      "bytes": 474,
+      "mode": "0755",
+      "sha256": "2f08a73a2f12a57530ef916a6c8faa90b3f1eb24339a7b4ef1895ba065f7fd58"
+    },
+    "scripts/tunnel_help.sh": {
+      "bytes": 284,
+      "mode": "0755",
+      "sha256": "2c8d8264b399567e0d33d6e67f8d13c6a2cdf6fa3cb6170c6a6de953650c1c83"
+    },
+    "scripts/verify_release.py": {
+      "bytes": 1808,
+      "mode": "0644",
+      "sha256": "83bd12ed1e32d16e1354aecf174f51e2f33dab148b2f50cbc19a0cec0920ebb2"
+    },
+    "tests/mcp_fixture.py": {
+      "bytes": 1422,
+      "mode": "0644",
+      "sha256": "85989ccf5dfbce7daac4aec35daa135c48717e847dcd58d646ca41de8228836c"
+    },
+    "tests/test_direct_setup.py": {
+      "bytes": 19289,
+      "mode": "0644",
+      "sha256": "49ec41ff9b7299df22b0e71cd66684bc5368920f816f4fbf2ffcbc180c1ad680"
+    },
+    "tests/test_mcp_config.py": {
+      "bytes": 4162,
+      "mode": "0644",
+      "sha256": "d2bf94ea9d56fdb639470b8c6785ce12a11b8d02e683f02f3484d2813d4fe6fd"
+    },
+    "tests/test_mcp_stdio.py": {
+      "bytes": 8408,
+      "mode": "0644",
+      "sha256": "559a2980edd411fec739590c58ec849d2c524480d967005aed4b30444536cb49"
+    },
+    "transport/README.md": {
+      "bytes": 8902,
+      "mode": "0644",
+      "sha256": "269166ebe06f51598c3cd8b726a89d58185ffd5e481cbcae893af4041491a2fd"
+    },
+    "transport/__init__.py": {
+      "bytes": 313,
+      "mode": "0644",
+      "sha256": "7ef8938c4ff0c86acf6d81aadc78b70a95bec47a4c4540509a8d25ea3813530f"
+    },
+    "transport/benchmark-results.json": {
+      "bytes": 1197,
+      "mode": "0644",
+      "sha256": "2346479f1c9dafdb5bd7fb9b987bb6b582275a61b8122129064d673e19b999b0"
+    },
+    "transport/benchmark.py": {
+      "bytes": 7609,
+      "mode": "0644",
+      "sha256": "e4a57dba5136d4b2f9746eee72c7bdb9b2776413d4c8e8b626af3bd0681fb7c7"
+    },
+    "transport/queue.py": {
+      "bytes": 16017,
+      "mode": "0644",
+      "sha256": "8c0afd22b43d97eb5214a104b2759f54009eaa0a7b79ad7361d34259d804c406"
+    },
+    "transport/surface.py": {
+      "bytes": 2720,
+      "mode": "0644",
+      "sha256": "d586557fa8020165312e33b6197a19077e2fa60c1b316c32759dd898fdbecc3c"
+    },
+    "transport/test_queue.py": {
+      "bytes": 11214,
+      "mode": "0644",
+      "sha256": "390b2c8446897ba1b6259abf82f22a4625ebd4aa58170d78d37dee67cfd302f3"
+    }
+  },
+  "source_files": [
+    "LICENSE",
+    "README.md",
+    "START_HERE.zh-CN.md",
+    "THIRD_PARTY_NOTICES.md",
+    "context/README.md",
+    "context/benchmark-results.json",
+    "context/incremental.py",
+    "context/test_incremental.py",
+    "docs/CODEX_CLIENT.zh-CN.md",
+    "docs/MAC_QUICKSTART.zh-CN.md",
+    "docs/MCP_AND_TUNNEL.md",
+    "docs/NATIVE_CONTROLLER.zh-CN.md",
+    "facade/README.md",
+    "facade/__init__.py",
+    "facade/runtime.py",
+    "facade/test_runtime.py",
+    "facade/wire.py",
+    "facade/wire_support.py",
+    "mcp_adapter/__init__.py",
+    "mcp_adapter/__main__.py",
+    "mcp_adapter/config.example.json",
+    "mcp_adapter/config.py",
+    "mcp_adapter/server.py",
+    "mcp_adapter/tools.py",
+    "orchestration/README.md",
+    "orchestration/test_vertical_slice.py",
+    "orchestration/vertical_slice.py",
+    "orchestration/vertical_slice_result.json",
+    "requirements-mcp.txt",
+    "scripts/direct.py",
+    "scripts/run_focused_tests.py",
+    "scripts/start_mcp.sh",
+    "scripts/tunnel_help.sh",
+    "scripts/verify_release.py",
+    "tests/mcp_fixture.py",
+    "tests/test_direct_setup.py",
+    "tests/test_mcp_config.py",
+    "tests/test_mcp_stdio.py",
+    "transport/README.md",
+    "transport/__init__.py",
+    "transport/benchmark-results.json",
+    "transport/benchmark.py",
+    "transport/queue.py",
+    "transport/surface.py",
+    "transport/test_queue.py"
+  ],
+  "source_tree_sha256": "830e73a68c0a3fb77a0584bdd09945b208057a13077821de7e7a435aa84df720",
+  "tree_sha256": "830e73a68c0a3fb77a0584bdd09945b208057a13077821de7e7a435aa84df720"
+}
