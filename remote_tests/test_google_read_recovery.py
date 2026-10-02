@@ -45,6 +45,16 @@ class FakeService:
         return value
 
 
+def expected_diagnostics(category, attempts, exception_class, http_status=None, *, truncated=False):
+    value = {'category': category, 'attempts': attempts,
+             'exception_class': exception_class, 'exception_chain': [exception_class]}
+    if http_status is not None:
+        value['http_status'] = http_status
+    if truncated:
+        value['exception_chain_truncated'] = True
+    return value
+
+
 class ReadRecoveryTests(unittest.TestCase):
     def setUp(self):
         self.sleep = patch.object(clients.time, 'sleep').start()
@@ -95,7 +105,7 @@ class ReadRecoveryTests(unittest.TestCase):
         self.assertTrue(error.retryable)
         self.assertEqual(str(error), 'docs_read_transient_exhausted')
         self.assertEqual(error.diagnostics,
-                         {'category': 'http_transient', 'http_status': 503, 'attempts': 3})
+                         expected_diagnostics('http_transient', 3, 'unrecognized', 503))
         self.assertEqual(self.sleep.call_args_list, [call(1.0), call(2.0)])
         self.assertEqual(len(service.calls), 6)
         self.assert_sanitized(error)
@@ -115,13 +125,13 @@ class ReadRecoveryTests(unittest.TestCase):
     def test_transient_then_auth_stops_immediately(self):
         service, error = self.read_failure([HttpFailure(503), HttpFailure(401), {'must_not_be_read': True}])
         self.assertFalse(error.retryable)
-        self.assertEqual(error.diagnostics, {'category': 'authorization', 'http_status': 401, 'attempts': 2})
+        self.assertEqual(error.diagnostics, expected_diagnostics('authorization', 2, 'unrecognized', 401))
         self.assertEqual(len(service.calls), 4)
         self.sleep.assert_called_once_with(1.0)
 
     def test_exception_message_is_not_parsed_for_retry(self):
         service, error = self.read_failure([ValueError('503 429 timeout private secret'), {'ok': True}])
-        self.assertEqual(error.diagnostics, {'category': 'unexpected', 'attempts': 1})
+        self.assertEqual(error.diagnostics, expected_diagnostics('unexpected', 1, 'builtins.ValueError'))
         self.assertFalse(error.retryable)
         self.assertEqual(len(service.calls), 2)
         self.sleep.assert_not_called()
@@ -131,14 +141,14 @@ class ReadRecoveryTests(unittest.TestCase):
         for status in (True, '503', 'secret', 999, 0):
             with self.subTest(status=status):
                 service, error = self.read_failure([HttpFailure(status)])
-                self.assertEqual(error.diagnostics, {'category': 'unexpected', 'attempts': 1})
+                self.assertEqual(error.diagnostics, expected_diagnostics('unexpected', 1, 'unrecognized'))
                 self.assertFalse(error.retryable)
                 self.assertEqual(len(service.calls), 2)
                 self.sleep.assert_not_called()
 
     def test_validation_error_cannot_be_retried(self):
         service, error = self.read_failure([ProtocolError('tampered_private_state')])
-        self.assertEqual(error.diagnostics, {'category': 'protocol', 'attempts': 1})
+        self.assertEqual(error.diagnostics, expected_diagnostics('protocol', 1, 'remote_transport.model.ProtocolError'))
         self.assertFalse(error.retryable)
         self.sleep.assert_not_called()
         self.assertEqual(len(service.calls), 2)
@@ -147,7 +157,7 @@ class ReadRecoveryTests(unittest.TestCase):
         for failure in (ssl.SSLCertVerificationError('secret'), ssl.SSLError('secret')):
             with self.subTest(failure=type(failure).__name__):
                 service, error = self.read_failure([failure])
-                self.assertEqual(error.diagnostics, {'category': 'tls', 'attempts': 1})
+                self.assertEqual(error.diagnostics, expected_diagnostics('tls', 1, 'ssl.' + type(failure).__name__))
                 self.assertFalse(error.retryable)
                 self.sleep.assert_not_called()
                 self.assertEqual(len(service.calls), 2)
@@ -177,7 +187,7 @@ class ReadRecoveryTests(unittest.TestCase):
             outer = wrapper
         service, error = self.read_failure([outer])
         self.assertFalse(error.retryable)
-        self.assertEqual(error.diagnostics, {'category': 'unexpected', 'attempts': 1})
+        self.assertEqual(error.diagnostics, expected_diagnostics('unexpected', 1, 'builtins.ConnectionError', truncated=True))
         self.assertEqual(len(service.calls), 2)
         self.sleep.assert_not_called()
 
@@ -209,7 +219,7 @@ class ReadRecoveryTests(unittest.TestCase):
         module = types.SimpleNamespace(RefreshError=RefreshError)
         with patch.dict(sys.modules, {'google.auth.exceptions': module}):
             _, error = self.read_failure([RefreshError('private auth details')])
-        self.assertEqual(error.diagnostics, {'category': 'authorization', 'attempts': 1})
+        self.assertEqual(error.diagnostics, expected_diagnostics('authorization', 1, 'google.auth.exceptions.RefreshError'))
         self.assertFalse(error.retryable)
         self.sleep.assert_not_called()
 
@@ -304,14 +314,14 @@ class ReadBudgetTests(unittest.TestCase):
         checks = []
         self.assertEqual(clients.DocsSDKClient(service).get_document(
             'doc', deadline=110, check=lambda: checks.append(self.now)), {'ok': True})
-        self.assertEqual(checks, [100, 100])
+        self.assertEqual(checks, [100, 100, 100])
 
     def test_stop_after_failure_is_preserved_and_prevents_retry(self):
         service = FakeService([TimeoutError('secret'), {'ok': True}])
         calls = []
         def check():
             calls.append(True)
-            if len(calls) == 2:
+            if len(calls) == 3:
                 raise ProtocolError('global_session_stopped_new_activation_required')
         with self.assertRaisesRegex(ProtocolError, '^global_session_stopped_new_activation_required$'):
             clients.DocsSDKClient(service).get_document('doc', deadline=110, check=check)
@@ -371,7 +381,7 @@ class SDKReadRecoveryTests(unittest.TestCase):
             client.get_document('synthetic-doc')
         self.assertFalse(caught.exception.retryable)
         self.assertEqual(caught.exception.diagnostics,
-                         {'category': 'authorization', 'http_status': 403, 'attempts': 1})
+                         expected_diagnostics('authorization', 1, 'googleapiclient.errors.HttpError', 403))
         self.assertEqual(len(http.calls), 1)
         self.sleep.assert_not_called()
 

@@ -6,6 +6,7 @@ No native execution occurs in this module. No resources are created automaticall
 """
 import copy
 import json
+import math
 import re
 import time
 from dataclasses import dataclass
@@ -39,6 +40,23 @@ class MessageStore(Protocol):
 class SessionControlStore(Protocol):
     def read(self): ...
     def compare_and_swap(self, snapshot, new_state): ...
+
+
+def dispatch_docs_write(client, document_id, requests, write_control, *, deadline=None, check=None):
+    """One attempt, with optional dispatch-time guards for serializing ports.
+
+    Older synchronous ports keep their three-argument signature. Never probe a
+    port by calling and catching TypeError: that could replay a committed write.
+    """
+    require(deadline is None or type(deadline) in (int, float) and math.isfinite(deadline),
+            'invalid_docs_write_deadline')
+    require(check is None or callable(check), 'invalid_docs_write_check')
+    if check is not None: check()
+    require(deadline is None or time.monotonic()<deadline, 'docs_write_deadline_exceeded')
+    if callable(getattr(type(client), 'batch_update_document_guarded', None)):
+        return client.batch_update_document_guarded(document_id, requests, write_control,
+                                                    deadline=deadline, check=check)
+    return client.batch_update_document(document_id, requests, write_control)
 
 
 @dataclass(frozen=True)
@@ -95,6 +113,12 @@ def initial_state(pin, control_id):
 
 
 def validate_state(s):
+    from .selection import validate_selection
+    return _validate_state(s, validate_selection)
+
+
+def _validate_state(s, selection_validator):
+    # Runtime stores always call validate_state; recovery cannot create permits.
     require(isinstance(s,dict) and set(s)=={'contract','control_id','session_id','control_epoch',
             'binding','phase','admissions','max_requests','request','claim','dispatch','result',
             'receipt','history','operations'} | ({'closed'} if 'closed' in s else set()),'invalid_control_state')
@@ -114,8 +138,7 @@ def validate_state(s):
             b['identity'].get('native_task_id')==b['native_task_id'] and b['identity'].get('worker_journal_id')==b['journal_id'] and
             b['identity'].get('session_id')==s['session_id'],'invalid_control_binding')
     if 'selection' in b:
-        from .selection import validate_selection
-        validate_selection(b['selection'])
+        selection_validator(b['selection'])
     require(type(b['created']) is int and type(b['expires']) is int and 1<=b['expires']-b['created']<=MAX_SESSION_SECONDS,'invalid_control_lifetime')
     # Validate the complete identity using the common envelope schema.
     Object.make(b['identity'],'deployment',0,None,{'created':0,'expires':1,'max_requests':s['max_requests'],
@@ -169,7 +192,7 @@ def validate_state(s):
         # Reuse full binding validation without recursively retaining history.
         archived=dict(s);archived.update(binding=h['binding'],phase='IDLE',admissions=0,request=None,claim=None,
             dispatch=None,result=None,receipt=None,history=[],operations=[],control_epoch=0)
-        validate_state(archived)
+        _validate_state(archived, selection_validator)
         if h['phase']=='DELIVERED':
             _validate_result_record(h['result']);validate_reference(h['receipt'])
         else:require(h['result'] is None and h['receipt'] is None,'invalid_control_history')
@@ -280,8 +303,18 @@ class GoogleDocsCASControlStore:
 
     def compare_and_swap(self,snapshot,new_state):
         prepared=self.prepare_update(snapshot,new_state)
+        kind=new_state['operations'][-1]['kind']
+        active_write=kind in {'admit','claim','begin','rebind'}
+        expires=snapshot.state['binding']['expires']
+        if kind=='rebind': expires=min(expires,new_state['binding']['expires'])
+        deadline=snapshot.acquired_at+self.snapshot_ttl
+        if active_write: deadline=min(deadline,time.monotonic()+max(0,expires-time.time()))
+        def check_snapshot():
+            require(0<=time.monotonic()-snapshot.acquired_at<=self.snapshot_ttl,'control_snapshot_expired')
+            if active_write: require(time.time()<expires,'control_deployment_expired')
         try:
-            response=self.client.batch_update_document(prepared['document_id'],prepared['requests'],prepared['write_control'])
+            response=dispatch_docs_write(self.client,prepared['document_id'],prepared['requests'],prepared['write_control'],
+                                        deadline=deadline,check=check_snapshot)
         except CASConflict:raise
         except Exception as exc:
             raise CASUnknown('control_write_outcome_unknown') from exc

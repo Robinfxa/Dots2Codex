@@ -210,11 +210,21 @@ class RecoveringDocs:
     def stop_recovery(self):
         self.stopping = True
 
-    def batch_update_document(self, *args, **kwargs):
-        if not self.stopping and threading.get_ident() == self.owner:
+    def batch_update_document(self, document_id, requests, write_control, *, deadline=None, check=None):
+        from .control import dispatch_docs_write
+        owner_guard = not self.stopping and threading.get_ident() == self.owner
+        if owner_guard:
             if self.preparation is not None: self.preparation.reconcile()
             self._check()
-        return self.docs.batch_update_document(*args, **kwargs)
+            deadline = min(value for value in (deadline, self.deadline, self.setup_deadline) if value is not None)
+        def dispatch_check():
+            if owner_guard: self._check()
+            if check is not None: check()
+        return dispatch_docs_write(self.docs, document_id, requests, write_control,
+                                   deadline=deadline, check=dispatch_check)
+
+    def batch_update_document_guarded(self, document_id, requests, write_control, *, deadline=None, check=None):
+        return self.batch_update_document(document_id, requests, write_control, deadline=deadline, check=check)
 
 
 def binary_evidence(path, *, run=subprocess.run):

@@ -233,23 +233,28 @@ def initial_state(*, bootstrap_id, session_id, created, expires, join_code, fold
     return state
 
 
-def _validate_selected_logical(state, value):
+def _validate_selected_logical(state, value, admission_validator):
     worker = value['worker']
     if worker is not None:
         if state['contract'] == SELECTED_CONTRACT:
-            validate_admission(worker.get('admission'), state['required_selection'], worker['native_task_id'])
+            admission_validator(worker.get('admission'), state['required_selection'], worker['native_task_id'])
         else:
             require('admission' not in worker, 'legacy_bootstrap_cannot_claim_selection')
 
 
 def validate_state(state):
+    return _validate_state(state, validate_selection, validate_admission)
+
+
+def _validate_state(state, selection_validator, admission_validator):
+    # The normal public parser always uses current-catalog validators.
     require(isinstance(state, dict), 'invalid_bootstrap_state')
     extra = {'required_selection'} if state.get('contract') == SELECTED_CONTRACT else set()
     require(set(state) == ROOT_KEYS | extra | {
             "root_mac", "epoch", "stage", "worker", "bundle", "bundle_hashes", "worker_ack", "events"},
             "invalid_bootstrap_state")
     require(state["contract"] in {BOOT_CONTRACT, SELECTED_CONTRACT}, "invalid_bootstrap_contract")
-    if extra: validate_selection(state["required_selection"])
+    if extra: selection_validator(state["required_selection"])
     _safe_id(state["bootstrap_id"], max_len=64)
     for key in ("session_id", "folder_id", "bootstrap_document_id", "bootstrap_tab_id"):
         _safe_id(state[key])
@@ -274,7 +279,7 @@ def validate_state(state):
                 and all(valid_hash(bundle[k]) for k in ("deployment_hash", "mac")) and
                 all(isinstance(bundle[k], str) for k in ("pin_b64", "config_b64")), "invalid_bootstrap_bundle")
     _validate_logical(_logical(state))
-    _validate_selected_logical(state, _logical(state))
+    _validate_selected_logical(state, _logical(state), admission_validator)
     events = state["events"]
     require(type(state["epoch"]) is int and 0 <= state["epoch"] <= 6 and
             type(events) is list and len(events) == state["epoch"], "invalid_bootstrap_events")
@@ -294,7 +299,7 @@ def validate_state(state):
         if event["kind"] not in {"closed", "aborted"}:
             require(event["at"] < state["expires"], "bootstrap_expired_event")
         _validate_transition(before, event["after"], event["kind"], event["actor"])
-        _validate_selected_logical(state, event["after"])
+        _validate_selected_logical(state, event["after"], admission_validator)
         before, parent, last_at = event["after"], hash_bytes(canonical(event)), event["at"]
         operations.add(event["operation_id"])
     require(before == _logical(state), "bootstrap_logical_state_mismatch")
@@ -302,7 +307,11 @@ def validate_state(state):
 
 
 def verify_join_code(state, join_code):
-    validate_state(state)
+    return _verify_join_code(state, join_code, validate_state)
+
+
+def _verify_join_code(state, join_code, state_validator):
+    state_validator(state)
     require(hmac.compare_digest(state["join_code_sha256"], join_code_hash(join_code)), "join_code_mismatch")
     verify_proof(join_code, "root", root_context(state), state["root_mac"])
     for event in state["events"]:

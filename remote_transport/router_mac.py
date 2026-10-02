@@ -24,11 +24,11 @@ import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from . import Journal, Object, deployment
+from . import Journal, deployment
 from .backend import read_private_file, fsync_dir
 from .cli import write_new
-from .control import (_document_text, GoogleDocsCASControlStore, SessionCoordinator,
-                      binding_for, CASConflict)
+from .control import _document_text, CASConflict, dispatch_docs_write
+from . import legacy_cleanup as cleanup_protocol
 from .model import canonical, require, hash_bytes
 from .operator import codex_command, ready_selection, selection_status
 from .selection import load_catalog, select, validate_selection, validate_settings_selection, catalog_hash
@@ -39,7 +39,7 @@ from .router_bootstrap import (
     prepare_update as bootstrap_prepare_update,
     verify_update as bootstrap_verify_update,
     verify_worker_admission, bundle_ready, verify_worker_polling, consume_bundle,
-    close_bootstrap, abort_bootstrap, plan as bootstrap_plan,
+    plan as bootstrap_plan,
     root_context, verify_context,
 )
 from .session import _save
@@ -116,6 +116,13 @@ def _validate_settings_config(c):
     return c
 
 
+def _load_cleanup_config(path):
+    """Load existing configuration only for stop; never for start or status."""
+    # Settings and cleanup share the exact existing-catalog reader. Neither
+    # changes the saved selection or reads/imports a retired catalog file.
+    return _validate_settings_config(_load_private_json(_config_path(path), 131072))
+
+
 def _resolve_selection(args, config):
     """Choose only before pairing. Partial overrides never inherit another effort."""
     model = getattr(args, "model", None); effort = getattr(args, "effort", None)
@@ -186,8 +193,12 @@ def _initialize_bootstrap(docs, document_id, tab_id, state, runtime, *, source_r
                                          "text": bootstrap_block_for(state)[:-1]}}],
             "write_control": {"requiredRevisionId": revision}}
     path, rec = _operation(runtime, "initialize-bootstrap", args)
+    deadline = time.monotonic() + max(0, state["expires"] - time.time())
+    def dispatch_check():
+        require(not (Path(runtime) / "stop-requested.json").exists(), "router_start_cancelled")
+        require(state["created"] <= time.time() < state["expires"], "bootstrap_expired_or_not_yet_valid")
     try:
-        docs.batch_update_document(args["document_id"], args["requests"], args["write_control"])
+        dispatch_docs_write(docs, **args, deadline=deadline, check=dispatch_check)
     except Exception:
         pass  # Read-only exact reconciliation, never resubmit.
     try:
@@ -202,16 +213,31 @@ def _initialize_bootstrap(docs, document_id, tab_id, state, runtime, *, source_r
 
 def _bootstrap_cas(docs, snapshot, new_state, *, join_code, runtime):
     value = bootstrap_plan(snapshot, new_state, join_code=join_code)
+    return _dispatch_bootstrap_plan(docs, value, bootstrap_verify_update, join_code=join_code, runtime=runtime)
+
+
+def _dispatch_bootstrap_plan(docs, value, verify_update, *, join_code, runtime):
+    new_state = value["expected_state"]
     path, rec = _operation(runtime, "bootstrap-" + str(new_state["epoch"]), value)
     args = value["tool_arguments"]
     response = None
+    terminal = new_state["stage"] in {"CLOSED", "ABORTED"}
+    deadline = None if terminal else time.monotonic() + max(0, new_state["expires"] - time.time())
+    def dispatch_check():
+        now = time.time()
+        require(new_state["created"] <= now and new_state["events"][-1]["at"] <= now,
+                "bootstrap_expired_or_not_yet_valid")
+        # Exact terminal cleanup is allowed after expiry or a stop request.
+        if not terminal:
+            require(not (Path(runtime) / "stop-requested.json").exists(), "router_start_cancelled")
+            require(now < new_state["expires"], "bootstrap_expired_or_not_yet_valid")
     try:
-        response = docs.batch_update_document(args["document_id"], args["requests"], args["write_control"])
+        response = dispatch_docs_write(docs, **args, deadline=deadline, check=dispatch_check)
     except Exception:
         pass
     try:
         readback = docs.get_document(args["document_id"])
-        result = bootstrap_verify_update(value, response, readback, join_code=join_code)
+        result = verify_update(value, response, readback, join_code=join_code)
     except Exception:
         _finish_operation(path, rec, status="unknown")
         raise RuntimeError("bootstrap_write_outcome_unknown_no_replay") from None
@@ -494,11 +520,12 @@ def _close_control(docs, active, config):
     if not pin_path.exists():
         require(not active.get("control_initialization_attempted"), "router_pin_missing_close_unverified")
         return {"closed": False, "not_created": True, "authoritative": False}
-    pin = Object.parse(read_private_file(pin_path, 131072))
-    require(pin.oid == active.get("deployment"), "router_close_pin_mismatch")
-    store = GoogleDocsCASControlStore(docs, active["control_document_id"], active["control_tab_id"],
+    binding = cleanup_protocol.pin_binding(read_private_file(pin_path, 131072))
+    require(binding["deployment_hash"] == active.get("deployment"), "router_close_pin_mismatch")
+    if active.get("model_selection") is not None:
+        require(binding.get("selection") == active["model_selection"], "router_close_selection_mismatch")
+    store = cleanup_protocol.CloseOnlyControlStore(docs, active["control_document_id"], active["control_tab_id"],
         active["control_id"], active["session_id"], config["mac_writer_identity"])
-    binding = binding_for(pin)
     snapshot = store.read(); state = snapshot.state
     require(state["binding"] == binding, "router_close_binding_mismatch")
     path = Path(active["runtime"]) / "control-close.json"
@@ -514,14 +541,13 @@ def _close_control(docs, active, config):
         os.replace(path, archive); fsync_dir(path.parent)
     if state.get("closed") is True:
         return {"closed": True, "authoritative": True, "observed_existing_fence": True}
-    coordinator = SessionCoordinator(store, None)
-    result = coordinator.plan("close", {"binding": binding}, uuid.uuid4().hex, snapshot=snapshot)
-    expected = result["state"]["operations"][-1]
+    new_state = store.plan_close(snapshot, binding, uuid.uuid4().hex)
+    expected = new_state["operations"][-1]
     rec = {"status": "dispatched", "operation": expected, "prior_operations": state["operations"],
-           "arguments": store.prepare_update(snapshot, result["state"])}
+           "arguments": store.prepare_update(snapshot, new_state)}
     write_new(path, canonical(rec, max_bytes=2 * 1024 * 1024))
     try:
-        store.compare_and_swap(snapshot, result["state"])
+        store.compare_and_swap(snapshot, new_state)
     except CASConflict:
         _finish_operation(path, rec, status="rejected")
         raise RuntimeError("router_close_cas_rejected_retry_requires_new_stop") from None
@@ -541,14 +567,15 @@ def _close_control(docs, active, config):
 
 def _finish_bootstrap(docs, active, join_code, *, closed):
     if not active.get("bootstrap_root"): return {"verified": False, "not_initialized": True}
-    snap = _bootstrap_read(docs, active, join_code, require_fresh=False)
+    snap = cleanup_protocol.bootstrap_snapshot(docs.get_document(active["bootstrap_document_id"]),
+        active["bootstrap_document_id"], active["bootstrap_tab_id"],
+        join_code=join_code, expected_root=active["bootstrap_root"])
     if snap.state["stage"] in {"CLOSED", "ABORTED"}:
         return {"verified": True, "stage": snap.state["stage"], "history_erased": False}
-    if closed and snap.state["stage"] == "CONSUMED":
-        nxt = close_bootstrap(snap.state, join_code=join_code)
-    else:
-        nxt = abort_bootstrap(snap.state, join_code=join_code, reason="mac_operator_stop")
-    _bootstrap_cas(docs, snap, nxt, join_code=join_code, runtime=active["runtime"])
+    nxt = cleanup_protocol.finish_bootstrap_state(snap.state, join_code=join_code, closed=closed)
+    value = cleanup_protocol.bootstrap_plan(snap, nxt, join_code=join_code)
+    _dispatch_bootstrap_plan(docs, value, cleanup_protocol.verify_bootstrap_update,
+                             join_code=join_code, runtime=active["runtime"])
     return {"verified": True, "stage": nxt["stage"], "history_erased": False}
 
 
@@ -802,7 +829,7 @@ def stop(args):
         current = _load_private_json(active_path)
         _request_stop(current)
         try:
-            config = _load_config(args.config); _set_google_env(config)
+            config = _load_cleanup_config(args.config); _set_google_env(config)
             from examples.google_clients import create_docs_client
             docs = create_docs_client()
         except Exception:

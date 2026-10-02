@@ -55,8 +55,10 @@ def controller_source_hashes():
            'remote_transport/global_timing.py','remote_transport/global_gateway.py','remote_transport/global_pilot.py',
            'remote_transport/global_handoff.py','remote_transport/global_desktop.py',
            'remote_transport/router_join.py','remote_transport/router_bootstrap.py','remote_transport/router_mac.py',
+           'remote_transport/legacy_cleanup.py','remote_transport/model.py','remote_transport/control.py',
            'remote_transport/router_pairing.py','native_connector/router_pairing.js','remote_transport/connector_files.py',
-           'native_connector/global_controller_cell.js','examples/remote_setup.py','docs/GLOBAL_NATIVE_CONTROLLER.md')
+           'native_connector/global_controller_cell.js','examples/remote_setup.py','examples/google_clients.py',
+           'docs/GLOBAL_NATIVE_CONTROLLER.md')
     result={}
     for name in names:
         path=root/name;require(path.is_file() and not path.is_symlink(),'global_controller_source_missing')

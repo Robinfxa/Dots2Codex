@@ -121,6 +121,9 @@ class GlobalStagedCLIIntegrationTests(unittest.TestCase):
     def event(self, kind, route_id=None, **arguments):
         plan = self.path(kind+'-plan')
         result = self.parent('plan-'+kind, route_id=route_id, save=plan, **arguments)
+        # This helper commits actual events only. A read-only heartbeat handoff
+        # must be asserted separately, never mistaken for a missing CAS file.
+        self.assertNotEqual(result.get('action'), 'heartbeat_deferred_for_ready')
         self.parent('check-cas', plan_file=plan)
         response = self.google.batch_update_document(**result['tool_arguments'])
         check = self.parent('verify', plan_file=plan, response=self.file(response),
@@ -270,13 +273,56 @@ class GlobalStagedCLIIntegrationTests(unittest.TestCase):
 
     def test_staged_240_second_setup_real_child_cli_then_single_http_proof(self):
         self.reserve(); self.native()
-        for _ in range(4):
-            self.clock += 60
-            self.event('heartbeat'); self.bridge.sync_heartbeat()
+        ledger = self.parent_dir/(queue.root_hash(self.initial)+'.json')
+        before = json.loads(ledger.read_bytes())
+        initial_controller = self.bridge.read().state['logical']['controller']
+        handoff_deadline = None
+        # The 240-second staged setup remains within the original 900-second
+        # freshness budget. Yield this admitted->ready writer interval in paced
+        # read-only calls instead of issuing the old competing heartbeat CASes.
+        for _ in range(10):
+            self.clock += 24
+            pending_plan = self.path('deferred-heartbeat-plan')
+            calls = len(self.google.calls)
+            deferred = self.parent('plan-heartbeat', save=pending_plan)
+            self.assertEqual(deferred['action'], 'heartbeat_deferred_for_ready')
+            self.assertTrue(deferred['read_only'])
+            self.assertFalse(deferred['write_attempted'])
+            self.assertFalse(deferred['heartbeat_verified'])
+            self.assertFalse(deferred['native_spawn_allowed'])
+            self.assertEqual(deferred['pending_ready_count'], 1)
+            self.assertEqual(deferred['heartbeat_at'], initial_controller['heartbeat_at'])
+            self.assertLessEqual(deferred['recheck_after_seconds'], 25)
+            self.assertGreater(deferred['recheck_after_seconds'], 0)
+            if handoff_deadline is None: handoff_deadline = deferred['observe_before']
+            self.assertEqual(deferred['observe_before'], handoff_deadline)
+            self.assertLessEqual(handoff_deadline, initial_controller['heartbeat_at']+900)
+            self.assertLessEqual(handoff_deadline, initial_controller['lease_expires'])
+            self.assertNotIn('tool_arguments', deferred)
+            self.assertNotIn('plan_file', deferred)
+            self.assertFalse(pending_plan.exists())
+            current = json.loads(ledger.read_bytes())
+            self.assertEqual(current['operations'], before['operations'])
+            self.assertEqual(current['spawns'], before['spawns'])
+            self.assertEqual(len(self.google.calls), calls)
+            self.bridge.sync_heartbeat()
             self.assertFalse(self.status()['ready'])
             self.assert_counts(routes=1, requests=0)
         self.ready()
         self.assertTrue(self.status()['ready'])
+        ready_source = self.bridge.read()
+        self.assertEqual(ready_source.state['logical']['demands'][self.rid]['state'], 'ready')
+        heartbeat_plan = self.event('heartbeat')
+        heartbeat_packet = json.loads(heartbeat_plan.read_bytes())
+        self.assertEqual(heartbeat_packet['tool_arguments']['write_control'],
+                         {'requiredRevisionId': ready_source.revision_id})
+        self.assertLessEqual(heartbeat_packet['execute_before'], initial_controller['heartbeat_at']+900)
+        self.assertLessEqual(heartbeat_packet['execute_before'], self.clock+120)
+        after_heartbeat = self.bridge.read().state
+        self.assertEqual(after_heartbeat['epoch'], ready_source.state['epoch']+1)
+        self.assertEqual(after_heartbeat['events'][-1]['kind'], 'heartbeat')
+        self.assertEqual(after_heartbeat['logical']['controller']['heartbeat_at'], int(self.clock))
+        self.bridge.sync_heartbeat()
         plan = self.finish_plan()
         self.assertGreater(plan['expires'], self.clock)
         with patch.object(desktop, 'post_preflight', wraps=desktop.post_preflight) as post:

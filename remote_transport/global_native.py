@@ -129,6 +129,8 @@ class NativeLedger:
                 'global_child_verified_admitted_binding_mismatch')
         return packet
     def observe(self,saved,source):
+        require(source.document_id==self.context['document_id'] and source.tab_id==self.context['tab_id'],
+                'global_document_mismatch')
         state=queue.verify(source.state,self.code,expected_root=self.context,require_fresh=False)
         now=time.time();c=state['logical']['controller'];old=saved['observed_controller']
         reason=saved['terminal_reason']
@@ -191,6 +193,26 @@ class NativeLedger:
                     'controller_timing':state['controller_timing'],
                     'first_heartbeat_required':bool(c and c['heartbeat_at']==c['joined_at']),
                     'automatic_wake':False,'native_capacity_is_not_reserved_platform_slots':True}
+    def _heartbeat_ready_handoff(self,state):
+        """Yield the admitted->ready writer turn before reserving any heartbeat.
+
+        This is conflict avoidance, not evidence that an attempted CAS failed.
+        Every admitted route participates: one ready child cannot release the
+        handoff while another child may still publish readiness. The caller
+        must obtain a new signed snapshot on its next bounded invocation.
+        """
+        pending=[d for d in state['logical']['demands'].values() if d['state']=='admitted']
+        if not pending:return None
+        c=state['logical']['controller'];checked=time.time()
+        deadline=min(state['expires'],c['lease_expires'],
+                     c['heartbeat_at']+state['controller_timing']['freshness_seconds'],
+                     *(min(d['expires'],d['child_bootstrap']['expires']) for d in pending))
+        require(checked<deadline,'global_heartbeat_readiness_window_expired')
+        return {'action':'heartbeat_deferred_for_ready','read_only':True,
+                'write_attempted':False,'heartbeat_verified':False,'native_spawn_allowed':False,
+                'pending_ready_count':len(pending),'heartbeat_at':c['heartbeat_at'],
+                'checked_at':checked,'observe_before':deadline,
+                'recheck_after_seconds':min(state['controller_timing']['heartbeat_interval_seconds'],deadline-checked)}
     def plan_event(self,source,kind,destination,*,route_id=None,capacity=None,seconds=None,now=None):
         if kind=='join-heartbeat':
             require(now is None,'global_join_heartbeat_requires_host_clock')
@@ -209,6 +231,12 @@ class NativeLedger:
                       'lease_expires':min(now+seconds,state['expires']),'capacity':capacity}
             else:
                 require(c is not None,'global_controller_join_required')
+                if kind=='heartbeat':
+                    # The lock, authenticated snapshot, original authority and
+                    # unresolved-operation fence all precede this no-write path.
+                    # Do not allocate a plan file or burn/release a reservation.
+                    deferred=self._heartbeat_ready_handoff(state)
+                    if deferred is not None:return deferred
                 args={'native_task_id':self.identity,'controller_epoch':c['controller_epoch']}
                 if kind=='claim':args.update(route_id=route_id,claim_id=secrets.token_hex(16))
                 elif kind in ('begin','unknown','admitted'):
@@ -649,7 +677,7 @@ def main():
     elif a.operation=='record-native':value=ledger.record_spawn(a.plan_file,read(a.actual_arguments),read(a.native_result),a.save)
     elif a.operation=='import-child-admission':value=ledger.import_child_admission(source,a.route_id,a.admission_receipt,a.child_native_task_id)
     else:value=ledger.plan_event(source,a.operation.removeprefix('plan-'),a.save,route_id=a.route_id,capacity=a.capacity,seconds=a.seconds)
-    if a.check_cas_now:
+    if a.check_cas_now and value.get('action')!='heartbeat_deferred_for_ready':
         # Run the same complete dispatch check after reservation, in this helper
         # invocation. Callers must still account for elapsed time before CAS.
         value['dispatch_check']=ledger.check_plan(source,value['plan_file'])

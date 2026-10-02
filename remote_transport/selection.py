@@ -57,11 +57,16 @@ def validate_selection(value, catalog=None):
 
 
 def validate_settings_selection(value):
-    """Read current or the exact retired v1 choice only for explicit Settings UI.
+    """Read an existing choice for explicit Settings; never for admission."""
+    return _validate_existing_selection(value)
+
+
+def _validate_existing_selection(value):
+    """Read current or the exact retired v1 choice for Settings or closure only.
 
     Returned values are unchanged, including retired max choices. This does not
-    authorize routing, admission, receipts or signed roots: those must continue
-    using validate_selection and require an explicit current-catalog reselection.
+    authorize routing, new admission receipts or new signed roots: those must
+    continue using validate_selection and explicit current-catalog reselection.
     """
     require(isinstance(value, dict) and set(value) == SELECTION_KEYS, 'invalid_native_selection')
     if (value['catalog_version'], value['catalog_sha256']) != (RETIRED_CATALOG_VERSION, RETIRED_CATALOG_SHA256):

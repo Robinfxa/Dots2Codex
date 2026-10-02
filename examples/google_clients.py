@@ -5,6 +5,8 @@ The operator must approve and provision this endpoint's own credential file.
 Never point this at connector, browser, another app's, or another host's secrets.
 """
 import errno
+from contextlib import contextmanager
+import copy
 import http.client
 import json
 import math
@@ -13,6 +15,7 @@ from pathlib import Path
 import socket
 import ssl
 import sys
+import threading
 import time
 from remote_transport.backend import read_private_file
 from remote_transport.drive_http import DriveHTTPClient
@@ -114,6 +117,32 @@ def _optional_exception(exc, module, names):
                for cls in (getattr(namespace, name, None) for name in names))
 
 
+def _safe_exception_class(exc):
+    """Fixed labels only: custom exception names can themselves contain secrets."""
+    known = (
+        ("builtins", ("Exception", "RuntimeError", "ValueError", "TypeError", "OSError",
+                      "TimeoutError", "ConnectionError", "ConnectionResetError",
+                      "ConnectionAbortedError", "ConnectionRefusedError", "BrokenPipeError",
+                      "PermissionError", "FileNotFoundError")),
+        ("http.client", ("HTTPException", "ResponseNotReady", "CannotSendRequest",
+                         "CannotSendHeader", "BadStatusLine", "RemoteDisconnected", "IncompleteRead")),
+        ("ssl", ("SSLError", "SSLCertVerificationError", "SSLEOFError", "SSLZeroReturnError")),
+        ("socket", ("gaierror", "herror")),
+        ("json.decoder", ("JSONDecodeError",)),
+        ("remote_transport.model", ("ProtocolError",)),
+        ("httplib2", ("HttpLib2Error", "ServerNotFoundError")),
+        ("google.auth.exceptions", ("TransportError", "RefreshError", "DefaultCredentialsError")),
+        ("googleapiclient.errors", ("HttpError",)),
+        ("requests.exceptions", ("ConnectionError", "Timeout", "ConnectTimeout", "ReadTimeout", "SSLError")),
+    )
+    for module, names in known:
+        namespace = sys.modules.get(module)
+        for name in names:
+            if type(exc) is getattr(namespace, name, None):
+                return module + "." + name
+    return "unrecognized"
+
+
 def _exception_chain(exc):
     """Inspect a bounded causal chain without formatting provider error text."""
     pending, seen, chain = [exc], {id(exc)}, []
@@ -134,20 +163,29 @@ def _exception_chain(exc):
 
 def _read_failure(exc, attempts):
     chain = _exception_chain(exc)
+    def failure(*, category, retryable, http_status=None):
+        result = DocsReadError(category=category, retryable=retryable,
+                               attempts=attempts, http_status=http_status)
+        result.diagnostics["exception_class"] = _safe_exception_class(exc)
+        result.diagnostics["exception_chain"] = [
+            _safe_exception_class(value) for value in (chain or [exc])]
+        if chain is None:
+            result.diagnostics["exception_chain_truncated"] = True
+        return result
     if chain is None:
-        return DocsReadError(category="unexpected", retryable=False, attempts=attempts)
+        return failure(category="unexpected", retryable=False)
     statuses = []
     for current in chain:
         # Security/validation/auth failures stay terminal, even inside a transport
         # wrapper. Never infer retryability from error messages, bodies, or URLs.
         if isinstance(current, ProtocolError):
-            return DocsReadError(category="protocol", retryable=False, attempts=attempts)
+            return failure(category="protocol", retryable=False)
         if isinstance(current, ssl.SSLError) or _optional_exception(
                 current, "requests.exceptions", ("SSLError",)):
-            return DocsReadError(category="tls", retryable=False, attempts=attempts)
+            return failure(category="tls", retryable=False)
         if _optional_exception(current, "google.auth.exceptions",
                                ("RefreshError", "DefaultCredentialsError")):
-            return DocsReadError(category="authorization", retryable=False, attempts=attempts)
+            return failure(category="authorization", retryable=False)
         status = getattr(getattr(current, "resp", None), "status", None)
         # HttpError uses resp.status. Only a real HTTP-range integer is retained.
         if type(status) is int and 100 <= status <= 599:
@@ -155,16 +193,14 @@ def _read_failure(exc, attempts):
     for status in statuses:
         if status not in (408, 429) and not 500 <= status <= 599:
             category = "authorization" if status in (401, 403) else "http_permanent"
-            return DocsReadError(category=category, retryable=False,
-                                 attempts=attempts, http_status=status)
+            return failure(category=category, retryable=False, http_status=status)
     if statuses:
         status = statuses[0]
         category = "rate_limited" if status == 429 else "http_transient"
-        return DocsReadError(category=category, retryable=True,
-                             attempts=attempts, http_status=status)
+        return failure(category=category, retryable=True, http_status=status)
     for current in chain:
         if isinstance(current, TimeoutError):
-            return DocsReadError(category="timeout", retryable=True, attempts=attempts)
+            return failure(category="timeout", retryable=True)
         if (isinstance(current, (ConnectionError, http.client.IncompleteRead))
                 or isinstance(current, OSError) and current.errno in {
                     errno.ETIMEDOUT, errno.ECONNRESET, errno.ECONNREFUSED,
@@ -174,17 +210,17 @@ def _read_failure(exc, attempts):
                 or _optional_exception(current, "httplib2", ("ServerNotFoundError",))
                 or _optional_exception(current, "google.auth.exceptions", ("TransportError",))
                 or _optional_exception(current, "requests.exceptions", ("ConnectionError", "Timeout"))):
-            return DocsReadError(category="network", retryable=True, attempts=attempts)
-    return DocsReadError(category="unexpected", retryable=False, attempts=attempts)
+            return failure(category="network", retryable=True)
+    return failure(category="unexpected", retryable=False)
 
 
-def _check_read_budget(deadline, check):
+def _check_budget(deadline, check, operation="read"):
     # Caller liveness/stop/integrity checks are not provider errors and must not
     # be wrapped into retryable transport failures.
     if check is not None:
         check()
     if deadline is not None:
-        require(time.monotonic() < deadline, "docs_read_deadline_exceeded")
+        require(time.monotonic() < deadline, "docs_" + operation + "_deadline_exceeded")
 
 
 class DocsSDKClient:
@@ -200,6 +236,31 @@ class DocsSDKClient:
     """
     def __init__(self, service):
         self.service = service
+        # Supervisor and facade threads share this client. The SDK's httplib2
+        # connection cache and AuthorizedHttp credential refresh are not safe to
+        # run concurrently. Include request construction and refresh in the same
+        # gate as execution; never retain it across read retry backoff.
+        self._transport_lock = threading.RLock()
+
+    @contextmanager
+    def _transport(self, deadline, check, operation="read"):
+        _check_budget(deadline, check, operation)
+        if deadline is None and check is None:
+            self._transport_lock.acquire()
+        else:
+            while True:
+                delay = .1 if deadline is None else min(.1, max(0, deadline - time.monotonic()))
+                if self._transport_lock.acquire(timeout=delay):
+                    break
+                _check_budget(deadline, check, operation)
+        try:
+            # A read can expire or be cancelled while waiting behind another
+            # facade. Keep this check outside the provider-error catch so it
+            # cannot become a retryable failure or permit a stale dispatch.
+            _check_budget(deadline, check, operation)
+            yield
+        finally:
+            self._transport_lock.release()
 
     def get_document(self, document_id, *, deadline=None, check=None):
         """Retry only this GET, rejecting results after an optional caller budget.
@@ -211,16 +272,18 @@ class DocsSDKClient:
                 "invalid_docs_read_deadline")
         require(check is None or callable(check), "invalid_docs_read_check")
         for attempt in range(1, len(READ_RETRY_DELAYS) + 2):
-            _check_read_budget(deadline, check)
-            try:
-                result = self.service.documents().get(documentId=document_id,
-                    includeTabsContent=True, suggestionsViewMode="SUGGESTIONS_INLINE").execute(num_retries=0)
-            except Exception as exc:
-                failure = _read_failure(exc, attempt)
-            else:
-                _check_read_budget(deadline, check)
+            with self._transport(deadline, check):
+                try:
+                    result = self.service.documents().get(documentId=document_id,
+                        includeTabsContent=True, suggestionsViewMode="SUGGESTIONS_INLINE").execute(num_retries=0)
+                except Exception as exc:
+                    failure = _read_failure(exc, attempt)
+                else:
+                    failure = None
+            if failure is None:
+                _check_budget(deadline, check)
                 return result
-            _check_read_budget(deadline, check)
+            _check_budget(deadline, check)
             if not failure.retryable or attempt > len(READ_RETRY_DELAYS):
                 raise failure from None
             delay = READ_RETRY_DELAYS[attempt - 1]
@@ -228,16 +291,30 @@ class DocsSDKClient:
                 delay = min(delay, max(0, deadline - time.monotonic()))
             time.sleep(delay)
 
-    def batch_update_document(self, document_id, requests, write_control):
+    def batch_update_document(self, document_id, requests, write_control, *, deadline=None, check=None):
+        # Keep the exact queued request/revision even if its caller later edits
+        # a mutable plan. Copy before the transport wait and validate that copy.
+        if isinstance(write_control, dict): write_control = dict(write_control)
         require(isinstance(write_control, dict) and set(write_control) == {"requiredRevisionId"}
                 and isinstance(write_control["requiredRevisionId"], str)
                 and write_control["requiredRevisionId"], "exact_required_revision_needed")
-        try:
-            return self.service.documents().batchUpdate(documentId=document_id,
-                body={"requests": requests, "writeControl": write_control}).execute(num_retries=0)
-        except Exception:
-            # No remote error text, document content, credential data, or URL in logs.
-            raise ProtocolError("docs_write_outcome_unknown") from None
+        require(deadline is None or type(deadline) in (int, float) and math.isfinite(deadline),
+                "invalid_docs_write_deadline")
+        require(check is None or callable(check), "invalid_docs_write_check")
+        requests = copy.deepcopy(requests)
+        # A failed dispatch guard proves this call never entered the SDK. Do not
+        # turn cancellation/expiry into an unknown provider outcome here.
+        with self._transport(deadline, check, "write"):
+            try:
+                return self.service.documents().batchUpdate(documentId=document_id,
+                    body={"requests": requests, "writeControl": write_control}).execute(num_retries=0)
+            except Exception:
+                # No remote error text, document content, credential data, or URL in logs.
+                raise ProtocolError("docs_write_outcome_unknown") from None
+
+    def batch_update_document_guarded(self, document_id, requests, write_control, *, deadline=None, check=None):
+        """Explicit optional port capability; checks also run after lock waits."""
+        return self.batch_update_document(document_id, requests, write_control, deadline=deadline, check=check)
 
 
 def create_docs_client():

@@ -12,6 +12,11 @@ function createGlobalControllerCell(io) {
     try {
       const source=freshSource===null?await io.read():freshSource;
       stage='plan';plan=await io.plan(kind,source,extra); // durable one-attempt reservation
+      if(kind==='heartbeat'&&plan&&plan.action==='heartbeat_deferred_for_ready') {
+        // This authenticated helper result was produced before any reservation.
+        // It is a read-only scheduling hint, never acceptance or a spawn permit.
+        return {result:plan,source};
+      }
       stage='check';await io.check(plan,source); // helper clock, signed predecessor deadline
       let response=null;
       stage='write';writeAttempted=true;
@@ -47,6 +52,8 @@ function createGlobalControllerCell(io) {
   }
   async function acceptedHeartbeat(source=null) {
     const accepted=await execute('heartbeat',{},source);
+    if(accepted.result.action==='heartbeat_deferred_for_ready')
+      throw Error('global_heartbeat_ready_handoff_pending');
     if(accepted.result.verified!==true||accepted.result.first_heartbeat_required)
       throw Error('global_heartbeat_unverified');
     return accepted;
@@ -174,7 +181,8 @@ function sanitizeGlobalControllerError(value, category) {
     'global_result_chunk_invalid','global_cas_outcome_unknown','global_local_helper_failed',
     'global_local_helper_output_invalid','global_private_diagnostic_capture_failed_no_replay',
     'global_cas_dispatch_permit_unavailable','global_cas_dispatch_arguments_mismatch',
-    'global_native_dispatch_window_expired_no_replay','global_native_preparation_unverified']);
+    'global_native_dispatch_window_expired_no_replay','global_native_preparation_unverified',
+    'global_heartbeat_readiness_window_expired','global_heartbeat_ready_handoff_pending']);
   const statuses=[nested.status,nested.status_code,nested.statusCode,nested.code,root.status,root.statusCode];
   const status=statuses.find(x=>Number.isInteger(x)&&x>=100&&x<=599);
   const rpc=Number.isInteger(nested.code)&&nested.code>=0&&nested.code<=16?nested.code:undefined;
@@ -223,7 +231,8 @@ function createGlobalControllerToolAdapter(tools, config, captureValue) {
   const helperCodes=new Set(['global_queue_closed','global_operation_not_observed_no_replay',
     'global_cas_acceptance_window_expired_no_replay','global_cas_dispatch_window_expired_no_replay',
     'global_unresolved_cas_readonly_reconciliation_required','global_controller_clock_rollback',
-    'global_controller_not_active_restart_required','global_native_dispatch_window_expired_no_replay']);
+    'global_controller_not_active_restart_required','global_native_dispatch_window_expired_no_replay',
+    'global_heartbeat_readiness_window_expired']);
   function failure(code,value,category) {
     const error=Error(code);failures.set(error,sanitizeGlobalControllerError(value,category));return error;
   }
@@ -355,6 +364,24 @@ function createGlobalControllerToolAdapter(tools, config, captureValue) {
       const plan=await helper('plan-'+kind,source,['--save',path('plan'),'--check-cas-now',
         ...(['claim','begin','claim-begin','claim-startup','admitted','heartbeat-admitted'].includes(kind)?['--route-id',extra.routeId]:[]),
         ...(['join','join-heartbeat'].includes(kind)?['--capacity',String(extra.capacity),'--seconds',String(extra.seconds)]:[])]);
+      if(kind==='heartbeat'&&plan&&plan.action==='heartbeat_deferred_for_ready') {
+        const fields=['action','read_only','write_attempted','heartbeat_verified','native_spawn_allowed',
+          'pending_ready_count','heartbeat_at','checked_at','observe_before','recheck_after_seconds'];
+        const elapsed=(Date.now()-started)/1000;
+        if(Object.keys(plan).length!==fields.length||fields.some(key=>!Object.hasOwn(plan,key))
+          ||plan.read_only!==true||plan.write_attempted!==false||plan.heartbeat_verified!==false
+          ||plan.native_spawn_allowed!==false||!Number.isSafeInteger(plan.pending_ready_count)||plan.pending_ready_count<1
+          ||![plan.heartbeat_at,plan.checked_at,plan.observe_before,plan.recheck_after_seconds].every(Number.isFinite)
+          ||plan.heartbeat_at>plan.checked_at||plan.checked_at>=plan.observe_before
+          ||plan.recheck_after_seconds<=0||plan.recheck_after_seconds>25
+          ||plan.recheck_after_seconds>plan.observe_before-plan.checked_at)
+          throw Error('global_local_helper_output_invalid');
+        // Transfer time consumes the same original window. A slow helper or
+        // rollback cannot turn an old handoff observation into fresh authority.
+        if(!Number.isFinite(elapsed)||elapsed<0||plan.checked_at+elapsed>=plan.observe_before)
+          throw Error('global_heartbeat_readiness_window_expired');
+        return Object.freeze({...plan,recheck_after_seconds:Math.max(0,plan.recheck_after_seconds-elapsed)});
+      }
       if(!plan||typeof plan!=='object'||typeof plan.plan_file!=='string'||!plan.plan_file
         ||!plan.tool_arguments||typeof plan.tool_arguments!=='object'||Array.isArray(plan.tool_arguments))
         throw Error('global_local_helper_output_invalid');

@@ -1,43 +1,47 @@
 {
   "contract": "dots2codex-desktop-global-pilot/1",
-  "base_commit": "d2dc62618f9eb0d94d93faedf9b0976a870504d8",
-  "base_source_tree_sha256": "349aa8a215403f9c365fed7ca7b67e61ed1c5b012f8611f2421be36b3663be07",
+  "base_commit": "6be738b68f90f0e1c6493f91dabe61e263d3b267",
+  "base_source_tree_sha256": "79f40f5ab1cb5eb63dd38fbffbb1428bcd440819cda3d6f32f5104005e1ea8d7",
   "input_launcher_source_tree_sha256": "7774123803de7f12e89b8cb8be7a510f5cfc2e829572921c0fde33632d4e096e",
   "input_gateway_source_tree_sha256": "ab3026308c240f613b8be00b623cfa3eb67cd73fcac4e87556da7d1619215891",
-  "source_tree_sha256": "79f40f5ab1cb5eb63dd38fbffbb1428bcd440819cda3d6f32f5104005e1ea8d7",
+  "source_tree_sha256": "461e0f1167faa950aab40ae2d66d07f222807cf4cfe599e0412decdf82b2c8a6",
   "source_tree_hash_algorithm": "SHA-256 of UTF-8 canonical JSON files array (sort_keys=true,separators=comma/colon,ensure_ascii=false); array sorted by path",
-  "hashed_file_count": 263,
+  "hashed_file_count": 269,
   "manifest_self_excluded": true,
   "changed_files": [
-    "GLOBAL_GATEWAY_README.txt",
-    "README.md",
-    "docs/DESKTOP_GLOBAL.zh-CN.md",
-    "docs/MODEL_SELECTION.zh-CN.md",
-    "docs/MODEL_SELECTION_VALIDATION.md",
-    "remote_tests/test_codex_catalog.py",
-    "remote_tests/test_global_control.py",
-    "remote_tests/test_global_gateway.py",
-    "remote_tests/test_global_heartbeat.py",
+    "docs/GLOBAL_NATIVE_CONTROLLER.md",
+    "examples/google_clients.py",
+    "examples/remote_setup.py",
+    "native_connector/global_controller_cell.js",
+    "native_connector/global_controller_heartbeat_handoff.test.js",
+    "remote_tests/fixtures/retired_v1_sessions.json",
+    "remote_tests/test_global_heartbeat_ready_handoff.py",
     "remote_tests/test_global_staged_cli.py",
-    "remote_tests/test_mac_launcher.py",
-    "remote_tests/test_model_selection.py",
-    "remote_tests/test_router_cell_materialization.py",
-    "remote_tests/test_xhigh_migration_independent.py",
-    "remote_transport/global_fixture.py",
-    "remote_transport/global_gateway.py",
-    "remote_transport/mac_launcher.py",
-    "remote_transport/mac_ui.py",
-    "remote_transport/native_capabilities.json",
+    "remote_tests/test_google_read_recovery.py",
+    "remote_tests/test_google_sdk_concurrency.py",
+    "remote_tests/test_legacy_cleanup.py",
+    "remote_transport/control.py",
+    "remote_transport/global_control.py",
+    "remote_transport/global_desktop.py",
+    "remote_transport/global_google.py",
+    "remote_transport/global_native.py",
+    "remote_transport/legacy_cleanup.py",
+    "remote_transport/model.py",
+    "remote_transport/router_bootstrap.py",
     "remote_transport/router_mac.py",
-    "remote_transport/selection.py",
-    "remote_transport/wire.py"
+    "remote_transport/selection.py"
   ],
   "added_files": [
-    "remote_tests/test_xhigh_migration_independent.py"
+    "native_connector/global_controller_heartbeat_handoff.test.js",
+    "remote_tests/fixtures/retired_v1_sessions.json",
+    "remote_tests/test_global_heartbeat_ready_handoff.py",
+    "remote_tests/test_google_sdk_concurrency.py",
+    "remote_tests/test_legacy_cleanup.py",
+    "remote_transport/legacy_cleanup.py"
   ],
   "all_six_source_bindings_preserved": true,
   "existing_runtime_migration": "fresh_activation_and_v2_join_required",
-  "status": "xhigh-default-offline-validated-awaiting-live-acceptance",
+  "status": "recovery-fixes-offline-validated-awaiting-live-acceptance",
   "launcher_global_menu_supported": true,
   "production_ready": false,
   "ready_for_config": false,
@@ -303,8 +307,8 @@
     },
     {
       "path": "docs/GLOBAL_NATIVE_CONTROLLER.md",
-      "bytes": 29863,
-      "sha256": "ac02811809582ce2a46e06e937dfff4b3d6f658770ecd74261b6013c90c5d588",
+      "bytes": 33344,
+      "sha256": "fbe56673dad2d4e2e4f324a8893029e6e22116c5bcba49e301f5d3fa5d5f4875",
       "mode": "0644"
     },
     {
@@ -525,14 +529,14 @@
     },
     {
       "path": "examples/google_clients.py",
-      "bytes": 12132,
-      "sha256": "489cd27f9f934549427fa5fb52b0e0012a4a01a5ba58d267490f1552ffff89ac",
+      "bytes": 16312,
+      "sha256": "cb21948daef6245500ea0a61ad4041130aac8f89edb1213823493073b2f0e0c5",
       "mode": "0644"
     },
     {
       "path": "examples/remote_setup.py",
-      "bytes": 4153,
-      "sha256": "c65ebdfb2649db889300a029cd678461bc3021cf0d6d4c7c946fe2f324952a0d",
+      "bytes": 4472,
+      "sha256": "87bf3fa852816e063dd09b11fd01f4b4219f7a06e5b5a2d89bfb3b49e392a212",
       "mode": "0644"
     },
     {
@@ -621,14 +625,20 @@
     },
     {
       "path": "native_connector/global_controller_cell.js",
-      "bytes": 30518,
-      "sha256": "01132dde7fa273ca8ee8d2e50ddf17be203dc259af0107eee2c62199e2b04155",
+      "bytes": 32582,
+      "sha256": "548b8724ebdce097a9cbf275dd2c80f1dc98cd188485f55adbfc5aecd8a0736f",
       "mode": "0644"
     },
     {
       "path": "native_connector/global_controller_cell.test.js",
       "bytes": 14912,
       "sha256": "0c5dfc4fb0bf9b0e019398c2724fb1a6a6b7cbeeb3ee63ca6f459e8ff79a0ec4",
+      "mode": "0644"
+    },
+    {
+      "path": "native_connector/global_controller_heartbeat_handoff.test.js",
+      "bytes": 6961,
+      "sha256": "4e09c66fcb4fcea6736d1b9975674b9bb78e8869929ac8a4c10edf5095a68f4a",
       "mode": "0644"
     },
     {
@@ -791,6 +801,12 @@
       "path": "remote_tests/fakes.py",
       "bytes": 2184,
       "sha256": "8b3d2446786f7915a17e16720ad01dd66ddc484f5c00b3f4a9b6848b034623a5",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_tests/fixtures/retired_v1_sessions.json",
+      "bytes": 37568,
+      "sha256": "17d13c332922e09a039099c7daca0fb4526a9953248d6ab6b64369e86b4a047e",
       "mode": "0644"
     },
     {
@@ -968,6 +984,12 @@
       "mode": "0644"
     },
     {
+      "path": "remote_tests/test_global_heartbeat_ready_handoff.py",
+      "bytes": 13104,
+      "sha256": "3592b53115c3d031119af08760f82e8d1e70f938c237668efbf9c62dfe1ac9c7",
+      "mode": "0644"
+    },
+    {
       "path": "remote_tests/test_global_native_diagnostics.py",
       "bytes": 4653,
       "sha256": "9a0ecab7be9fb10107491b4ad953c223086392d976bb3d4314cded0b21ce8594",
@@ -1005,8 +1027,8 @@
     },
     {
       "path": "remote_tests/test_global_staged_cli.py",
-      "bytes": 25122,
-      "sha256": "4782eb581682ce8148211f68b79bbbbd5063ad42b35253bce59654ca47028e49",
+      "bytes": 28293,
+      "sha256": "8170ec082547ac0e8020052519a28d8ae380324af2cda4f6a36d9555aa97701e",
       "mode": "0644"
     },
     {
@@ -1023,8 +1045,20 @@
     },
     {
       "path": "remote_tests/test_google_read_recovery.py",
-      "bytes": 18373,
-      "sha256": "6c1cd561153616f2c3707a1831e9cf49879cb815585e7383c464fd0dc9121ddd",
+      "bytes": 18967,
+      "sha256": "836085e933cb9ac230bd8440cc74b08f38bb1c8a151414e742aaee97916f5685",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_tests/test_google_sdk_concurrency.py",
+      "bytes": 35134,
+      "sha256": "eae812909103cbfb64a6f667a7a53a27a976b4325a71e56f8793286740475a1b",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_tests/test_legacy_cleanup.py",
+      "bytes": 16821,
+      "sha256": "fc2bbebe06af14aa2aeb9a8adceb79aadb9a1a2d3c67035bc8ad67adf28e7e3d",
       "mode": "0644"
     },
     {
@@ -1197,8 +1231,8 @@
     },
     {
       "path": "remote_transport/control.py",
-      "bytes": 25916,
-      "sha256": "255fc3d7adeea08a0f2c359d87c23d9bc0fe6784cdcaf4c111f2907df4a50578",
+      "bytes": 27837,
+      "sha256": "08c7037f42326a762bc8e37c44fb6cb704c152cc3bbce23c57af8ae5c0ad96d1",
       "mode": "0644"
     },
     {
@@ -1233,14 +1267,14 @@
     },
     {
       "path": "remote_transport/global_control.py",
-      "bytes": 31476,
-      "sha256": "fd1c6b6e4d10e80921394bb50c0bba2d47fe60f9408de22932eb1892a3721473",
+      "bytes": 31624,
+      "sha256": "35c82fc8311fcc7f62f43e9be7fd2f3d5fe05e27980848bf0529228d7259b514",
       "mode": "0644"
     },
     {
       "path": "remote_transport/global_desktop.py",
-      "bytes": 51856,
-      "sha256": "4c506362a534ab6a90f3277229ecd31564001a056c255787088835181615f85b",
+      "bytes": 52541,
+      "sha256": "80230ac6845665a0bfb66499f6ece218f198516fb6c9cad10d773f2412f28749",
       "mode": "0644"
     },
     {
@@ -1257,8 +1291,8 @@
     },
     {
       "path": "remote_transport/global_google.py",
-      "bytes": 43932,
-      "sha256": "67aa000703b06573a7d84a3504c9ee9ae5a8e202cbf2a466483b89a1d37de9ae",
+      "bytes": 44634,
+      "sha256": "77750a6aec4f7f6397b1cd091343af0f8de04f61dd7eb9d7033a4adf36e318c4",
       "mode": "0644"
     },
     {
@@ -1269,8 +1303,8 @@
     },
     {
       "path": "remote_transport/global_native.py",
-      "bytes": 49816,
-      "sha256": "09961a4d41f39d4ef0d07ed1a2902d9f8cdb476f440c14e53dc55a195660abee",
+      "bytes": 51819,
+      "sha256": "31d2f6b7795a942939085880f142f4c189d1293b16ce3e3f62ef804f3805e80d",
       "mode": "0644"
     },
     {
@@ -1283,6 +1317,12 @@
       "path": "remote_transport/global_timing.py",
       "bytes": 2200,
       "sha256": "b8efa28d784300fcd8b0a840ffe146f3f71040c96bc8e98fb08424e781010fb5",
+      "mode": "0644"
+    },
+    {
+      "path": "remote_transport/legacy_cleanup.py",
+      "bytes": 13399,
+      "sha256": "aaeec4752265e83120d812ac86a7ed79066fa4baa1704c15d5d231781632369a",
       "mode": "0644"
     },
     {
@@ -1311,8 +1351,8 @@
     },
     {
       "path": "remote_transport/model.py",
-      "bytes": 7416,
-      "sha256": "47e222531809e0aeb0f69610653d278a6d571275902ad2f1108a45014c99eb32",
+      "bytes": 7664,
+      "sha256": "dea5390b8d4b5c957c3d6e5c3574a60c793601806bd6a28da0cf0d1a0c791a06",
       "mode": "0644"
     },
     {
@@ -1329,8 +1369,8 @@
     },
     {
       "path": "remote_transport/router_bootstrap.py",
-      "bytes": 29242,
-      "sha256": "05cd8237453c72eb269c1b6adac29c037e581bb769f36ddc71b6a3d50e9243a2",
+      "bytes": 29648,
+      "sha256": "973ab7038df7a86872cdcd10141a14fdb910fd2de691ce0d8a797fc68686c3e5",
       "mode": "0644"
     },
     {
@@ -1347,8 +1387,8 @@
     },
     {
       "path": "remote_transport/router_mac.py",
-      "bytes": 46245,
-      "sha256": "43214e644ba750490f252d9d3b4d4fd301a22584dffa4a0f7e0bb1d2fd6fab03",
+      "bytes": 47961,
+      "sha256": "d239aec848c9f35cf832f1b026f47fb4110f780df19593872d94f808ccff3bbe",
       "mode": "0644"
     },
     {
@@ -1359,8 +1399,8 @@
     },
     {
       "path": "remote_transport/selection.py",
-      "bytes": 8248,
-      "sha256": "6c8155883ef05c09485970292d66c85e33738f06a22f5966c0bbab0d7f04852e",
+      "bytes": 8411,
+      "sha256": "4135edcb5555a2a4aaf259c664cf0c6201292fb56ea031e8bf621c80627e923e",
       "mode": "0644"
     },
     {
@@ -1628,7 +1668,7 @@
       "mode": "0644"
     }
   ],
-  "parent_commit": "d2dc62618f9eb0d94d93faedf9b0976a870504d8",
+  "parent_commit": "6be738b68f90f0e1c6493f91dabe61e263d3b267",
   "global_config_pilot_gate_implemented": true,
   "global_config_pilot_runtime_exercised": false,
   "input_desktop_global_source_tree_sha256": "7999cd2b2a5e028bc706760d7a290f44a3b5365b76c5f38f88a4d9478a89b4f3",
@@ -1681,20 +1721,21 @@
     "real_mac_native_google_acceptance": false
   },
   "test_results": {
-    "contract": "dots2codex-xhigh-default-offline-validation/1",
+    "contract": "dots2codex-recovery-fixes-offline-validation/1",
     "status": "passed_with_explicit_optional_skips",
-    "source_tree_sha256": "79f40f5ab1cb5eb63dd38fbffbb1428bcd440819cda3d6f32f5104005e1ea8d7",
+    "source_tree_sha256": "461e0f1167faa950aab40ae2d66d07f222807cf4cfe599e0412decdf82b2c8a6",
     "final_snapshot_validated": true,
     "live_mac_google_native_verified": false,
     "google_writes": 0,
     "native_inference_calls": 0,
     "dependency_install_performed": false,
-    "full_run_jobs": 83,
+    "full_run_jobs": 87,
+    "max_concurrent_test_jobs": 6,
     "six_way_isolated_full_run": true,
     "reused_prior_run_results": false,
     "tests": {
-      "tests": 1315,
-      "passed": 1306,
+      "tests": 1387,
+      "passed": 1378,
       "failures": 0,
       "errors": 0,
       "skipped": 9,
@@ -1702,8 +1743,8 @@
       "unexpected_successes": 0
     },
     "python": {
-      "tests": 1150,
-      "passed": 1141,
+      "tests": 1202,
+      "passed": 1193,
       "failures": 0,
       "errors": 0,
       "skipped": 9,
@@ -1711,8 +1752,8 @@
       "unexpected_successes": 0
     },
     "node": {
-      "tests": 165,
-      "passed": 165,
+      "tests": 185,
+      "passed": 185,
       "failures": 0,
       "errors": 0,
       "skipped": 0,
@@ -1721,8 +1762,8 @@
     },
     "totals_by_suite": {
       "remote_tests": {
-        "tests": 881,
-        "passed": 872,
+        "tests": 933,
+        "passed": 924,
         "failures": 0,
         "errors": 0,
         "skipped": 9,
@@ -1775,8 +1816,8 @@
         "unexpected_successes": 0
       },
       "node": {
-        "tests": 165,
-        "passed": 165,
+        "tests": 185,
+        "passed": 185,
         "failures": 0,
         "errors": 0,
         "skipped": 0,
@@ -1796,30 +1837,38 @@
     "skips_by_reason": {
       "optional tomlkit unavailable; real parser integration NOT VERIFIED": 9
     },
-    "full_run_seconds": 156.055,
-    "full_snapshot_sha256": "cbbc50642330d7af782ff44f8e49b3e546acf502f8904a15da593e40196765b7",
+    "new_test_modules": [
+      "native_connector/global_controller_heartbeat_handoff.test.js",
+      "remote_tests/test_global_heartbeat_ready_handoff.py",
+      "remote_tests/test_google_sdk_concurrency.py",
+      "remote_tests/test_legacy_cleanup.py"
+    ],
+    "real_sdk_modules": {
+      "remote_tests/test_google_read_recovery.py": 29,
+      "remote_tests/test_google_sdk_concurrency.py": 23,
+      "sdk_tests/test_google_sdk_independent.py": 3
+    },
+    "real_sdk_modules_zero_skips": true,
+    "full_run_seconds": 170.931,
+    "full_snapshot_sha256": "a8a6ba32ef1acaeaacf0515f25df09c01a76632ef7c9ffba895335b68df542cb",
     "tree_unchanged_during_run": true,
     "final_manifest_verified": true,
-    "manifest_entries": 263,
+    "manifest_entries": 269,
     "syntax_checks": {
-      "python": 143,
-      "node": 21,
+      "python": 147,
+      "node": 22,
       "shell": 11,
-      "json": 16
+      "json": 17
     },
-    "independent_migration_tests_passed": 19,
-    "independent_tests_already_included_in_totals": true,
-    "catalog_version": "2026-10-01.codex-0.159.2.v2",
-    "catalog_sha256": "67b816ad4cbc7a86dfd9beab767534039b02b71968b6664258f88b692ccd85c9",
-    "allowed_bridge_pairs": 20,
-    "official_cli_pair_catalog_parses_passed": 20,
-    "official_cli_global_catalog_parses_passed": 4,
-    "official_cli_parses_supplemental_not_in_test_totals": true,
+    "network_attempts_blocked": 0,
+    "leaked_subprocesses": 0,
+    "per_job_descendant_supervision": true,
+    "network_guards": "Python audit hook, Node hooks, inherited native socket guard; local fixture loopback only",
+    "toml_parser_integration_verified": false,
     "known_limits": [
-      "Nine optional real tomlkit parser integration cases skipped because the dependency is unavailable; no dependency installation performed.",
-      "Mac native UI, real Google writes, native admission/inference, client traffic, and end-to-end activation were not run.",
-      "Official Codex 0.159.2 catalog parse acceptance is not model entitlement or backend model attestation.",
-      "Retired v1 selections and signed roots are not rewritten or silently downgraded; stop and restore prior activation, explicitly reselect in Settings, then start a new same-version pairing."
+      "Optional real tomlkit parser integration cases, if listed in skips_by_reason, were skipped because the dependency is unavailable; no dependency installation performed.",
+      "Mac native UI, real Google writes, native admission/inference, client traffic, live queue/protocol traffic, and end-to-end activation were not run.",
+      "Deterministic benchmark results describe offline scheduling only, not live-service latency."
     ]
   },
   "prior_heartbeat_v2_validation": {
@@ -2352,7 +2401,7 @@
       "results_reused_in_final_validation": false
     }
   },
-  "xhigh_default_validation": {
+  "prior_xhigh_default_validation": {
     "contract": "dots2codex-xhigh-default-offline-validation/1",
     "status": "passed_with_explicit_optional_skips",
     "source_tree_sha256": "79f40f5ab1cb5eb63dd38fbffbb1428bcd440819cda3d6f32f5104005e1ea8d7",
@@ -2492,6 +2541,157 @@
       "Mac native UI, real Google writes, native admission/inference, client traffic, and end-to-end activation were not run.",
       "Official Codex 0.159.2 catalog parse acceptance is not model entitlement or backend model attestation.",
       "Retired v1 selections and signed roots are not rewritten or silently downgraded; stop and restore prior activation, explicitly reselect in Settings, then start a new same-version pairing."
+    ]
+  },
+  "recovery_fixes_validation": {
+    "contract": "dots2codex-recovery-fixes-offline-validation/1",
+    "status": "passed_with_explicit_optional_skips",
+    "source_tree_sha256": "461e0f1167faa950aab40ae2d66d07f222807cf4cfe599e0412decdf82b2c8a6",
+    "final_snapshot_validated": true,
+    "live_mac_google_native_verified": false,
+    "google_writes": 0,
+    "native_inference_calls": 0,
+    "dependency_install_performed": false,
+    "full_run_jobs": 87,
+    "max_concurrent_test_jobs": 6,
+    "six_way_isolated_full_run": true,
+    "reused_prior_run_results": false,
+    "tests": {
+      "tests": 1387,
+      "passed": 1378,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "python": {
+      "tests": 1202,
+      "passed": 1193,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 9,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "node": {
+      "tests": 185,
+      "passed": 185,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "expected_failures": 0,
+      "unexpected_successes": 0
+    },
+    "totals_by_suite": {
+      "remote_tests": {
+        "tests": 933,
+        "passed": 924,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 9,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "tests": {
+        "tests": 134,
+        "passed": 134,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "remote_audit/cas": {
+        "tests": 47,
+        "passed": 47,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "remote_audit/drive": {
+        "tests": 48,
+        "passed": 48,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "sdk_tests": {
+        "tests": 3,
+        "passed": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "docs/gemini_setup/tools": {
+        "tests": 37,
+        "passed": 37,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "node": {
+        "tests": 185,
+        "passed": 185,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      },
+      "benchmark": {
+        "tests": 0,
+        "passed": 0,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "expected_failures": 0,
+        "unexpected_successes": 0
+      }
+    },
+    "skips_by_reason": {
+      "optional tomlkit unavailable; real parser integration NOT VERIFIED": 9
+    },
+    "new_test_modules": [
+      "native_connector/global_controller_heartbeat_handoff.test.js",
+      "remote_tests/test_global_heartbeat_ready_handoff.py",
+      "remote_tests/test_google_sdk_concurrency.py",
+      "remote_tests/test_legacy_cleanup.py"
+    ],
+    "real_sdk_modules": {
+      "remote_tests/test_google_read_recovery.py": 29,
+      "remote_tests/test_google_sdk_concurrency.py": 23,
+      "sdk_tests/test_google_sdk_independent.py": 3
+    },
+    "real_sdk_modules_zero_skips": true,
+    "full_run_seconds": 170.931,
+    "full_snapshot_sha256": "a8a6ba32ef1acaeaacf0515f25df09c01a76632ef7c9ffba895335b68df542cb",
+    "tree_unchanged_during_run": true,
+    "final_manifest_verified": true,
+    "manifest_entries": 269,
+    "syntax_checks": {
+      "python": 147,
+      "node": 22,
+      "shell": 11,
+      "json": 17
+    },
+    "network_attempts_blocked": 0,
+    "leaked_subprocesses": 0,
+    "per_job_descendant_supervision": true,
+    "network_guards": "Python audit hook, Node hooks, inherited native socket guard; local fixture loopback only",
+    "toml_parser_integration_verified": false,
+    "known_limits": [
+      "Optional real tomlkit parser integration cases, if listed in skips_by_reason, were skipped because the dependency is unavailable; no dependency installation performed.",
+      "Mac native UI, real Google writes, native admission/inference, client traffic, live queue/protocol traffic, and end-to-end activation were not run.",
+      "Deterministic benchmark results describe offline scheduling only, not live-service latency."
     ]
   }
 }

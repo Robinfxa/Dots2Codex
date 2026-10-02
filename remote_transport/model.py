@@ -111,6 +111,12 @@ class Object:
                 b['kind'], b['seq'], b['attempt'], b['actor'])
 
     def validate(self):
+        from .selection import validate_inference
+        return self._validate(validate_inference)
+
+    def _validate(self, inference_validator):
+        # Shared structural checks. Runtime entrypoints always use validate();
+        # the close-only recovery reader supplies its narrowly bounded reader.
         v = self._decoded
         require(isinstance(v, dict) and set(v) == {'object_id', 'body'}, 'invalid_envelope')
         b = v['body']
@@ -137,8 +143,7 @@ class Object:
             require(set(p) in ({'created', 'expires', 'max_requests', 'scope', 'ownership'},
                     {'created', 'expires', 'max_requests', 'scope', 'ownership', 'inference'}), 'invalid_deployment')
             if 'inference' in p:
-                from .selection import validate_inference
-                validate_inference(p['inference'], ident['native_task_id'])
+                inference_validator(p['inference'], ident['native_task_id'])
             require(type(p['created']) is int and type(p['expires']) is int and
                     1 <= p['expires'] - p['created'] <= MAX_SESSION_SECONDS, 'invalid_lifetime')
             require(type(p['max_requests']) is int and 1 <= p['max_requests'] <= MAX_REQUESTS and

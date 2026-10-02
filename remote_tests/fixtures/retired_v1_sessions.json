@@ -1,0 +1,810 @@
+{
+  "fixture_source": "Generated offline by Dots2Codex-startup-round3-frozen-v2 (retired v1). Synthetic identifiers and join code only; no user credentials or documents.",
+  "join_code": "SYNTHETIC_retired_catalog_fixture_only",
+  "sessions": {
+    "max": {
+      "bootstrap_consumed": {
+        "bootstrap_document_id": "bootstrap",
+        "bootstrap_id": "boot123",
+        "bootstrap_tab_id": "t.0",
+        "bundle": null,
+        "bundle_hashes": {
+          "config_sha256": "6748c8bfd3f1d545eaace801937687cec709ab5dfd0966a5506f0ee157796cdf",
+          "deployment_hash": "9362a81632e574f25917df326915bff8201b9b95a96ed4b2d77df8a4350edda8",
+          "pin_sha256": "5ac3f9a9ca7f408a3931a03630fcf7b546b96c6cb0a1a469ae78e97f1e2915d0"
+        },
+        "contract": "dots-router-bootstrap/3",
+        "control": {
+          "control_id": "cid",
+          "document_id": "control",
+          "mac_writer_identity": "mac-controller-router",
+          "tab_id": "t.0",
+          "worker_writer_identity": "remote-worker-router"
+        },
+        "created": 1000,
+        "epoch": 4,
+        "events": [
+          {
+            "actor": "worker",
+            "after": {
+              "bundle_commitment": null,
+              "bundle_hashes": null,
+              "stage": "WORKER_ADMITTED",
+              "worker": {
+                "admission": {
+                  "adapter": "collaboration.spawn_agent",
+                  "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+                  "contract": "dots-native-admission/1",
+                  "fork_turns": "none",
+                  "native_task_id": "/root/synthetic_worker",
+                  "submitted_model": "gpt-6.1-sol",
+                  "submitted_reasoning_effort": "max",
+                  "underlying_model_verified": false,
+                  "verification": "parent_recorded_platform_admission"
+                },
+                "admitted_at": 1001,
+                "native_task_id": "/root/synthetic_worker",
+                "probe": {
+                  "file_id": "probeFile",
+                  "name": "dots2codex-router-probe-boot123.json",
+                  "sha256": "0d8e2ea61fe8daf919fba1ea6151030a7ee7063f9d50c791c89304a275665a1e"
+                },
+                "proof": "ad9ba6fbe42b869797d1a6727c2910e6c3318f0f13475c78b453a7cfcc04099c"
+              },
+              "worker_ack": null
+            },
+            "at": 1001,
+            "before_hash": "9361c01c18b8fd409ceaa44807f17996be0c987576d96dd94cfb2304fb7e51c9",
+            "epoch": 1,
+            "kind": "worker_admitted",
+            "mac": "cf698ef6720b5920760102ec1f2aae79ccabec1b89937a5ebc57ab31fd54239e",
+            "operation_id": "d7031f2e3bf44bb03c9ce0ba990ce326",
+            "parent_hash": "cd37b805d234d529c8d5439401de83b72483281051110e9cc8053f7cb1d82678",
+            "reason": ""
+          },
+          {
+            "actor": "mac",
+            "after": {
+              "bundle_commitment": "8b80cc831160f27f90d675e45a309c4a236cf39eda2f27c1db26890c713e6e65",
+              "bundle_hashes": {
+                "config_sha256": "6748c8bfd3f1d545eaace801937687cec709ab5dfd0966a5506f0ee157796cdf",
+                "deployment_hash": "9362a81632e574f25917df326915bff8201b9b95a96ed4b2d77df8a4350edda8",
+                "pin_sha256": "5ac3f9a9ca7f408a3931a03630fcf7b546b96c6cb0a1a469ae78e97f1e2915d0"
+              },
+              "stage": "BUNDLE_READY",
+              "worker": {
+                "admission": {
+                  "adapter": "collaboration.spawn_agent",
+                  "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+                  "contract": "dots-native-admission/1",
+                  "fork_turns": "none",
+                  "native_task_id": "/root/synthetic_worker",
+                  "submitted_model": "gpt-6.1-sol",
+                  "submitted_reasoning_effort": "max",
+                  "underlying_model_verified": false,
+                  "verification": "parent_recorded_platform_admission"
+                },
+                "admitted_at": 1001,
+                "native_task_id": "/root/synthetic_worker",
+                "probe": {
+                  "file_id": "probeFile",
+                  "name": "dots2codex-router-probe-boot123.json",
+                  "sha256": "0d8e2ea61fe8daf919fba1ea6151030a7ee7063f9d50c791c89304a275665a1e"
+                },
+                "proof": "ad9ba6fbe42b869797d1a6727c2910e6c3318f0f13475c78b453a7cfcc04099c"
+              },
+              "worker_ack": null
+            },
+            "at": 1003,
+            "before_hash": "9eb5220210eb0215f12a5d39a4370a73e67a21be911a35e35c1b71b6e6ec8698",
+            "epoch": 2,
+            "kind": "bundle_ready",
+            "mac": "ceb91f42c2e0015be4e52bc0fdb645e388f703ab8e4845fc50715f74921e7f5d",
+            "operation_id": "383c5b1fa39328fe2860fbbbc0cd1d54",
+            "parent_hash": "c3efe2fbbfd7c6ebfda5b52a6b01e3626934ae85aba4a8d6b5fae6f8f2d3e946",
+            "reason": ""
+          },
+          {
+            "actor": "worker",
+            "after": {
+              "bundle_commitment": "8b80cc831160f27f90d675e45a309c4a236cf39eda2f27c1db26890c713e6e65",
+              "bundle_hashes": {
+                "config_sha256": "6748c8bfd3f1d545eaace801937687cec709ab5dfd0966a5506f0ee157796cdf",
+                "deployment_hash": "9362a81632e574f25917df326915bff8201b9b95a96ed4b2d77df8a4350edda8",
+                "pin_sha256": "5ac3f9a9ca7f408a3931a03630fcf7b546b96c6cb0a1a469ae78e97f1e2915d0"
+              },
+              "stage": "WORKER_POLLING",
+              "worker": {
+                "admission": {
+                  "adapter": "collaboration.spawn_agent",
+                  "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+                  "contract": "dots-native-admission/1",
+                  "fork_turns": "none",
+                  "native_task_id": "/root/synthetic_worker",
+                  "submitted_model": "gpt-6.1-sol",
+                  "submitted_reasoning_effort": "max",
+                  "underlying_model_verified": false,
+                  "verification": "parent_recorded_platform_admission"
+                },
+                "admitted_at": 1001,
+                "native_task_id": "/root/synthetic_worker",
+                "probe": {
+                  "file_id": "probeFile",
+                  "name": "dots2codex-router-probe-boot123.json",
+                  "sha256": "0d8e2ea61fe8daf919fba1ea6151030a7ee7063f9d50c791c89304a275665a1e"
+                },
+                "proof": "ad9ba6fbe42b869797d1a6727c2910e6c3318f0f13475c78b453a7cfcc04099c"
+              },
+              "worker_ack": {
+                "bundle_hashes": {
+                  "config_sha256": "6748c8bfd3f1d545eaace801937687cec709ab5dfd0966a5506f0ee157796cdf",
+                  "deployment_hash": "9362a81632e574f25917df326915bff8201b9b95a96ed4b2d77df8a4350edda8",
+                  "pin_sha256": "5ac3f9a9ca7f408a3931a03630fcf7b546b96c6cb0a1a469ae78e97f1e2915d0"
+                },
+                "forward_probe_sha256": "7e88acbfd3776f80b3ffacab941eafc707ac6d08c618ce14fb76dd2ca1d0e1ac",
+                "native_task_id": "/root/synthetic_worker",
+                "proof": "f1e5041b78aaecaa7fd80f45f29fa0501fad70bc234b3efe7ba84f8794029fcb",
+                "ready_at": 1004,
+                "runtime_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              }
+            },
+            "at": 1004,
+            "before_hash": "f3ac5e482264314e97f4cdae45a67e7bb4571aa6327a9d2557e54f2c49be195c",
+            "epoch": 3,
+            "kind": "worker_polling",
+            "mac": "58d59cb1f315311ecc6373a4d31850644a3b0f9059de1ad459684a1cbf96fca2",
+            "operation_id": "41e4fdd3d4442a471ee103b4e6d7429e",
+            "parent_hash": "f94cb3ffdd9099b09a384a85d587b6623ba877811019546b0597eb3ef4e5a08b",
+            "reason": ""
+          },
+          {
+            "actor": "mac",
+            "after": {
+              "bundle_commitment": null,
+              "bundle_hashes": {
+                "config_sha256": "6748c8bfd3f1d545eaace801937687cec709ab5dfd0966a5506f0ee157796cdf",
+                "deployment_hash": "9362a81632e574f25917df326915bff8201b9b95a96ed4b2d77df8a4350edda8",
+                "pin_sha256": "5ac3f9a9ca7f408a3931a03630fcf7b546b96c6cb0a1a469ae78e97f1e2915d0"
+              },
+              "stage": "CONSUMED",
+              "worker": {
+                "admission": {
+                  "adapter": "collaboration.spawn_agent",
+                  "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+                  "contract": "dots-native-admission/1",
+                  "fork_turns": "none",
+                  "native_task_id": "/root/synthetic_worker",
+                  "submitted_model": "gpt-6.1-sol",
+                  "submitted_reasoning_effort": "max",
+                  "underlying_model_verified": false,
+                  "verification": "parent_recorded_platform_admission"
+                },
+                "admitted_at": 1001,
+                "native_task_id": "/root/synthetic_worker",
+                "probe": {
+                  "file_id": "probeFile",
+                  "name": "dots2codex-router-probe-boot123.json",
+                  "sha256": "0d8e2ea61fe8daf919fba1ea6151030a7ee7063f9d50c791c89304a275665a1e"
+                },
+                "proof": "ad9ba6fbe42b869797d1a6727c2910e6c3318f0f13475c78b453a7cfcc04099c"
+              },
+              "worker_ack": {
+                "bundle_hashes": {
+                  "config_sha256": "6748c8bfd3f1d545eaace801937687cec709ab5dfd0966a5506f0ee157796cdf",
+                  "deployment_hash": "9362a81632e574f25917df326915bff8201b9b95a96ed4b2d77df8a4350edda8",
+                  "pin_sha256": "5ac3f9a9ca7f408a3931a03630fcf7b546b96c6cb0a1a469ae78e97f1e2915d0"
+                },
+                "forward_probe_sha256": "7e88acbfd3776f80b3ffacab941eafc707ac6d08c618ce14fb76dd2ca1d0e1ac",
+                "native_task_id": "/root/synthetic_worker",
+                "proof": "f1e5041b78aaecaa7fd80f45f29fa0501fad70bc234b3efe7ba84f8794029fcb",
+                "ready_at": 1004,
+                "runtime_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              }
+            },
+            "at": 1005,
+            "before_hash": "6ffbdb2a95fb478b67e5ff6426bcee96683451a6319c33d2a65951b6e8219849",
+            "epoch": 4,
+            "kind": "bundle_consumed",
+            "mac": "af8d7c1462bfeccdc7209a1f820bf1d9594f9412712d112d435bcb6d72407636",
+            "operation_id": "52135ea8b746ad995c8a517b78495a9c",
+            "parent_hash": "37c4e6051a2956178b13ef9820d6618de353fee5a3257ef3241bdab6bd414a72",
+            "reason": ""
+          }
+        ],
+        "expires": 2800,
+        "folder_id": "folder",
+        "forward_probe": {
+          "file_id": "forwardFile",
+          "name": "dots2codex-router-forward-probe-boot123.json",
+          "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+          "sha256": "7e88acbfd3776f80b3ffacab941eafc707ac6d08c618ce14fb76dd2ca1d0e1ac"
+        },
+        "join_code_sha256": "4975d701a63569ae4091a088a5160ff5b67efe92002206520ae8baabb95fb82b",
+        "required_selection": {
+          "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+          "catalog_version": "2026-10-01.codex-0.159.2.v1",
+          "contract": "dots-native-selection/1",
+          "model": "gpt-6.1-sol",
+          "reasoning_effort": "max"
+        },
+        "root_mac": "efe5514ad69ac9a4bc46e65ce5a93ec30b310cbba2a31e7e4b0a3ced04af02ad",
+        "session_id": "router-session",
+        "stage": "CONSUMED",
+        "worker": {
+          "admission": {
+            "adapter": "collaboration.spawn_agent",
+            "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+            "contract": "dots-native-admission/1",
+            "fork_turns": "none",
+            "native_task_id": "/root/synthetic_worker",
+            "submitted_model": "gpt-6.1-sol",
+            "submitted_reasoning_effort": "max",
+            "underlying_model_verified": false,
+            "verification": "parent_recorded_platform_admission"
+          },
+          "admitted_at": 1001,
+          "native_task_id": "/root/synthetic_worker",
+          "probe": {
+            "file_id": "probeFile",
+            "name": "dots2codex-router-probe-boot123.json",
+            "sha256": "0d8e2ea61fe8daf919fba1ea6151030a7ee7063f9d50c791c89304a275665a1e"
+          },
+          "proof": "ad9ba6fbe42b869797d1a6727c2910e6c3318f0f13475c78b453a7cfcc04099c"
+        },
+        "worker_ack": {
+          "bundle_hashes": {
+            "config_sha256": "6748c8bfd3f1d545eaace801937687cec709ab5dfd0966a5506f0ee157796cdf",
+            "deployment_hash": "9362a81632e574f25917df326915bff8201b9b95a96ed4b2d77df8a4350edda8",
+            "pin_sha256": "5ac3f9a9ca7f408a3931a03630fcf7b546b96c6cb0a1a469ae78e97f1e2915d0"
+          },
+          "forward_probe_sha256": "7e88acbfd3776f80b3ffacab941eafc707ac6d08c618ce14fb76dd2ca1d0e1ac",
+          "native_task_id": "/root/synthetic_worker",
+          "proof": "f1e5041b78aaecaa7fd80f45f29fa0501fad70bc234b3efe7ba84f8794029fcb",
+          "ready_at": 1004,
+          "runtime_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "bootstrap_initial": {
+        "bootstrap_document_id": "bootstrap",
+        "bootstrap_id": "boot123",
+        "bootstrap_tab_id": "t.0",
+        "bundle": null,
+        "bundle_hashes": null,
+        "contract": "dots-router-bootstrap/3",
+        "control": {
+          "control_id": "cid",
+          "document_id": "control",
+          "mac_writer_identity": "mac-controller-router",
+          "tab_id": "t.0",
+          "worker_writer_identity": "remote-worker-router"
+        },
+        "created": 1000,
+        "epoch": 0,
+        "events": [],
+        "expires": 2800,
+        "folder_id": "folder",
+        "forward_probe": {
+          "file_id": "forwardFile",
+          "name": "dots2codex-router-forward-probe-boot123.json",
+          "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+          "sha256": "7e88acbfd3776f80b3ffacab941eafc707ac6d08c618ce14fb76dd2ca1d0e1ac"
+        },
+        "join_code_sha256": "4975d701a63569ae4091a088a5160ff5b67efe92002206520ae8baabb95fb82b",
+        "required_selection": {
+          "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+          "catalog_version": "2026-10-01.codex-0.159.2.v1",
+          "contract": "dots-native-selection/1",
+          "model": "gpt-6.1-sol",
+          "reasoning_effort": "max"
+        },
+        "root_mac": "efe5514ad69ac9a4bc46e65ce5a93ec30b310cbba2a31e7e4b0a3ced04af02ad",
+        "session_id": "router-session",
+        "stage": "WAITING_FOR_WORKER",
+        "worker": null,
+        "worker_ack": null
+      },
+      "control": {
+        "admissions": 0,
+        "binding": {
+          "created": 1002,
+          "deployment_hash": "9362a81632e574f25917df326915bff8201b9b95a96ed4b2d77df8a4350edda8",
+          "expires": 15402,
+          "generation": 1,
+          "identity": {
+            "assignment_epoch": 1,
+            "controller_id": "controller",
+            "controller_journal_id": "1f9bda3e5c37421882355394d63abfee",
+            "deployment_id": "41f2dbf5a1034ff0bd604d3f6822e881",
+            "generation": 1,
+            "native_task_id": "/root/synthetic_worker",
+            "session_id": "router-session",
+            "worker_id": "worker",
+            "worker_journal_id": "e5a1b8004500485a9e564ef8e8d8c78d"
+          },
+          "journal_id": "e5a1b8004500485a9e564ef8e8d8c78d",
+          "native_task_id": "/root/synthetic_worker",
+          "selection": {
+            "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+            "catalog_version": "2026-10-01.codex-0.159.2.v1",
+            "contract": "dots-native-selection/1",
+            "model": "gpt-6.1-sol",
+            "reasoning_effort": "max"
+          },
+          "worker_id": "worker"
+        },
+        "claim": null,
+        "contract": "dots-session-control/0",
+        "control_epoch": 0,
+        "control_id": "cid",
+        "dispatch": null,
+        "history": [],
+        "max_requests": 128,
+        "operations": [],
+        "phase": "IDLE",
+        "receipt": null,
+        "request": null,
+        "result": null,
+        "session_id": "router-session"
+      },
+      "pin": {
+        "body": {
+          "actor": "controller",
+          "attempt": 0,
+          "contract": "dots-drive-objects/0",
+          "deployment": null,
+          "identity": {
+            "assignment_epoch": 1,
+            "controller_id": "controller",
+            "controller_journal_id": "1f9bda3e5c37421882355394d63abfee",
+            "deployment_id": "41f2dbf5a1034ff0bd604d3f6822e881",
+            "generation": 1,
+            "native_task_id": "/root/synthetic_worker",
+            "session_id": "router-session",
+            "worker_id": "worker",
+            "worker_journal_id": "e5a1b8004500485a9e564ef8e8d8c78d"
+          },
+          "kind": "deployment",
+          "links": {},
+          "payload": {
+            "created": 1002,
+            "expires": 15402,
+            "inference": {
+              "admission": {
+                "adapter": "collaboration.spawn_agent",
+                "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+                "contract": "dots-native-admission/1",
+                "fork_turns": "none",
+                "native_task_id": "/root/synthetic_worker",
+                "submitted_model": "gpt-6.1-sol",
+                "submitted_reasoning_effort": "max",
+                "underlying_model_verified": false,
+                "verification": "parent_recorded_platform_admission"
+              },
+              "selection": {
+                "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+                "catalog_version": "2026-10-01.codex-0.159.2.v1",
+                "contract": "dots-native-selection/1",
+                "model": "gpt-6.1-sol",
+                "reasoning_effort": "max"
+              }
+            },
+            "max_requests": 128,
+            "ownership": "externally_pinned_single_writer",
+            "scope": "responses_tools"
+          },
+          "seq": 0
+        },
+        "object_id": "9362a81632e574f25917df326915bff8201b9b95a96ed4b2d77df8a4350edda8"
+      },
+      "selection": {
+        "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+        "catalog_version": "2026-10-01.codex-0.159.2.v1",
+        "contract": "dots-native-selection/1",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "max"
+      }
+    },
+    "xhigh": {
+      "bootstrap_consumed": {
+        "bootstrap_document_id": "bootstrap",
+        "bootstrap_id": "boot123",
+        "bootstrap_tab_id": "t.0",
+        "bundle": null,
+        "bundle_hashes": {
+          "config_sha256": "6748c8bfd3f1d545eaace801937687cec709ab5dfd0966a5506f0ee157796cdf",
+          "deployment_hash": "7b23e353b1cd78ac07b305d5c425ad34a10dd426d0617c26dc6645b8449b7187",
+          "pin_sha256": "11e95a979d7d996d7670cef883b80a2572e709899a8bf0095c621f60d7b8df4e"
+        },
+        "contract": "dots-router-bootstrap/3",
+        "control": {
+          "control_id": "cid",
+          "document_id": "control",
+          "mac_writer_identity": "mac-controller-router",
+          "tab_id": "t.0",
+          "worker_writer_identity": "remote-worker-router"
+        },
+        "created": 1000,
+        "epoch": 4,
+        "events": [
+          {
+            "actor": "worker",
+            "after": {
+              "bundle_commitment": null,
+              "bundle_hashes": null,
+              "stage": "WORKER_ADMITTED",
+              "worker": {
+                "admission": {
+                  "adapter": "collaboration.spawn_agent",
+                  "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+                  "contract": "dots-native-admission/1",
+                  "fork_turns": "none",
+                  "native_task_id": "/root/synthetic_worker",
+                  "submitted_model": "gpt-6.1-sol",
+                  "submitted_reasoning_effort": "xhigh",
+                  "underlying_model_verified": false,
+                  "verification": "parent_recorded_platform_admission"
+                },
+                "admitted_at": 1001,
+                "native_task_id": "/root/synthetic_worker",
+                "probe": {
+                  "file_id": "probeFile",
+                  "name": "dots2codex-router-probe-boot123.json",
+                  "sha256": "0d8e2ea61fe8daf919fba1ea6151030a7ee7063f9d50c791c89304a275665a1e"
+                },
+                "proof": "098b146e9c8e617fce42b2048463d1d4bb9a6082cc6b370f996fb5d2043ad677"
+              },
+              "worker_ack": null
+            },
+            "at": 1001,
+            "before_hash": "9361c01c18b8fd409ceaa44807f17996be0c987576d96dd94cfb2304fb7e51c9",
+            "epoch": 1,
+            "kind": "worker_admitted",
+            "mac": "74698764c67794534ef3829270dd93bcb71da4f4e38b78bf8ac9374e48b82ba1",
+            "operation_id": "cda99bf0c7c15de2d1f3017f186bab8e",
+            "parent_hash": "51b3f41e7f110b4e8880d3c65557f500e2505cd1b455c7ec3575bab1a3e635f2",
+            "reason": ""
+          },
+          {
+            "actor": "mac",
+            "after": {
+              "bundle_commitment": "13a9cd525de58fb54bc26947312f3e3d94bd41855874f486b39b3026e24fb3e8",
+              "bundle_hashes": {
+                "config_sha256": "6748c8bfd3f1d545eaace801937687cec709ab5dfd0966a5506f0ee157796cdf",
+                "deployment_hash": "7b23e353b1cd78ac07b305d5c425ad34a10dd426d0617c26dc6645b8449b7187",
+                "pin_sha256": "11e95a979d7d996d7670cef883b80a2572e709899a8bf0095c621f60d7b8df4e"
+              },
+              "stage": "BUNDLE_READY",
+              "worker": {
+                "admission": {
+                  "adapter": "collaboration.spawn_agent",
+                  "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+                  "contract": "dots-native-admission/1",
+                  "fork_turns": "none",
+                  "native_task_id": "/root/synthetic_worker",
+                  "submitted_model": "gpt-6.1-sol",
+                  "submitted_reasoning_effort": "xhigh",
+                  "underlying_model_verified": false,
+                  "verification": "parent_recorded_platform_admission"
+                },
+                "admitted_at": 1001,
+                "native_task_id": "/root/synthetic_worker",
+                "probe": {
+                  "file_id": "probeFile",
+                  "name": "dots2codex-router-probe-boot123.json",
+                  "sha256": "0d8e2ea61fe8daf919fba1ea6151030a7ee7063f9d50c791c89304a275665a1e"
+                },
+                "proof": "098b146e9c8e617fce42b2048463d1d4bb9a6082cc6b370f996fb5d2043ad677"
+              },
+              "worker_ack": null
+            },
+            "at": 1003,
+            "before_hash": "372484b12f864cf38ffc8a4db5fdcba284d2ab2757a6616ddee83910b02ef7d8",
+            "epoch": 2,
+            "kind": "bundle_ready",
+            "mac": "c75b84a6cdf1f46c3f64ba6fef01b4d61e0833c5f0de716d7f14e4871a7da9bb",
+            "operation_id": "c58d7f85dde5482741350d2876b487b9",
+            "parent_hash": "621da958d22f01cc7f5c2aeb127779b8a4ff3f85cdc99f78ff1dd52e4f241a4e",
+            "reason": ""
+          },
+          {
+            "actor": "worker",
+            "after": {
+              "bundle_commitment": "13a9cd525de58fb54bc26947312f3e3d94bd41855874f486b39b3026e24fb3e8",
+              "bundle_hashes": {
+                "config_sha256": "6748c8bfd3f1d545eaace801937687cec709ab5dfd0966a5506f0ee157796cdf",
+                "deployment_hash": "7b23e353b1cd78ac07b305d5c425ad34a10dd426d0617c26dc6645b8449b7187",
+                "pin_sha256": "11e95a979d7d996d7670cef883b80a2572e709899a8bf0095c621f60d7b8df4e"
+              },
+              "stage": "WORKER_POLLING",
+              "worker": {
+                "admission": {
+                  "adapter": "collaboration.spawn_agent",
+                  "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+                  "contract": "dots-native-admission/1",
+                  "fork_turns": "none",
+                  "native_task_id": "/root/synthetic_worker",
+                  "submitted_model": "gpt-6.1-sol",
+                  "submitted_reasoning_effort": "xhigh",
+                  "underlying_model_verified": false,
+                  "verification": "parent_recorded_platform_admission"
+                },
+                "admitted_at": 1001,
+                "native_task_id": "/root/synthetic_worker",
+                "probe": {
+                  "file_id": "probeFile",
+                  "name": "dots2codex-router-probe-boot123.json",
+                  "sha256": "0d8e2ea61fe8daf919fba1ea6151030a7ee7063f9d50c791c89304a275665a1e"
+                },
+                "proof": "098b146e9c8e617fce42b2048463d1d4bb9a6082cc6b370f996fb5d2043ad677"
+              },
+              "worker_ack": {
+                "bundle_hashes": {
+                  "config_sha256": "6748c8bfd3f1d545eaace801937687cec709ab5dfd0966a5506f0ee157796cdf",
+                  "deployment_hash": "7b23e353b1cd78ac07b305d5c425ad34a10dd426d0617c26dc6645b8449b7187",
+                  "pin_sha256": "11e95a979d7d996d7670cef883b80a2572e709899a8bf0095c621f60d7b8df4e"
+                },
+                "forward_probe_sha256": "7e88acbfd3776f80b3ffacab941eafc707ac6d08c618ce14fb76dd2ca1d0e1ac",
+                "native_task_id": "/root/synthetic_worker",
+                "proof": "707e4b8bf71ee0d588941f1d3a53046ec3517060637496609c4742e110af773b",
+                "ready_at": 1004,
+                "runtime_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              }
+            },
+            "at": 1004,
+            "before_hash": "0e0cf4e744dcf047b4dccd19929f5c49ab64e9911910119fa5d5ca5953d39b9e",
+            "epoch": 3,
+            "kind": "worker_polling",
+            "mac": "f1b8d7b5e0ad763147b1b063e6d088b4da8966fb2a4c1fbbe168c94a2e8e5ded",
+            "operation_id": "44b9a3f0f8e00eca75e1379c7a3dc9db",
+            "parent_hash": "19aebda698a3240121cbd813c24455605d4b5f26fc308a0d689aacbc55eafd29",
+            "reason": ""
+          },
+          {
+            "actor": "mac",
+            "after": {
+              "bundle_commitment": null,
+              "bundle_hashes": {
+                "config_sha256": "6748c8bfd3f1d545eaace801937687cec709ab5dfd0966a5506f0ee157796cdf",
+                "deployment_hash": "7b23e353b1cd78ac07b305d5c425ad34a10dd426d0617c26dc6645b8449b7187",
+                "pin_sha256": "11e95a979d7d996d7670cef883b80a2572e709899a8bf0095c621f60d7b8df4e"
+              },
+              "stage": "CONSUMED",
+              "worker": {
+                "admission": {
+                  "adapter": "collaboration.spawn_agent",
+                  "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+                  "contract": "dots-native-admission/1",
+                  "fork_turns": "none",
+                  "native_task_id": "/root/synthetic_worker",
+                  "submitted_model": "gpt-6.1-sol",
+                  "submitted_reasoning_effort": "xhigh",
+                  "underlying_model_verified": false,
+                  "verification": "parent_recorded_platform_admission"
+                },
+                "admitted_at": 1001,
+                "native_task_id": "/root/synthetic_worker",
+                "probe": {
+                  "file_id": "probeFile",
+                  "name": "dots2codex-router-probe-boot123.json",
+                  "sha256": "0d8e2ea61fe8daf919fba1ea6151030a7ee7063f9d50c791c89304a275665a1e"
+                },
+                "proof": "098b146e9c8e617fce42b2048463d1d4bb9a6082cc6b370f996fb5d2043ad677"
+              },
+              "worker_ack": {
+                "bundle_hashes": {
+                  "config_sha256": "6748c8bfd3f1d545eaace801937687cec709ab5dfd0966a5506f0ee157796cdf",
+                  "deployment_hash": "7b23e353b1cd78ac07b305d5c425ad34a10dd426d0617c26dc6645b8449b7187",
+                  "pin_sha256": "11e95a979d7d996d7670cef883b80a2572e709899a8bf0095c621f60d7b8df4e"
+                },
+                "forward_probe_sha256": "7e88acbfd3776f80b3ffacab941eafc707ac6d08c618ce14fb76dd2ca1d0e1ac",
+                "native_task_id": "/root/synthetic_worker",
+                "proof": "707e4b8bf71ee0d588941f1d3a53046ec3517060637496609c4742e110af773b",
+                "ready_at": 1004,
+                "runtime_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              }
+            },
+            "at": 1005,
+            "before_hash": "f578e0c266fd2c17bf9270048d6c317943f9a60fdaf235621bbc6c8939eb5fed",
+            "epoch": 4,
+            "kind": "bundle_consumed",
+            "mac": "4b1d85a6cf8b662c26e950794aab6f621ecd6219cea5e10fa0eececc637506b6",
+            "operation_id": "953eb09c8250f75566cf7d477b0fcb34",
+            "parent_hash": "ab79b75bc5d10f4c7d1c9138916216b66dcf50d368412ee5d6e82fa9d5dccd0f",
+            "reason": ""
+          }
+        ],
+        "expires": 2800,
+        "folder_id": "folder",
+        "forward_probe": {
+          "file_id": "forwardFile",
+          "name": "dots2codex-router-forward-probe-boot123.json",
+          "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+          "sha256": "7e88acbfd3776f80b3ffacab941eafc707ac6d08c618ce14fb76dd2ca1d0e1ac"
+        },
+        "join_code_sha256": "4975d701a63569ae4091a088a5160ff5b67efe92002206520ae8baabb95fb82b",
+        "required_selection": {
+          "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+          "catalog_version": "2026-10-01.codex-0.159.2.v1",
+          "contract": "dots-native-selection/1",
+          "model": "gpt-6.1-sol",
+          "reasoning_effort": "xhigh"
+        },
+        "root_mac": "95131a01ea017ed5ea5d17071d90b8bdb190f572d4efb155915a8826d648ade1",
+        "session_id": "router-session",
+        "stage": "CONSUMED",
+        "worker": {
+          "admission": {
+            "adapter": "collaboration.spawn_agent",
+            "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+            "contract": "dots-native-admission/1",
+            "fork_turns": "none",
+            "native_task_id": "/root/synthetic_worker",
+            "submitted_model": "gpt-6.1-sol",
+            "submitted_reasoning_effort": "xhigh",
+            "underlying_model_verified": false,
+            "verification": "parent_recorded_platform_admission"
+          },
+          "admitted_at": 1001,
+          "native_task_id": "/root/synthetic_worker",
+          "probe": {
+            "file_id": "probeFile",
+            "name": "dots2codex-router-probe-boot123.json",
+            "sha256": "0d8e2ea61fe8daf919fba1ea6151030a7ee7063f9d50c791c89304a275665a1e"
+          },
+          "proof": "098b146e9c8e617fce42b2048463d1d4bb9a6082cc6b370f996fb5d2043ad677"
+        },
+        "worker_ack": {
+          "bundle_hashes": {
+            "config_sha256": "6748c8bfd3f1d545eaace801937687cec709ab5dfd0966a5506f0ee157796cdf",
+            "deployment_hash": "7b23e353b1cd78ac07b305d5c425ad34a10dd426d0617c26dc6645b8449b7187",
+            "pin_sha256": "11e95a979d7d996d7670cef883b80a2572e709899a8bf0095c621f60d7b8df4e"
+          },
+          "forward_probe_sha256": "7e88acbfd3776f80b3ffacab941eafc707ac6d08c618ce14fb76dd2ca1d0e1ac",
+          "native_task_id": "/root/synthetic_worker",
+          "proof": "707e4b8bf71ee0d588941f1d3a53046ec3517060637496609c4742e110af773b",
+          "ready_at": 1004,
+          "runtime_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "bootstrap_initial": {
+        "bootstrap_document_id": "bootstrap",
+        "bootstrap_id": "boot123",
+        "bootstrap_tab_id": "t.0",
+        "bundle": null,
+        "bundle_hashes": null,
+        "contract": "dots-router-bootstrap/3",
+        "control": {
+          "control_id": "cid",
+          "document_id": "control",
+          "mac_writer_identity": "mac-controller-router",
+          "tab_id": "t.0",
+          "worker_writer_identity": "remote-worker-router"
+        },
+        "created": 1000,
+        "epoch": 0,
+        "events": [],
+        "expires": 2800,
+        "folder_id": "folder",
+        "forward_probe": {
+          "file_id": "forwardFile",
+          "name": "dots2codex-router-forward-probe-boot123.json",
+          "nonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+          "sha256": "7e88acbfd3776f80b3ffacab941eafc707ac6d08c618ce14fb76dd2ca1d0e1ac"
+        },
+        "join_code_sha256": "4975d701a63569ae4091a088a5160ff5b67efe92002206520ae8baabb95fb82b",
+        "required_selection": {
+          "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+          "catalog_version": "2026-10-01.codex-0.159.2.v1",
+          "contract": "dots-native-selection/1",
+          "model": "gpt-6.1-sol",
+          "reasoning_effort": "xhigh"
+        },
+        "root_mac": "95131a01ea017ed5ea5d17071d90b8bdb190f572d4efb155915a8826d648ade1",
+        "session_id": "router-session",
+        "stage": "WAITING_FOR_WORKER",
+        "worker": null,
+        "worker_ack": null
+      },
+      "control": {
+        "admissions": 0,
+        "binding": {
+          "created": 1002,
+          "deployment_hash": "7b23e353b1cd78ac07b305d5c425ad34a10dd426d0617c26dc6645b8449b7187",
+          "expires": 15402,
+          "generation": 1,
+          "identity": {
+            "assignment_epoch": 1,
+            "controller_id": "controller",
+            "controller_journal_id": "f1b158504d9141d2af44d7967de0ef0b",
+            "deployment_id": "25e030535cd041d98145d74b2010aab5",
+            "generation": 1,
+            "native_task_id": "/root/synthetic_worker",
+            "session_id": "router-session",
+            "worker_id": "worker",
+            "worker_journal_id": "08270bc8b0df48dea3d9cdb7a5197c96"
+          },
+          "journal_id": "08270bc8b0df48dea3d9cdb7a5197c96",
+          "native_task_id": "/root/synthetic_worker",
+          "selection": {
+            "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+            "catalog_version": "2026-10-01.codex-0.159.2.v1",
+            "contract": "dots-native-selection/1",
+            "model": "gpt-6.1-sol",
+            "reasoning_effort": "xhigh"
+          },
+          "worker_id": "worker"
+        },
+        "claim": null,
+        "contract": "dots-session-control/0",
+        "control_epoch": 0,
+        "control_id": "cid",
+        "dispatch": null,
+        "history": [],
+        "max_requests": 128,
+        "operations": [],
+        "phase": "IDLE",
+        "receipt": null,
+        "request": null,
+        "result": null,
+        "session_id": "router-session"
+      },
+      "pin": {
+        "body": {
+          "actor": "controller",
+          "attempt": 0,
+          "contract": "dots-drive-objects/0",
+          "deployment": null,
+          "identity": {
+            "assignment_epoch": 1,
+            "controller_id": "controller",
+            "controller_journal_id": "f1b158504d9141d2af44d7967de0ef0b",
+            "deployment_id": "25e030535cd041d98145d74b2010aab5",
+            "generation": 1,
+            "native_task_id": "/root/synthetic_worker",
+            "session_id": "router-session",
+            "worker_id": "worker",
+            "worker_journal_id": "08270bc8b0df48dea3d9cdb7a5197c96"
+          },
+          "kind": "deployment",
+          "links": {},
+          "payload": {
+            "created": 1002,
+            "expires": 15402,
+            "inference": {
+              "admission": {
+                "adapter": "collaboration.spawn_agent",
+                "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+                "contract": "dots-native-admission/1",
+                "fork_turns": "none",
+                "native_task_id": "/root/synthetic_worker",
+                "submitted_model": "gpt-6.1-sol",
+                "submitted_reasoning_effort": "xhigh",
+                "underlying_model_verified": false,
+                "verification": "parent_recorded_platform_admission"
+              },
+              "selection": {
+                "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+                "catalog_version": "2026-10-01.codex-0.159.2.v1",
+                "contract": "dots-native-selection/1",
+                "model": "gpt-6.1-sol",
+                "reasoning_effort": "xhigh"
+              }
+            },
+            "max_requests": 128,
+            "ownership": "externally_pinned_single_writer",
+            "scope": "responses_tools"
+          },
+          "seq": 0
+        },
+        "object_id": "7b23e353b1cd78ac07b305d5c425ad34a10dd426d0617c26dc6645b8449b7187"
+      },
+      "selection": {
+        "catalog_sha256": "ae293637817c1b758d5819b5f6944ad32fd8a21bd46092dd49aeeed5dcf5d583",
+        "catalog_version": "2026-10-01.codex-0.159.2.v1",
+        "contract": "dots-native-selection/1",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "xhigh"
+      }
+    }
+  }
+}

@@ -21,7 +21,7 @@ from . import global_control as queue
 from . import router_bootstrap as child
 from . import router_mac as mac
 from .backend import GoogleDriveBackend, read_private_file
-from .control import GoogleDocsCASControlStore, SessionCoordinator
+from .control import GoogleDocsCASControlStore, SessionCoordinator, dispatch_docs_write
 from .controlled import CASController
 from .facade import RemoteResponsesFacade
 from .global_gateway import private_dir, private_write, strict_json
@@ -164,7 +164,11 @@ class GoogleQueueBridge:
         args={'document_id':self.document_id,'requests':[{'insertText':{'location':{'index':1,'tabId':self.tab_id},
               'text':queue.block(self.initial)[:-1]}}],'write_control':{'requiredRevisionId':revision}}
         path,record=mac._operation(self.root,'initialize-queue',args)
-        try:self.docs.batch_update_document(**args)
+        deadline=time.monotonic()+max(0,self.initial['expires']-time.time())
+        def dispatch_check():
+            self._check_running()
+            require(self.initial['created']<=time.time()<self.initial['expires'],'global_queue_expired_or_future')
+        try:dispatch_docs_write(self.docs,**args,deadline=deadline,check=dispatch_check)
         except Exception:pass  # Exact read-only reconciliation, never reissue.
         try:
             fresh=self.read();require(fresh.state==self.initial and fresh.revision_id!=revision,'global_queue_initialization_mismatch')
@@ -177,7 +181,12 @@ class GoogleQueueBridge:
         label='queue-'+kind+'-'+str(args.get('route_id','controller'))
         path,record=mac._operation(self.root,label,packet)
         response=None
-        try:response=self.docs.batch_update_document(**packet['tool_arguments'])
+        deadline=time.monotonic()+max(0,packet['execute_before']-time.time())
+        def dispatch_check():
+            # Stop itself must still be able to publish the terminal close.
+            if kind!='close': self._check_running()
+            require(new['events'][-1]['at']<=time.time()<packet['execute_before'],'global_prepared_event_expired')
+        try:response=dispatch_docs_write(self.docs,**packet['tool_arguments'],deadline=deadline,check=dispatch_check)
         except Exception:pass
         try:
             readback=self.docs.get_document(self.document_id)

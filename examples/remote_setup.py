@@ -5,9 +5,10 @@ This module never creates resources, grants access, starts login, or runs a mode
 """
 import argparse
 import json
+import time
 from remote_transport import Object
 from remote_transport.backend import read_private_file
-from remote_transport.control import GoogleDocsCASControlStore, _document_text, initial_state, block_for
+from remote_transport.control import GoogleDocsCASControlStore, _document_text, initial_state, block_for, dispatch_docs_write
 from remote_transport.model import ProtocolError, require
 from .google_clients import create_drive_client, create_docs_client
 
@@ -25,10 +26,14 @@ def initialize_blank(client, pin, document_id, tab_id, control_id, writer_identi
     require(isinstance(revision, str) and revision, "editable_revision_required")
     state = initial_state(pin, control_id)
     block = block_for(state)
+    deadline = time.monotonic() + max(0, state['binding']['expires'] - time.time())
+    def dispatch_check():
+        require(state['binding']['created'] <= time.time() < state['binding']['expires'],
+                'control_deployment_expired')
     # Preserve Docs' mandatory terminal newline. No deletion or repair operation.
-    response = client.batch_update_document(document_id,
+    response = dispatch_docs_write(client, document_id,
         [{"insertText": {"location": {"index": 1, "tabId": tab_id}, "text": block[:-1]}}],
-        {"requiredRevisionId": revision})
+        {"requiredRevisionId": revision}, deadline=deadline, check=dispatch_check)
     require(isinstance(response, dict) and response.get("documentId") == document_id
             and isinstance(response.get("replies"), list) and len(response["replies"]) == 1,
             "control_initialization_unverified")
