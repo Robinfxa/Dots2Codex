@@ -4,7 +4,7 @@
 
 ## 先确认实际工具可用
 
-八个工具名保持不变：`bridge_status`、`get_request`、`discover_tools`、`lookup_schema`、`submit_action_and_wait_result`、`await_result`、`finish_request`、`cancel_request`。全局版增加了路由归属字段，首次换版必须同步插件工具定义，并确认新创建的真实子线程能看到全局版参数。旧子线程缓存的旧 schema 不算通过。
+原有八个工具名保持不变，另增原生 web 专用 `prepare_hosted_call` 和 `record_hosted_result`（共十个）：`bridge_status`、`get_request`、`discover_tools`、`lookup_schema`、`submit_action_and_wait_result`、`await_result`、`finish_request`、`cancel_request`。全局版增加了路由归属字段，首次换版必须同步插件工具定义，并确认新创建的真实子线程能看到全局版参数。旧子线程缓存的旧 schema 不算通过。
 
 `bridge_status({})` 应显示 `mode: global`、本次 `instance_id`、持久 `config_id`、`allowed_pairs`、`max_routes` 和 `pending_routes`。`actual_native_platform_verified: false` 是诚实边界：Python 仅记录可信单用户提供的逻辑归属，不证明平台身份或实际模型。父线程必须依据真实平台创建结果记录子线程。
 
@@ -78,3 +78,36 @@ Stop 关闭本机网关和隧道，拒绝新的请求、认领和响应发射，
 独立的云端夹具已验证实际原生任务参与的三轮连续处理、空闲后恢复、MCP/桥接进程重启、同一归属与重复提交去重。控制工具入口使用私有测试邮箱替代，Codex HTTP 客户端为合成；这不是正式隧道或 Mac Desktop 验收，也没有新增永久调度器。`automatic_wake` 仍为 false。
 
 复现步骤、实际父控制器循环规则及未验证项见 [云端无人值守验证](UNATTENDED_CLOUD_VALIDATION.zh-CN.md)。去敏后的原生创建/恢复与桥接计数摘要见 `orchestration/unattended_native_result.json`；普通回归测试中的合成工作线程证据与它分开记录。
+
+## 工具协议 v2：完整客户端声明与原生 web
+
+全局/单次会话服务现有工具协议为 `dots-direct-tools/2`，MCP 0.3.0。
+原有八个工具保留，另增 `prepare_hosted_call`、`record_hosted_result`；需刷新
+已安装插件工具定义。真实客户端的 function、custom、namespace、client
+`tool_search` 和 web_search 声明均可进入动态目录。不要把 web/search 当作普通
+无名称函数，也不要为了纯文字请求而删除客户端默认 cached web 声明。
+
+先读取 `get_request.capabilities`。默认 cached（`external_web_access:false`）、
+indexed、位置、检索上下文大小等选项，原生 web 工具目前无法精确实现；只有
+尝试执行时明确报能力错误。未经用户明确选择，不得改为 live，不得改设置。
+
+原生 web 必须先读取精确 schema，再用稳定 operation_id 调用 prepare，只有
+首次 `execute:true` 才按返回的完整参数调用一次实际可用的原生 `web.run`。
+用 record 回传完整原生结果及真实 URL/引用，最终响应包含返回的已完成
+web_search_call。它是已发生的原生操作，不是等待 Mac 执行的意图。
+重读、超时、断线或重启不能授权重新执行。回执只是可信工作线程的报告，
+不是平台执行证明。详细参数与边界见 [工具兼容说明](TOOL_COMPATIBILITY.md)。
+
+client tool_search 必须发出真正的 tool_search_call（arguments 为对象），等待
+实际工具搜索回调；回调中的 namespace/function 定义才能作为新工具读取。
+不要臆造工具或改成普通函数。默认模型目录现已开启 client search-tool 能力。
+
+图片通过真实 MCP ImageContent 块交付。若在 functions.exec 里包装 MCP 调用，
+必须逐一 `image(block)` 转发返回的图片块，并单独转发文本；只打印 JSON
+或 base64 不算原生模型看到了图。完整来源和精确工具回调仍保留。当前为
+单张 512 KiB、1600 万像素、完整历史最多 8 张且完整请求最多 1 MiB；超过
+界限会明确报错，不会悄悄缩图。只接收验证过的 data URI 图片，不自动下载 URL。
+
+网页答案应在正文写可打开的真实来源链接，不能只靠 annotations；固定客户端
+会丢弃这些注释。内部 turn 引用不能当成客户端能用的链接。此前同一路由中
+已经验证的来源可继续引用，无需为引用而重复检索。

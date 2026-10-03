@@ -6,7 +6,7 @@ This is the runnable integration layer, not a model server. `runtime.py` compose
   deduplication, expiry and cancellation
 - `context.ContextStore`: locally validated full source requests, exact schema
   lookup, explicit context receipts, and model-visible full/delta delivery
-- `mcp_adapter`: eight static tools over real MCP stdio
+- `mcp_adapter`: eight legacy static tools, plus two explicit native-hosted tools in global mode, over real MCP stdio
 - `wire.py`: request/response validation and SSE serialization copied from the
   frozen Dots2Codex baseline; no Drive controller, OAuth, model API, or Mac executor
 
@@ -59,8 +59,10 @@ marked synthetic.
 - Source requests still use complete history. They are checked locally, then only
   the new exact delta is exposed to the model. No output truncation or silent
   summary is used. A full projection above the inline bound fails explicitly.
-- The facade supports text plus advertised function/custom tools supported by the
-  pinned wire validator. Hosted tools, unsupported content forms, changed model/
+- The global facade supports the pinned five declaration kinds and bounded image
+  delivery; native web requires its separate receipt flow. See
+  [tool compatibility](../docs/TOOL_COMPATIBILITY.md) for precise execution gaps.
+  Unsupported hosted capabilities/content forms, changed model/
   effort, unknown callbacks, altered prior calls, and missing current exact schema
   receipts fail closed. Arbitrary Codex versions remain unverified.
 - Each route is a single active conversation. Native logical ownership is not

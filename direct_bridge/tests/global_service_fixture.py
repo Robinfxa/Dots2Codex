@@ -36,7 +36,7 @@ def main():
                 if self.headers.get('Authorization') != 'Bearer ' + os.environ['DOTS_BRIDGE_HTTP_BEARER']:
                     self.send_error(401)
                     return
-                body = json.dumps({'mode': 'global', 'listener_ready': True,
+                body = json.dumps({'mode': 'global', 'listener_ready': True, 'tool_contract': 'dots-direct-tools/2',
                     'config_id': settings['config_id'], 'instance_id': os.environ['DOTS_DIRECT_RUN_ID']}).encode()
             else:
                 body = b'ready'

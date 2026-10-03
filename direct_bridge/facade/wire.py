@@ -51,46 +51,77 @@ def strict_json(raw):
 
 
 def _text(value):
-    require(isinstance(value, str) or (isinstance(value, list) and all(
-        isinstance(p, dict) and p.get('type') in {'input_text', 'output_text'} and
-        isinstance(p.get('text'), str) for p in value)), 'text_content_required')
+    if isinstance(value, str): return
+    require(isinstance(value, list), 'text_content_required')
+    from .images import image_payload
+    for part in value:
+        require(isinstance(part, dict), 'text_content_required')
+        if part.get('type') == 'input_image':
+            image_payload(part)
+        else:
+            require(part.get('type') in {'input_text', 'output_text'} and isinstance(part.get('text'), str),
+                    'text_content_required')
+
+
+CLIENT_CALL_TYPES = frozenset({'function_call', 'custom_tool_call', 'tool_search_call'})
 
 
 def request_tools(request):
-    result = {}
-    sources = list(request.get('tools') or [])
+    """Exact declarations, including client-discovered tools; no execution here.
+
+    Unnamed protocol capabilities use one-element tuple keys, which cannot
+    collide with a user namespace/function pair. Repeated discovery is legal
+    only when the entire declaration and namespace metadata are identical.
+    """
+    result, bindings, namespaces = {}, {}, {}
+    sources = [(tool, False) for tool in (request.get('tools') or [])]
     for item in request['input']:
-        if item.get('type') == 'additional_tools':
+        if item.get('type') in {'additional_tools', 'tool_search_output'}:
             require(isinstance(item.get('tools'), list), 'invalid_additional_tools')
-            sources.extend(item['tools'])
-    def visit(tool, index, namespace=None, child_index=None):
+            sources.extend((tool, True) for tool in item['tools'])
+    def visit(tool, index, namespace=None, child_index=None, metadata=None, revealed=False):
         require(isinstance(tool, dict), 'invalid_tool')
         name, kind = tool.get('name'), tool.get('type')
-        # Hosted/client-discovery declarations are not ordinary named tools.
-        # Reject their semantics explicitly before applying name validation.
-        if isinstance(kind, str) and kind in HOSTED_TOOL_TYPES:
-            _tool_error('unsupported_hosted_tool', tool, index, child_index)
-        if kind == 'tool_search':
-            _tool_error('unsupported_client_tool_search', tool, index, child_index)
-        if not isinstance(kind, str) or kind not in {'namespace', 'function', 'custom'}:
-            _tool_error('unsupported_tool_type', tool, index, child_index)
-        if not isinstance(name, str) or not 0 < len(name) <= 256:
-            _tool_error('invalid_tool_name', tool, index, child_index)
-        if kind == 'namespace':
-            require(namespace is None and isinstance(tool.get('tools'), list), 'invalid_tool_namespace')
-            for offset, child in enumerate(tool['tools']):
-                visit(child, index, name, offset)
+        if kind == 'web_search':
+            require(namespace is None, 'invalid_tool_namespace')
+            from .hosted import validate_web_declaration
+            validate_web_declaration(tool)
+            key = (kind,)
+        elif kind == 'tool_search':
+            require(namespace is None and 'name' not in tool, 'invalid_tool_namespace')
+            require(tool.get('execution') == 'client', 'unsupported_tool_search_execution')
+            require(isinstance(tool.get('description', ''), str), 'invalid_tool_search_declaration')
+            _schema(tool.get('parameters'))
+            key = (kind,)
         else:
+            if isinstance(kind, str) and kind in HOSTED_TOOL_TYPES:
+                _tool_error('unsupported_hosted_tool', tool, index, child_index)
+            if not isinstance(kind, str) or kind not in {'namespace', 'function', 'custom'}:
+                _tool_error('unsupported_tool_type', tool, index, child_index)
+            if not isinstance(name, str) or not 0 < len(name) <= 256:
+                _tool_error('invalid_tool_name', tool, index, child_index)
+            if kind == 'namespace':
+                require(namespace is None and isinstance(tool.get('tools'), list), 'invalid_tool_namespace')
+                namespace_metadata = {key: value for key, value in tool.items() if key != 'tools'}
+                require(name not in namespaces or namespaces[name] == namespace_metadata, 'conflicting_namespace_metadata')
+                namespaces[name] = namespace_metadata
+                for offset, child in enumerate(tool['tools']):
+                    visit(child, index, name, offset,
+                          {key: value for key, value in tool.items() if key != 'tools'}, revealed)
+                return
             key = (namespace, name)
-            require(key not in result, 'duplicate_tool')
-            result[key] = tool
             if kind == 'function':
                 _schema(tool.get('parameters'))
             elif 'format' in tool:
                 require(isinstance(tool['format'], dict) and tool['format'].get('type') in {'text', 'grammar'},
                         'unsupported_custom_tool_format')
-    for index, tool in enumerate(sources):
-        visit(tool, index)
+        binding = canonical({'namespace_metadata': metadata, 'definition': tool})
+        if key in result:
+            require(revealed and bindings[key] == binding, 'duplicate_tool')
+        else:
+            result[key], bindings[key] = tool, binding
+    for index, (tool, revealed) in enumerate(sources):
+        visit(tool, index, revealed=revealed)
     return result
 
 
@@ -317,8 +348,13 @@ def _schema(schema, value=None, *, check_value=False):
 def call_binding(item):
     """Exact execution-affecting fields; benign status annotations may vary."""
     kind = item.get('type')
-    names = ('id', 'type', 'call_id', 'name', 'namespace',
-             'arguments' if kind == 'function_call' else 'input')
+    if kind == 'tool_search_call':
+        names = ('id', 'type', 'call_id', 'execution', 'arguments')
+    elif kind == 'web_search_call':
+        names = ('id', 'type', 'status', 'action')
+    else:
+        names = ('id', 'type', 'call_id', 'name', 'namespace',
+                 'arguments' if kind == 'function_call' else 'input')
     return {name: item[name] for name in names if name in item}
 
 
@@ -335,6 +371,26 @@ def validate_request(request, *, max_bytes=MAX_BYTES):
     require(isinstance(request.get('input'), list), 'full_history_array_required')
     require(request.get('instructions') is None or isinstance(request['instructions'], str), 'invalid_instructions')
     require(request.get('tools') is None or isinstance(request['tools'], list), 'invalid_tools')
+    require('parallel_tool_calls' not in request or type(request['parallel_tool_calls']) is bool,
+            'invalid_parallel_tool_calls')
+    choice = request.get('tool_choice', 'auto')
+    require(choice in ('auto', 'none', 'required') if isinstance(choice, str) else
+            isinstance(choice, dict) and choice.get('type') in {'function', 'custom', 'web_search', 'tool_search'},
+            'invalid_tool_choice')
+    if isinstance(choice, dict) and choice['type'] in {'function', 'custom'}:
+        require(isinstance(choice.get('name'), str) and bool(choice['name'])
+                and (choice.get('namespace') is None or isinstance(choice['namespace'], str)), 'invalid_tool_choice')
+    require(not request.get('background'), 'unsupported_background_response')
+    require(request.get('store') is None or request.get('store') is False, 'unsupported_response_storage')
+    require(request.get('truncation') in (None, 'disabled'), 'unsupported_request_truncation')
+    require(not any(key in request for key in ('audio', 'modalities', 'max_output_tokens', 'temperature', 'top_p')),
+            'unsupported_generation_option')
+    text = request.get('text')
+    require(text is None or isinstance(text, dict), 'unsupported_response_format')
+    fmt = (text or {}).get('format', {'type': 'text'})
+    require(isinstance(fmt, dict) and fmt.get('type') in {'text', 'json_schema'}, 'unsupported_response_format')
+    if fmt.get('type') == 'json_schema':
+        _schema(fmt.get('schema'))
     calls, outputs, item_ids = {}, set(), set()
     for item in request['input']:
         require(isinstance(item, dict), 'invalid_input_item')
@@ -345,6 +401,22 @@ def validate_request(request, *, max_bytes=MAX_BYTES):
         if kind == 'message':
             require(item.get('role') in {'user', 'assistant', 'system', 'developer'}, 'invalid_message_role')
             _text(item.get('content'))
+        elif kind == 'tool_search_call':
+            cid = item.get('call_id')
+            require(isinstance(cid, str) and cid and cid not in calls, 'duplicate_or_invalid_tool_call')
+            require(item.get('execution') == 'client' and isinstance(item.get('arguments'), dict),
+                    'invalid_tool_search_call')
+            calls[cid] = item
+        elif kind == 'tool_search_output':
+            cid = item.get('call_id')
+            require(cid in calls and calls[cid]['type'] == 'tool_search_call' and cid not in outputs,
+                    'uncorrelated_tool_output')
+            require(item.get('execution') == 'client' and item.get('status') == 'completed'
+                    and isinstance(item.get('tools'), list), 'invalid_tool_search_output')
+            outputs.add(cid)
+        elif kind == 'web_search_call':
+            from .hosted import validate_web_item
+            validate_web_item(item)
         elif kind in {'function_call', 'custom_tool_call'}:
             cid = item.get('call_id')
             require(isinstance(cid, str) and cid and cid not in calls, 'duplicate_or_invalid_tool_call')
@@ -362,13 +434,18 @@ def validate_request(request, *, max_bytes=MAX_BYTES):
         elif kind == 'additional_tools':
             pass
         else:
-            raise ProtocolError('unsupported_input_item')
+            error = ProtocolError('unsupported_input_item')
+            error.details = {'item_type': kind if kind in {'reasoning', 'input_audio', 'image_generation_call',
+                             'computer_call', 'local_shell_call', 'agent_message'} else 'unknown'}
+            raise error
     require(set(calls) == outputs, 'tool_outcome_unknown')
     request_tools(request)
+    from .images import content_images
+    content_images(request['input'])
     return copy.deepcopy(request)
 
 
-def validate_response(response, request, *, max_bytes=MAX_BYTES):
+def validate_response(response, request, *, max_bytes=MAX_BYTES, hosted_receipts=(), prior_citation_sources=()):
     require(isinstance(response, dict) and len(canonical(response)) <= max_bytes, 'invalid_or_oversize_response')
     require(isinstance(response.get('id'), str) and response['id'], 'response_id_required')
     require(response.get('object', 'response') == 'response' and response.get('status') == 'completed', 'completed_response_required')
@@ -377,15 +454,31 @@ def validate_response(response, request, *, max_bytes=MAX_BYTES):
     output = response.get('output')
     require(isinstance(output, list) and output, 'response_output_required')
     tools, ids, calls = request_tools(request), set(), set()
-    old_calls = {item['call_id'] for item in request['input'] if item.get('type') in {'function_call', 'custom_tool_call'}}
+    old_ids = {item['id'] for item in request['input'] if 'id' in item}
+    old_calls = {item['call_id'] for item in request['input'] if item.get('type') in CLIENT_CALL_TYPES}
     for item in output:
         require(isinstance(item, dict), 'invalid_response_item')
-        require(isinstance(item.get('id'), str) and item['id'] and item['id'] not in ids, 'response_item_id_required')
+        require(isinstance(item.get('id'), str) and item['id'] and item['id'] not in ids and item['id'] not in old_ids, 'response_item_id_required')
         ids.add(item['id']); kind = item.get('type')
         if kind == 'message':
             require(item.get('role') == 'assistant' and isinstance(item.get('content'), list), 'invalid_assistant_message')
             require(all(isinstance(p, dict) and p.get('type') == 'output_text' and isinstance(p.get('text'), str)
                         for p in item['content']), 'text_response_required')
+        elif kind == 'tool_search_call':
+            prefix, separator, suffix = item['id'].partition('_')
+            require(prefix and separator and suffix, 'tool_item_id_prefix_suffix_required')
+            cid = item.get('call_id')
+            require(isinstance(cid, str) and cid and cid not in calls and cid not in old_calls,
+                    'duplicate_or_invalid_response_call_id')
+            calls.add(cid)
+            require(('tool_search',) in tools, 'unadvertised_tool')
+            require(item.get('execution') == 'client' and isinstance(item.get('arguments'), dict),
+                    'invalid_tool_search_call')
+            _schema(tools[('tool_search',)]['parameters'], item['arguments'], check_value=True)
+        elif kind == 'web_search_call':
+            from .hosted import validate_web_item
+            require(('web_search',) in tools, 'unadvertised_tool')
+            validate_web_item(item)
         elif kind in {'function_call', 'custom_tool_call'}:
             # The pinned Codex client splits response item IDs at the first
             # underscore. Preserve the ID verbatim; never rewrite call_id.
@@ -405,6 +498,18 @@ def validate_response(response, request, *, max_bytes=MAX_BYTES):
                 require(isinstance(item.get('input'), str), 'custom_input_string_required')
         else:
             raise ProtocolError('unsupported_response_item')
+    require(has_tools(response) or any(item.get('type') == 'message' for item in output), 'final_message_required')
+    from .hosted import validate_hosted_output, enforce_tool_policy
+    enforce_tool_policy(request, [item for item in output
+                                 if item.get('type') in CLIENT_CALL_TYPES | {'web_search_call'}])
+    fmt = (request.get('text') or {}).get('format', {'type': 'text'})
+    require(isinstance(fmt, dict) and fmt.get('type') in {'text', 'json_schema'}, 'unsupported_response_format')
+    if fmt.get('type') == 'json_schema' and not has_tools(response):
+        messages = [item for item in output if item.get('type') == 'message']
+        require(len(messages) == 1 and len(messages[0]['content']) == 1, 'response_format_mismatch')
+        value = strict_json(messages[0]['content'][0]['text'])
+        _schema(fmt.get('schema'), value, check_value=True)
+    validate_hosted_output(response, hosted_receipts, prior_citation_sources=prior_citation_sources)
     return copy.deepcopy(response)
 
 
@@ -426,19 +531,26 @@ def message_binding(item):
     return {'role': item.get('role'), 'content': content}
 
 
-def validate_history(request, previous_request, prior_outputs, prior_call_hashes=None):
+def validate_history(request, previous_request, prior_outputs, prior_call_hashes=None, prior_hosted_hashes=None):
     """Full input prefix plus exact earlier calls, compactly hash-bound."""
     prior = []
     if previous_request is not None:
         prior = previous_request['input']
         require(request['input'][:len(prior)] == prior, 'full_history_prefix_mismatch')
     emitted = {item['call_id']: sha256(canonical(call_binding(item))) for output in prior_outputs for item in output['output']
-               if item.get('type') in {'function_call', 'custom_tool_call'}}
+               if item.get('type') in CLIENT_CALL_TYPES}
     if prior_call_hashes is not None:
         emitted = prior_call_hashes
     supplied = {item['call_id']: sha256(canonical(call_binding(item))) for item in request['input']
-                if item.get('type') in {'function_call', 'custom_tool_call'}}
+                if item.get('type') in CLIENT_CALL_TYPES}
     require(supplied == emitted, 'tool_history_does_not_match_delivered_calls')
+    emitted_web = {item['id']: sha256(canonical(call_binding(item))) for output in prior_outputs
+                   for item in output['output'] if item.get('type') == 'web_search_call'}
+    if prior_hosted_hashes is not None:
+        emitted_web = prior_hosted_hashes
+    supplied_web = {item['id']: sha256(canonical(call_binding(item))) for item in request['input']
+                    if item.get('type') == 'web_search_call'}
+    require(supplied_web == emitted_web, 'hosted_history_mismatch')
     # The previous assistant answer is part of full history, too. Ignore only
     # optional item annotations and known typed-client text metadata omissions.
     suffix = request['input'][len(prior):]
@@ -446,13 +558,16 @@ def validate_history(request, previous_request, prior_outputs, prior_call_hashes
                 if x.get('type', 'message' if 'role' in x else None) == 'message']
     for output in prior_outputs:
         for item in output['output']:
+            if item.get('type') == 'web_search_call':
+                require(any(call_binding(candidate) == call_binding(item) for candidate in suffix
+                            if candidate.get('type') == 'web_search_call'), 'hosted_history_mismatch')
             if item.get('type') == 'message':
                 require(message_binding(item) in messages,
                         'previous_assistant_message_missing')
 
 
 def has_tools(response):
-    return any(item.get('type') in {'function_call', 'custom_tool_call'} for item in response['output'])
+    return any(item.get('type') in CLIENT_CALL_TYPES for item in response['output'])
 
 
 def event_frame(event):
@@ -463,7 +578,12 @@ def response_events(response):
     created = {**response, 'status': 'in_progress', 'output': []}
     events = [{'type': 'response.created', 'response': created}]
     for index, item in enumerate(response['output']):
-        events.append({'type': 'response.output_item.added', 'output_index': index, 'item': item})
+        added = {**item, 'status': 'in_progress'} if item.get('type') == 'web_search_call' else item
+        events.append({'type': 'response.output_item.added', 'output_index': index, 'item': added})
+        if item.get('type') == 'web_search_call':
+            for phase in (('in_progress', 'searching', 'completed') if item['status'] == 'completed'
+                          else ('in_progress', 'searching')):
+                events.append({'type': 'response.web_search_call.' + phase, 'output_index': index, 'item_id': item['id']})
         events.append({'type': 'response.output_item.done', 'output_index': index, 'item': item})
     events.append({'type': 'response.completed', 'response': response})
     return b''.join(event_frame({**event, 'sequence_number': n}) for n, event in enumerate(events))

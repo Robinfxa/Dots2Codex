@@ -102,7 +102,7 @@ def safe_env():
 def sdk_ready(python):
     try:
         result = subprocess.run([str(python), "-c", "import sys, importlib.metadata; "
-            "import mcp, anyio, jsonschema; "
+            "import mcp, anyio, jsonschema, PIL; "
             "raise SystemExit(sys.version_info < (3,10) or "
             f"importlib.metadata.version('mcp') != '{SDK_VERSION}')"],
             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,

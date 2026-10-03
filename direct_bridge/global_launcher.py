@@ -249,6 +249,7 @@ class Ports:
         require(data.get('mode') == 'global' and data.get('listener_ready') is True
                 and data.get('instance_id') == run_id and data.get('config_id') == settings['config_id'],
                 'bridge_health_identity_mismatch')
+        require(data.get('tool_contract') == 'dots-direct-tools/2', 'bridge_tool_contract_upgrade_required')
         # Official readiness, rather than mere occupied TCP ports or log text.
         loopback_get(f"http://127.0.0.1:{settings['admin_port']}/readyz")
         return data
@@ -418,8 +419,10 @@ class Launcher:
 
     def _config_info(self, settings, credential):
         config = read(self.state / 'bridge/config.json')
-        catalog = self.state / 'codex-models.json'
         selection = self.tx.default_selection()
+        encoded = json.dumps(self.tx.catalog_for_pairs(config['allowed_pairs'], selection),
+                             sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()
+        catalog = self.state / ('codex-models-' + hashlib.sha256(encoded).hexdigest() + '.json')
         self.tx.write_catalog(catalog, config['allowed_pairs'], selection)
         return {'base_url': f"http://127.0.0.1:{settings['http_port']}/v1",
                 'config_id': settings['config_id'], 'local_bearer': credential.http_bearer,
@@ -736,9 +739,9 @@ def verify_package(root=BUNDLE_ROOT):
 def prerequisites(python):
     try:
         result = subprocess.run([str(python), '-c',
-            "import sys,importlib.metadata; import mcp,anyio,jsonschema,tomlkit; "
+            "import sys,importlib.metadata; import mcp,anyio,jsonschema,tomlkit,PIL; "
             "raise SystemExit(sys.version_info < (3,11) or importlib.metadata.version('mcp') != '1.29.0' "
-            "or tomlkit.__version__ != '0.13.3')"], env=base_environment(), stdin=subprocess.DEVNULL,
+            "or tomlkit.__version__ != '0.13.3' or PIL.__version__ != '12.3.0')"], env=base_environment(), stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
         return result.returncode == 0
     except (OSError, subprocess.SubprocessError):
@@ -751,7 +754,7 @@ def choose_python(state, ui):
         if prerequisites(python):
             return str(python)
     require(not (state / '.venv').exists(), 'incomplete_private_environment_preserved')
-    if not ui.confirm(f'首次使用需要在 {state / ".venv"} 安装 mcp 1.29.0、tomlkit 0.13.3 及依赖。\n'
+    if not ui.confirm(f'首次使用需要在 {state / ".venv"} 安装 mcp 1.29.0、tomlkit 0.13.3、Pillow 12.3.0 及依赖。\n'
                       '仅从 PyPI 下载到这个私有 Python 环境。是否安装？', 'INSTALL'):
         raise Cancelled()
     private_dir(state, create=True)
@@ -767,6 +770,40 @@ def choose_python(state, ui):
         raise ProtocolError('private_dependency_install_failed_preserved_for_review') from None
     require(prerequisites(private), 'private_dependency_check_failed')
     return str(private)
+
+
+def ensure_private_dependencies(state, settings, ui):
+    """An explicit upgrade may modify only our owned private environment.
+
+    Never pip-install into a shared/system Python or update a running service.
+    Existing settings, credentials, profile and global config stay untouched.
+    """
+    python = Path(settings['python']).absolute()
+    if prerequisites(python):
+        return
+    private = Path(state) / '.venv/bin/python'
+    require(python == private.absolute(), 'dependency_upgrade_requires_owned_private_environment')
+    require(private.is_file() and not private.is_symlink(), 'private_dependency_environment_missing')
+    no_symlinks(private)
+    require(private.stat().st_uid == os.getuid(), 'private_dependency_environment_owner_mismatch')
+    with private_lock(Path(state) / 'lifecycle.lock'):
+        launcher = Launcher(state, ui=ui)
+        require(not any(alive(record.get('pid')) for record in launcher.records(launcher.current()).values()),
+                'dependency_upgrade_requires_explicit_stop')
+        if prerequisites(python):
+            return
+        if not ui.confirm(f'此 Direct 私有环境需要升级依赖：mcp 1.29.0、tomlkit 0.13.3、Pillow 12.3.0。\n'
+                          f'仅从 PyPI 安装到 {private.parent.parent}；保留原设置、凭据、profile 和队列。\n'
+                          '不会修改系统 Python。是否升级？', 'UPGRADE'):
+            raise Cancelled()
+        env = base_environment(); env['PIP_CONFIG_FILE'] = os.devnull
+        try:
+            subprocess.run([str(python), '-m', 'pip', '--isolated', 'install', '--disable-pip-version-check',
+                            '--index-url', 'https://pypi.org/simple', '-r', str(ROOT / 'requirements-global.txt')],
+                           check=True, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except (OSError, subprocess.SubprocessError):
+            raise ProtocolError('private_dependency_upgrade_failed_preserved_for_review') from None
+        require(prerequisites(python), 'private_dependency_check_failed')
 
 
 def existing_tunnel_binary():
@@ -815,6 +852,7 @@ def setup(state, ui=None):
     state = no_symlinks(state)
     if settings_path(state).exists():
         settings = load_settings(state)
+        ensure_private_dependencies(state, settings, ui)
         from direct_bridge.global_credentials import prepare_credentials
         return prepare_credentials(settings['credential_dir'], interactive=True)
     package_sha256 = verify_package()

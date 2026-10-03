@@ -71,31 +71,65 @@ def tool_key(namespace, name):
     return json.dumps([namespace, name], ensure_ascii=False, separators=(",", ":"))
 
 
+def catalog_key(tool_type, namespace=None, name=None):
+    """Catalog reference only; never manufacture a callable wire name.
+
+    Codex's hosted web and client discovery declarations have no ``name``.
+    A one-element key cannot collide with any ordinary [namespace, name] key,
+    even if a client uses a namespace or function named after a hosted tool.
+    """
+    if tool_type in {"web_search", "tool_search"}:
+        require(namespace is None, "invalid_tool_namespace")
+        require(name is None, "invalid_tool_name")
+        return json.dumps([tool_type], ensure_ascii=False, separators=(",", ":"))
+    return tool_key(namespace, name)
+
+
 def catalog(request):
     """Keep the complete definition and complete namespace metadata by ref."""
-    result = {}
+    result, namespaces = {}, {}
 
     def visit(tools, namespace=None, metadata=None):
         require(type(tools) is list, "tools_must_be_list")
         for tool in tools:
             require(type(tool) is dict, "invalid_tool")
             name, kind = tool.get("name"), tool.get("type")
-            require(isinstance(name, str) and name, "invalid_tool_name")
+            require(isinstance(kind, str) and kind in
+                    {"namespace", "function", "custom", "web_search", "tool_search"},
+                    "unsupported_tool_type")
             if kind == "namespace":
+                require(isinstance(name, str) and name, "invalid_tool_name")
                 require(namespace is None, "nested_namespace_unsupported")
-                visit(tool.get("tools"), name,
-                      {key: val for key, val in tool.items() if key != "tools"})
+                namespace_metadata = {key: val for key, val in tool.items() if key != "tools"}
+                if name in namespaces:
+                    require(canonical(namespaces[name]) == canonical(namespace_metadata),
+                            "conflicting_namespace_metadata")
+                else:
+                    namespaces[name] = namespace_metadata
+                visit(tool.get("tools"), name, namespace_metadata)
                 continue
-            require(kind in {"function", "custom"}, "unsupported_tool_type")
-            key = tool_key(namespace, name)
-            require(key not in result, "duplicate_tool")
+            if kind in {"web_search", "tool_search"}:
+                require("name" not in tool, "invalid_tool_name")
+                if kind == "tool_search":
+                    require(tool.get("execution") == "client", "unsupported_tool_search_execution")
+            else:
+                require(isinstance(name, str) and name, "invalid_tool_name")
+            key = catalog_key(kind, namespace, name)
             component = {"namespace": namespace, "namespace_metadata": metadata,
                          "definition": tool}
+            if key in result:
+                # Discovery can reveal a tool again, including within repeated
+                # namespace wrappers. Repetition is safe only if every field is
+                # identical; never pick a winner or silently change its scope.
+                require(canonical(result[key]["component"]) == canonical(component),
+                        "duplicate_tool")
+                continue
             result[key] = {"sha256": digest(component), "component": copy.deepcopy(component)}
 
     visit(request.get("tools", []))
     for item in request["input"]:
-        if item.get("type") == "additional_tools":
+        if (item.get("type") == "additional_tools" or
+                (item.get("type") == "tool_search_output" and item.get("execution") == "client")):
             visit(item.get("tools"))
     return result
 
@@ -104,19 +138,25 @@ def validate_history(items):
     """Never create/remap a call ID; callbacks must refer to preceding calls."""
     require(type(items) is list, "history_must_be_list")
     calls, outputs = {}, set()
+    output_kinds = {"function_call_output": "function_call",
+                    "custom_tool_call_output": "custom_tool_call",
+                    "tool_search_output": "tool_search_call"}
     for item in items:
         require(type(item) is dict, "invalid_history_item")
         kind = item.get("type")
-        if kind in {"function_call", "custom_tool_call"}:
+        if kind in {"tool_search_call", "tool_search_output"}:
+            require(item.get("execution") == "client",
+                    "unsupported_tool_search_execution")
+        if kind in {"function_call", "custom_tool_call", "tool_search_call"}:
             call_id = item.get("call_id")
             require(isinstance(call_id, str) and call_id and call_id not in calls,
                     "duplicate_or_missing_call_id")
             calls[call_id] = kind
-        elif kind in {"function_call_output", "custom_tool_call_output"}:
+        elif kind in output_kinds:
             call_id = item.get("call_id")
-            require(call_id in calls and call_id not in outputs,
+            require(isinstance(call_id, str) and call_id in calls and call_id not in outputs,
                     "unknown_or_duplicate_tool_output")
-            require(calls[call_id] + "_output" == kind, "tool_output_kind_mismatch")
+            require(calls[call_id] == output_kinds[kind], "tool_output_kind_mismatch")
             outputs.add(call_id)
 
 
@@ -244,7 +284,8 @@ class ContextStore:
     def _project_history(items):
         projected = copy.deepcopy(items)
         for item in projected:
-            if item.get("type") == "additional_tools":
+            if (item.get("type") == "additional_tools" or
+                    (item.get("type") == "tool_search_output" and item.get("execution") == "client")):
                 # Only tool declarations may move behind exact schema lookup.
                 # All other history text/metadata stays byte-for-byte as JSON values.
                 declarations = item.pop("tools")
@@ -327,11 +368,12 @@ class ContextStore:
         for key, value in sorted(self._catalog.items()):
             component = value["component"]
             definition = component["definition"]
-            text = " ".join(str(definition.get(k, "")) for k in ("name", "description"))
+            name = definition.get("name", definition["type"])
+            text = " ".join(str(definition.get(k, "")) for k in ("type", "name", "description"))
             text += " " + str(component["namespace"] or "")
             if all(word in text.casefold() for word in words):
                 found.append({"key": key, "namespace": component["namespace"],
-                              "name": definition["name"], "type": definition["type"],
+                              "name": name, "type": definition["type"],
                               "schema_sha256": value["sha256"]})
         return {"matches": found[:limit], "more": len(found) > limit,
                 "total_matches": len(found), "revision": self.revision}

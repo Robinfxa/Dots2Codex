@@ -125,7 +125,7 @@ class MCPServer:
         self._cancel_events = set()
         self.tool_definitions = GLOBAL_BRIDGE_TOOLS if getattr(runtime, "mode", None) == "global" else BRIDGE_TOOLS
         self._definitions = {item["name"]: item for item in self.tool_definitions}
-        self.app = Server("dots2codex-direct-bridge", version="0.2.0",
+        self.app = Server("dots2codex-direct-bridge", version="0.3.0",
                           instructions="Single-owner request handoff only. Never execute Mac tools here. Timeouts do not authorize retries with new action IDs.")
 
         @self.app.list_tools()
@@ -174,7 +174,11 @@ class MCPServer:
             encoded = finite_json(result)
             if len(encoded.encode("utf-8")) > MAX_TOOL_RESULT_BYTES:
                 return error_result("result_too_large")
-            return types.CallToolResult(content=[types.TextContent(type="text", text=encoded)],
+            from facade.images import delivery_images
+            images = [types.ImageContent(**block) for block in delivery_images(result)]
+            # These blocks are the model-visible pixels. Keeping only the JSON
+            # in a controller wrapper would discard the actual image channel.
+            return types.CallToolResult(content=[types.TextContent(type="text", text=encoded), *images],
                                         structuredContent=result, isError=False)
         except TimeoutError:
             redacted_log("request_timeout")

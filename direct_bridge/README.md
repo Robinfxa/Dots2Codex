@@ -72,7 +72,7 @@ runtime bearer supplied through the process environment. The local Responses
 listener binds only `127.0.0.1`; the dedicated supported tunnel owns the MCP stdio
 process. No public cloud server is required.
 
-Before a live trial, confirm the same eight static tools can actually be called by
+Before a live trial, confirm the configured static tools (ten in global mode) can actually be called by
 both the parent and one admitted native child. Tool schemas returned as data do
 not install tools. WebSockets or MCP notifications do not establish automatic
 native-model wakeups. The supported host connection and real live test decide
@@ -116,3 +116,7 @@ This trial is derived from Dots2Codex. `facade/wire.py` preserves the baseline
 lossless inner tool-argument numeric checks added. It imports no Drive controller.
 The existing [MIT license](LICENSE), copyright Dots2Codex contributors, is copied
 unchanged. No bundled Mac binary, credential, or external model client is included.
+
+## Tool contract v2
+
+See [pinned-client tool compatibility](docs/TOOL_COMPATIBILITY.md) for client tool discovery, native-hosted web receipts, bounded native image blocks, precise unsupported options, and evidence boundaries. Global MCP now exposes ten tools; existing eight contracts are retained.

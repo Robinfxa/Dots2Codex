@@ -13,9 +13,9 @@ import json
 import threading
 import time
 
-from context.incremental import ContextStore, NativeContinuity, strict_loads, tool_key, digest
+from context.incremental import ContextStore, NativeContinuity, strict_loads, tool_key, catalog_key, digest
 from transport import Queue, Binding, Principal, RouteAuthorization
-from .wire import validate_request, validate_response, validate_history, has_tools, response_events
+from .wire import validate_request, validate_response, validate_history, has_tools, response_events, CLIENT_CALL_TYPES
 from .wire_support import canonical, require
 
 MAX_BODY = 1024 * 1024
@@ -118,7 +118,7 @@ class BridgeRuntime:
         return {item['call_id']: sha256(canonical(call_binding(item)))
                 for request in self.requests if request.get('response')
                 for item in request['response']['output']
-                if item.get('type') in {'function_call', 'custom_tool_call'}}
+                if item.get('type') in CLIENT_CALL_TYPES}
 
     def _deliver_request(self, record):
         # Same read receipt can be retried, without consuming another execution permit.
@@ -183,6 +183,8 @@ class BridgeRuntime:
         response = validate_response(args['response'], record['request'])
         require(has_tools(response) != final, 'use_finish_for_message_or_submit_for_tools')
         for item in response['output']:
+            if item.get('type') == 'tool_search_call':
+                self.context.require_schema(continuity=self.continuity, key=catalog_key('tool_search'))
             if item.get('type') in {'function_call', 'custom_tool_call'}:
                 self.context.require_schema(continuity=self.continuity,
                     key=tool_key(item.get('namespace'), item['name']))

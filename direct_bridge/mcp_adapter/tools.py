@@ -60,3 +60,15 @@ for tool in GLOBAL_BRIDGE_TOOLS:
         schema['properties']['close_route'] = {'type': 'boolean', 'default': False}
         schema['required'].remove('request_id')
         tool['description'] = 'Cancel one pending request, or close_route=true to retire a settled/cancelled route and free capacity. A closed route cannot be reassigned. Cancellation never undoes an emitted effect.'
+
+# Explicit native-hosted lifecycle; these never ask Codex to execute web tools.
+GLOBAL_BRIDGE_TOOLS.extend([
+    definition("prepare_hosted_call", "Reserve one native-hosted web action after exact schema/capability checks. execute=true permits one actual native web invocation; replay never permits re-execution.",
+        {"route_id": ID, "claim_token": TOKEN, **CONTEXT, "operation_id": ID, "item_id": ID,
+         "action": {"type": "object"}, "schema_tokens": {"type": "array", "items": TOKEN, "maxItems": 128}},
+        ("route_id", "claim_token", "request_id", "context_token", "operation_id", "item_id", "action", "schema_tokens")),
+    definition("record_hosted_result", "Record the complete actual native web result and verified source references for a reserved operation. This is a trusted worker report, not platform attestation. No network execution occurs here.",
+        {"route_id": ID, "claim_token": TOKEN, **CONTEXT, "operation_id": ID, "operation_token": TOKEN,
+         "result": {"type": "object"}},
+        ("route_id", "claim_token", "request_id", "context_token", "operation_id", "operation_token", "result")),
+])

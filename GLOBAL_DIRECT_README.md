@@ -33,7 +33,7 @@
 
 本地 Start **不会启动模型、生成答案、自动创建/唤醒原生子任务或设置自动调度**。请在 dot 中明确启动或继续实际原生父控制器，由它按待处理路由创建真实原生子任务，再按精确模型/effort 和认领凭据执行。新模式不使用 Drive/Docs 搬运请求。
 
-MCP 保留八个工具名：`bridge_status`、`get_request`、`discover_tools`、`lookup_schema`、`submit_action_and_wait_result`、`await_result`、`finish_request`、`cancel_request`。**全局参数 schema 已改变**，已有插件必须重新同步，并实际检查工具列表/schema；看到八个旧名字不代表完成升级。状态中的本地 ready 也不证明原生父/子任务已接入。
+MCP 保留原有八个工具，并新增 `prepare_hosted_call`、`record_hosted_result`（共十个）：`bridge_status`、`get_request`、`discover_tools`、`lookup_schema`、`submit_action_and_wait_result`、`await_result`、`finish_request`、`cancel_request`。**全局参数 schema 已改变**，已有插件必须重新同步，并实际检查工具列表/schema；看到八个旧名字不代表完成升级；原生 web 需要新增两个工具。状态中的本地 ready 也不证明原生父/子任务已接入。
 
 实际 Mac、Codex Desktop 全局配置、官方 secure tunnel、真实原生父/子任务与多轮工具回传的联合验收仍待完成。离线 HTTP/MCP 与回滚测试不等于生产可用或实际速度证明。兼容元数据来源仍钉在 `codex-cli 0.159.2`。
 

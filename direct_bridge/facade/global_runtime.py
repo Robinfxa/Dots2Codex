@@ -23,8 +23,8 @@ import time
 from urllib.parse import urlsplit, parse_qs
 
 from context.incremental import (ContextStore, NativeContinuity, Delivery,
-                                 strict_loads, tool_key, digest)
-from .wire import validate_request, validate_response, validate_history, has_tools, response_events
+                                 strict_loads, tool_key, catalog_key, digest)
+from .wire import validate_request, validate_response, validate_history, has_tools, response_events, CLIENT_CALL_TYPES, request_tools
 from .wire_support import canonical, require
 
 MAX_BODY = 1024 * 1024
@@ -32,7 +32,8 @@ MAX_ROUTE_BYTES = 32 * 1024 * 1024
 CONTRACT = 'dots-direct-global/1'
 PAIR_KEYS = {'model', 'reasoning_effort'}
 INTERNAL_TOOLS = frozenset({'bridge_status', 'get_request', 'discover_tools', 'lookup_schema',
-    'submit_action_and_wait_result', 'await_result', 'finish_request', 'cancel_request'})
+    'submit_action_and_wait_result', 'await_result', 'finish_request', 'cancel_request',
+    'prepare_hosted_call', 'record_hosted_result'})
 
 
 # Explicit compile-time protocol labels only. Never forward arbitrary exception text.
@@ -218,6 +219,17 @@ SAFE_GLOBAL_ERRORS = frozenset({
     'wire_request_too_large',
 })
 
+from .hosted import WEB_ERRORS
+SAFE_GLOBAL_ERRORS = SAFE_GLOBAL_ERRORS | WEB_ERRORS | frozenset({
+    'unsupported_hosted_tool', 'unsupported_tool_search_execution', 'invalid_tool_search_declaration',
+    'invalid_tool_search_call', 'invalid_tool_search_output', 'conflicting_namespace_metadata',
+    'invalid_tool_search_execution', 'final_message_required', 'unsupported_response_format', 'response_format_mismatch',
+    'unsupported_image_source', 'invalid_image_content', 'image_content_too_large',
+    'image_dimensions_too_large', 'image_count_exceeded', 'unsupported_tool_option',
+    'unsupported_background_response', 'unsupported_response_storage',
+    'unsupported_request_truncation', 'unsupported_generation_option',
+})
+
 def _internal_tool(name, namespace=None):
     if not isinstance(name, str):
         return False
@@ -247,7 +259,7 @@ def _context_request(request):
         return result
     value['tools'] = filtered(value.get('tools') or [])
     for item in value['input']:
-        if item.get('type') == 'additional_tools':
+        if item.get('type') in {'additional_tools', 'tool_search_output'}:
             item['tools'] = filtered(item['tools'])
     return value
 
@@ -496,8 +508,11 @@ class GlobalRuntime:
                 require(previous['delivery_started'], 'previous_response_not_emitted')
                 from .wire import call_binding
                 prior_calls = {x['call_id']: digest(call_binding(x)) for r in route['requests'] if r['response']
-                               for x in r['response']['output'] if x.get('type') in {'function_call', 'custom_tool_call'}}
-                validate_history(request, previous['request'], [previous['response']], prior_call_hashes=prior_calls)
+                               for x in r['response']['output'] if x.get('type') in CLIENT_CALL_TYPES}
+                prior_hosted = {x['id']: digest(call_binding(x)) for r in route['requests'] if r['response']
+                                for x in r['response']['output'] if x.get('type') == 'web_search_call'}
+                validate_history(request, previous['request'], [previous['response']],
+                                 prior_call_hashes=prior_calls, prior_hosted_hashes=prior_hosted)
             else:
                 validate_history(request, None, [])
             require(len(route['requests']) < self.max_requests, 'route_request_capacity_exhausted')
@@ -554,7 +569,7 @@ class GlobalRuntime:
                 record = route['requests'][seq]
                 if record['cancelled']:
                     return {**common, 'status': 'cancelled', 'request_id': record['id'], 'seq': record['seq'],
-                            'effect': 'unknown' if record['delivery_started'] else 'not_emitted'}
+                            'effect': 'unknown' if record['delivery_started'] or record.get('hosted_operations') else 'not_emitted'}
                 if record['response'] is not None:
                     return {**common, 'status': 'already_completed', 'request_id': record['id'],
                             'seq': record['seq'], 'next_after_seq': record['seq'], 'resubmit_action': False}
@@ -562,13 +577,14 @@ class GlobalRuntime:
                 if record['context_token']:
                     return {**common, 'status': 'ready', 'request_id': record['id'], 'seq': record['seq'],
                             'context_token': record['context_token'], 'context': record['context_delivery'],
+                            'capabilities': self._capabilities(record['request']),
                             'replayed': True, 'execute_again': False}
                 route = copy.deepcopy(route)
                 record = route['requests'][seq]
                 context = _context_load(route, self.config['client_actor'])
                 continuity = NativeContinuity(claim['worker_id'], claim['context_epoch'])
                 delivery = context.prepare_delivery(continuity)
-                payload = delivery.tool_result()
+                payload = delivery.tool_result(max_bytes=MAX_BODY)
                 record['context_token'] = delivery.token
                 record['context_delivery'] = payload
                 record['execution_reserved'] = True
@@ -577,7 +593,8 @@ class GlobalRuntime:
                 route['metrics']['context_payload_bytes'].append(len(delivery.payload_bytes))
                 self._save(route)
                 return {**common, 'status': 'ready', 'request_id': record['id'], 'seq': record['seq'],
-                        'context_token': delivery.token, 'context': payload, 'replayed': False}
+                        'context_token': delivery.token, 'context': payload, 'replayed': False,
+                        'capabilities': self._capabilities(record['request'])}
             if self.closed or (cancel_event and cancel_event.is_set()) or time.monotonic() >= end:
                 return {**common, 'status': 'pending', 'after_seq': seq, 'effect': 'unknown',
                         'resubmit_action': False, 'automatic_wake': False}
@@ -591,6 +608,83 @@ class GlobalRuntime:
             require(context._delivery.token == record['context_token'], 'context_receipt_mismatch')
             context.acknowledge_delivery(context._delivery)
         return context
+
+    @staticmethod
+    def _capabilities(request):
+        from .hosted import web_capability
+        tools = request_tools(request)
+        return {'tool_contract': 'dots-direct-tools/2',
+                'client_execution': ['function', 'custom', 'namespace', 'tool_search'],
+                'hosted': [web_capability(tool) for key, tool in tools.items() if key == ('web_search',)],
+                'image_input': 'bounded_data_uri_mcp_image_blocks',
+                'native_execution_attested': False}
+
+    def _schemas(self, route, record, context, args):
+        continuity = NativeContinuity(route['claim']['worker_id'], route['claim']['context_epoch'])
+        for token in args.get('schema_tokens', []):
+            require(token in route['schema_tokens'], 'unknown_schema_receipt')
+            key, sha, context_token = route['schema_tokens'][token]
+            require(context_token == record['context_token'], 'schema_receipt_wrong_context')
+            context.acknowledge_schema_delivery(continuity=continuity, key=key, expected_digest=sha)
+        return continuity
+
+    def _hosted(self, name, route, record, args):
+        from .hosted import prepare_web, verify_result, enforce_tool_policy
+        self._active()
+        require(not route['closed'] and not record['cancelled'], 'request_cancelled_or_route_closed')
+        require(record is route['requests'][-1] and record['response'] is None, 'stale_request')
+        context = self._ack(route, record, args)
+        operations = record.setdefault('hosted_operations', {})
+        operation_id = args.get('operation_id')
+        require(type(operation_id) is str and re.fullmatch(r'[!-~]{1,256}', operation_id), 'action_id_required')
+        if name == 'prepare_hosted_call':
+            continuity = self._schemas(route, record, context, args)
+            schema = context.require_schema(continuity=continuity, key=catalog_key('web_search'))
+            tool = schema['component']['definition']
+            prepared = prepare_web(tool, args['action'], args['item_id'])
+            require(not any(item.get('id') == args['item_id'] for item in record['request']['input']),
+                    'response_item_id_required')
+            existing_items = [op['prepared']['item'] for key, op in operations.items() if key != operation_id]
+            enforce_tool_policy(record['request'], existing_items + [prepared['item']])
+            binding = {'route_id': route['route_id'], 'claim_token': route['claim']['claim_token'],
+                       'request_id': record['id'], 'context_token': record['context_token'],
+                       'schema_sha256': schema['schema_sha256'], 'operation_id': operation_id, 'prepared': prepared}
+            fingerprint = digest(binding)
+            if operation_id in operations:
+                op = operations[operation_id]
+                require(op['fingerprint'] == fingerprint, 'hosted_operation_conflict')
+                return {'status': op['result']['status'] if op.get('result') else 'reserved',
+                        'result_status': op['result']['status'] if op.get('result') else None,
+                        'operation_token': op['token'], 'execute': False, 'replayed': True,
+                        'effect': 'recorded' if op.get('result') else 'unknown',
+                        'native_execution_attested': False}
+            require(len(operations) < 32, 'hosted_operation_limit')
+            require(not any(op.get('result') is None for op in operations.values()), 'hosted_operation_pending')
+            require(not any(op['prepared']['item']['id'] == prepared['item']['id']
+                            or op['prepared']['native_arguments'] == prepared['native_arguments'] for op in operations.values()),
+                    'hosted_operation_conflict')
+            op = {'fingerprint': fingerprint, 'token': secrets.token_hex(32), 'prepared': prepared,
+                  'schema_sha256': schema['schema_sha256'], 'result': None}
+            operations[operation_id] = op
+            route['context'] = _context_dump(context)
+            self._save(route)  # Durable before returning permission to the trusted native worker.
+            return {'status': 'reserved', 'operation_token': op['token'], 'execute': True, 'replayed': False,
+                    'native_tool': prepared['native_tool'], 'native_arguments': prepared['native_arguments'],
+                    'native_execution_attested': False,
+                    'instruction': 'Execute these exact arguments once using your actual native web tool. Preserve its complete result. Permission and web-tool safety rules still apply; a replay never authorizes execution.'}
+        require(operation_id in operations, 'hosted_operation_unknown')
+        op = operations[operation_id]
+        require(args.get('operation_token') == op['token'], 'hosted_receipt_mismatch')
+        result = verify_result(op['prepared'], args['result'])
+        if op.get('result') is not None:
+            require(op['result'] == result, 'hosted_result_conflict')
+        else:
+            op['result'] = result
+            route['context'] = _context_dump(context)
+            self._save(route)
+        return {'status': result['status'], 'operation_token': op['token'], 'execute': False,
+                'item': {**op['prepared']['item'], 'status': result['status']},
+                'sources': result['sources'], 'native_execution_attested': False}
 
     def status(self):
         with self.cv:
@@ -613,6 +707,7 @@ class GlobalRuntime:
                 'allowed_pairs': self.config['allowed_pairs'], 'default_pair': self.config['default_pair'],
                 'actual_native_platform_verified': False, 'mac_execution_verified': False,
                 'model_api_used': False, 'automatic_wake': False,
+                'tool_contract': 'dots-direct-tools/2', 'native_hosted_execution_attested': False,
                 'native_children_stop_confirmed': False,
                 'trust_boundary': 'trusted_single_owner_logical_route_claim',
                 'controller_action': 'Create an actual native child for each pending route with its exact pair, then have that child claim using get_request. No automatic child wake is provided.'}
@@ -651,6 +746,8 @@ class GlobalRuntime:
                 self._save(route)
                 return {'status': 'closed', 'route_id': route['route_id'], 'worker_reassignment_allowed': False}
             record = self._record(route, args.get('request_id'))
+            if name in ('prepare_hosted_call', 'record_hosted_result'):
+                return self._hosted(name, route, record, args)
             if name in ('discover_tools', 'lookup_schema'):
                 self._active()
                 require(record is route['requests'][-1] and record['response'] is None and not record['cancelled'], 'stale_request')
@@ -678,17 +775,21 @@ class GlobalRuntime:
                     require(not route['closed'] and not record['cancelled'], 'request_cancelled_or_route_closed')
                     require(record is route['requests'][-1] and record['response'] is None, 'request_already_answered_or_stale')
                     context = self._ack(route, record, args)
-                    continuity = NativeContinuity(route['claim']['worker_id'], route['claim']['context_epoch'])
-                    for token in args.get('schema_tokens', []):
-                        require(token in route['schema_tokens'], 'unknown_schema_receipt')
-                        key, sha, context_token = route['schema_tokens'][token]
-                        require(context_token == record['context_token'], 'schema_receipt_wrong_context')
-                        context.acknowledge_schema_delivery(continuity=continuity, key=key, expected_digest=sha)
-                    response = validate_response(args['response'], record['request'])
+                    continuity = self._schemas(route, record, context, args)
+                    receipts = list(record.get('hosted_operations', {}).values())
+                    require(not any(op.get('result') is None for op in receipts), 'hosted_operation_pending')
+                    prior_sources = {source['url'] for previous in route['requests'] if previous is not record
+                                     for op in previous.get('hosted_operations', {}).values()
+                                     if op.get('result', {}).get('status') == 'completed'
+                                     for source in op['result']['sources']}
+                    response = validate_response(args['response'], record['request'], hosted_receipts=receipts,
+                                                 prior_citation_sources=prior_sources)
                     require(not any(_internal_tool(item.get('name'), item.get('namespace')) for item in response['output']
                                     if item.get('type') in {'function_call', 'custom_tool_call'}), 'bridge_transport_tool_intent_forbidden')
                     require(has_tools(response) != final, 'use_finish_for_message_or_submit_for_tools')
                     for item in response['output']:
+                        if item.get('type') == 'tool_search_call':
+                            context.require_schema(continuity=continuity, key=catalog_key('tool_search'))
                         if item.get('type') in {'function_call', 'custom_tool_call'}:
                             context.require_schema(continuity=continuity, key=tool_key(item.get('namespace'), item['name']))
                     context.record_output(continuity=continuity, items=response['output'])
@@ -710,7 +811,10 @@ class GlobalRuntime:
                     return {'status': 'too_late_result_committed', 'effect': 'unknown', 'resubmit_action': False}
                 record['cancelled'] = True
                 self._save(route)
-                return {'status': 'cancelled', 'request_id': record['id'], 'effect': 'not_emitted',
+                return {'status': 'cancelled', 'request_id': record['id'],
+                        'effect': 'unknown' if record.get('hosted_operations') else 'not_emitted',
+                        'hosted_result_recorded': any(op.get('result') for op in record.get('hosted_operations', {}).values()),
+                        'execute_again': False,
                         'route_requires_new_conversation': True}
             raise ValueError('unknown_tool')
 
@@ -742,11 +846,21 @@ class GlobalRuntime:
                 self.close_connection = True
             def _error(self, error, request_id=None):
                 # Exception codes here are fixed validators, never payload text.
-                code = str(error) if isinstance(error, ValueError) else 'invalid_arguments'
-                if not re.fullmatch(r'[a-z_]{1,100}', code):
-                    code = 'invalid_request'
+                code = runtime.public_error(error)
+                details = getattr(error, 'details', {})
+                safe_details = {}
+                for key in ('tool_index', 'child_index'):
+                    if type(details.get(key)) is int and 0 <= details[key] <= 100000:
+                        safe_details[key] = details[key]
+                from .wire import TOOL_DIAGNOSTIC_TYPES
+                if details.get('tool_type') in TOOL_DIAGNOSTIC_TYPES:
+                    safe_details['tool_type'] = details['tool_type']
+                if type(details.get('name_present')) is bool:
+                    safe_details['name_present'] = details['name_present']
+                if details.get('item_type') in {'reasoning', 'input_audio', 'image_generation_call', 'computer_call', 'local_shell_call', 'agent_message', 'unknown'}:
+                    safe_details['item_type'] = details['item_type']
                 self._json(401 if code == 'authorization_required' else 409,
-                    {'error': {'code': code}, 'request_id': request_id,
+                    {'error': {'code': code, **({'details': safe_details} if safe_details else {})}, 'request_id': request_id,
                      'automatic_retry': False, 'resubmit_new_action': False, 'native_fallback': False})
             def do_GET(self):
                 try:
@@ -768,7 +882,7 @@ class GlobalRuntime:
                             return self._json(200, {'route_id': route_id, 'request_id': record['id'],
                                 'status': 'cancelled' if record['cancelled'] else 'completed' if record['response'] else 'pending',
                                 'delivery_started': record['delivery_started'], 'automatic_retry': False,
-                                'effect': 'unknown' if record['delivery_started'] else 'not_emitted'})
+                                'effect': 'unknown' if record['delivery_started'] or record.get('hosted_operations') else 'not_emitted'})
                     return self._json(404, {'error': {'code': 'not_found'}})
                 except (ValueError, KeyError, TypeError) as exc:
                     self._error(exc)

@@ -60,6 +60,8 @@ def catalog_for_pairs(allowed_pairs, default_pair):
         model = catalog.catalog_for_selection(pair)["models"][0]
         name = pair["model"]
         if name not in models:
+            model["supports_search_tool"] = True
+            model["input_modalities"] = ["text", "image"]
             model["description"] = "Dots2Codex Direct; each new route admits its exact allowed model and effort."
             model["supported_reasoning_levels"] = []
             models[name] = model

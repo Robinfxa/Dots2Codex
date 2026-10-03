@@ -1,0 +1,471 @@
+{
+  "contract": "dots-direct-tool-acceptance/1",
+  "validated_on": "2026-10-03",
+  "external_model_api_used": false,
+  "mac_or_production_tunnel_used": false,
+  "native_platform_attestation": false,
+  "reports": {
+    "native_web": {
+      "native_web_executed": true,
+      "provenance": "actual available native web.run invoked after durable preparation; tool result reported by trusted worker, not platform attestation",
+      "response_validated": true,
+      "web_item": {
+        "action": {
+          "query": "IANA example domains",
+          "type": "search"
+        },
+        "id": "ws_native_iana",
+        "status": "completed",
+        "type": "web_search_call"
+      },
+      "source_urls": [
+        "https://www.iana.org/help/example-domains"
+      ],
+      "response_matches": true,
+      "mac_or_tunnel_used": false,
+      "external_model_api_used": false
+    },
+    "native_vision": {
+      "test": "isolated_direct_bridge_native_image_delivery",
+      "status": "passed",
+      "fixture": "native_image_tool_result.json",
+      "method": "Read the fixture using exec_command, parsed its tool result in functions.exec, and forwarded its actual returned image ContentBlock with image(block). Visual observations were made from the rendered pixels.",
+      "visual_observations": {
+        "background": "white",
+        "left_shape": "upright triangle",
+        "left_color": "green",
+        "right_shape": "circle",
+        "right_color": "orange-red",
+        "exact_visible_text": "MINT 7",
+        "text_color": "black",
+        "text_position": "beneath the left triangle"
+      },
+      "response_checks": {
+        "is_error": false,
+        "content_types": [
+          "text",
+          "image"
+        ],
+        "genuine_image_content_block": true,
+        "image_mime_type": "image/png",
+        "image_detail": "original",
+        "image_data_matches_context_input_data_uri": true,
+        "text_json_equals_structured_content": true,
+        "preserved_context": {
+          "contract": "dots-direct-context/1",
+          "kind": "full",
+          "history_messages": 1,
+          "history_content_types": [
+            "input_text",
+            "input_image"
+          ],
+          "user_request_text": "Describe the two shapes, their colors, and the exact text visible in this image.",
+          "request_instructions_characters": 2400,
+          "model": "gpt-6-astra",
+          "reasoning_effort": "xhigh",
+          "stream": true,
+          "revision": 1,
+          "tool_catalog_count": 1,
+          "tool_catalog_discovery": "on_demand",
+          "binding_present": true,
+          "native_context_present": true,
+          "request_fields_present": true
+        }
+      },
+      "boundaries": [
+        "Accepted the isolated image-delivery result represented by the supplied fixture, whose reported provenance was actual MCPServer._call_tool(get_request) with synthetic client input.",
+        "Did not independently rerun MCPServer._call_tool or verify upstream fixture provenance.",
+        "Did not read the image generator or expected-answer files.",
+        "Did not perform Mac, tunnel, external model API, or publishing actions.",
+        "This proves the supplied tool response image block reached this assistant's actual visual input; it is not production-route or native-platform execution attestation.",
+        "The fixture retains actual_native_platform_verified=false and native_execution_attested=false."
+      ]
+    },
+    "actual-bridge-default": {
+      "actual_client": "codex-cli 0.159.2",
+      "source_report_sha256": "071a3e2c824237f14e36b3cdd61f834abced0de1d6c5a310ef278a13583d1fcf",
+      "evidence": {
+        "case": "actual-bridge-default",
+        "client": "codex-cli 0.159.2",
+        "real_global_runtime": true,
+        "controller_synthetic": true,
+        "model_api_calls": 0,
+        "live_native_inference": false,
+        "client_returncode": 0,
+        "request_count": 1,
+        "events": [
+          {
+            "tool": "get_request",
+            "request_id": null,
+            "action_id": null,
+            "status": "ready",
+            "seq": 1
+          },
+          {
+            "tool": "finish_request",
+            "request_id": "request-b7ed95106f51ece64fbe08f38a7bb8b1fac9e22813720767c7134ec947355352",
+            "action_id": "synthetic-e2e-1",
+            "status": "completed",
+            "seq": null
+          }
+        ],
+        "failures": [],
+        "status": {
+          "status": "ready",
+          "mode": "global",
+          "contract": "dots-direct-global/1",
+          "config_id": "global-fixture",
+          "instance_id": "69c856ebe9e7d6f0bcf3b93a48a621d1",
+          "http_address": "http://127.0.0.1:40143/v1",
+          "max_routes": 2,
+          "active_routes": 1,
+          "pending_routes": [],
+          "routes": [
+            {
+              "route_id": "route-8caba7924777817c9e2572785d7e6856",
+              "model": "gpt-6-astra",
+              "reasoning_effort": "xhigh",
+              "state": "claimed",
+              "worker_id": "synthetic-real-client-controller",
+              "requests": 1,
+              "last_seq": 1,
+              "request_pending": false,
+              "last_local_stop_requested_at": null,
+              "metrics": {
+                "full_context_returns": 1,
+                "delta_context_returns": 0,
+                "response_commits": 1,
+                "http_emissions": 1,
+                "context_payload_bytes": [
+                  27369
+                ]
+              }
+            }
+          ],
+          "closed_route_count": 0,
+          "allowed_pairs": [
+            {
+              "model": "gpt-6-astra",
+              "reasoning_effort": "xhigh"
+            }
+          ],
+          "default_pair": {
+            "model": "gpt-6-astra",
+            "reasoning_effort": "xhigh"
+          },
+          "actual_native_platform_verified": false,
+          "mac_execution_verified": false,
+          "model_api_used": false,
+          "automatic_wake": false,
+          "tool_contract": "dots-direct-tools/2",
+          "native_hosted_execution_attested": false,
+          "native_children_stop_confirmed": false,
+          "trust_boundary": "trusted_single_owner_logical_route_claim",
+          "controller_action": "Create an actual native child for each pending route with its exact pair, then have that child claim using get_request. No automatic child wake is provided."
+        },
+        "expected_requests": 1,
+        "passed": true
+      }
+    },
+    "actual-bridge-search": {
+      "actual_client": "codex-cli 0.159.2",
+      "source_report_sha256": "e68e556df6be7a9bbcad6e0da607a869d458af1c6359f63412f27c6c0ad4627b",
+      "evidence": {
+        "case": "actual-bridge-search",
+        "client": "codex-cli 0.159.2",
+        "real_global_runtime": true,
+        "controller_synthetic": true,
+        "model_api_calls": 0,
+        "live_native_inference": false,
+        "client_returncode": 0,
+        "request_count": 3,
+        "events": [
+          {
+            "tool": "get_request",
+            "request_id": null,
+            "action_id": null,
+            "status": "ready",
+            "seq": 1
+          },
+          {
+            "tool": "discover_tools",
+            "request_id": "request-f2b650093e5f4d6bcd06f075361e9142e435fb6b221e179bdb25bfc4e9bb0302",
+            "action_id": null,
+            "status": null,
+            "seq": null
+          },
+          {
+            "tool": "lookup_schema",
+            "request_id": "request-f2b650093e5f4d6bcd06f075361e9142e435fb6b221e179bdb25bfc4e9bb0302",
+            "action_id": null,
+            "status": null,
+            "seq": null
+          },
+          {
+            "tool": "submit_action_and_wait_result",
+            "request_id": "request-f2b650093e5f4d6bcd06f075361e9142e435fb6b221e179bdb25bfc4e9bb0302",
+            "action_id": "synthetic-e2e-1",
+            "status": "pending",
+            "seq": null
+          },
+          {
+            "tool": "await_result",
+            "request_id": "request-f2b650093e5f4d6bcd06f075361e9142e435fb6b221e179bdb25bfc4e9bb0302",
+            "action_id": "synthetic-e2e-1",
+            "status": "ready",
+            "seq": 2
+          },
+          {
+            "tool": "discover_tools",
+            "request_id": "request-bb8b1ce54de8d26b8c42451a8d8bce860ee6ed63a5054cb68c717d1fc06fa08e",
+            "action_id": null,
+            "status": null,
+            "seq": null
+          },
+          {
+            "tool": "lookup_schema",
+            "request_id": "request-bb8b1ce54de8d26b8c42451a8d8bce860ee6ed63a5054cb68c717d1fc06fa08e",
+            "action_id": null,
+            "status": null,
+            "seq": null
+          },
+          {
+            "tool": "submit_action_and_wait_result",
+            "request_id": "request-bb8b1ce54de8d26b8c42451a8d8bce860ee6ed63a5054cb68c717d1fc06fa08e",
+            "action_id": "synthetic-e2e-2",
+            "status": "pending",
+            "seq": null
+          },
+          {
+            "tool": "await_result",
+            "request_id": "request-bb8b1ce54de8d26b8c42451a8d8bce860ee6ed63a5054cb68c717d1fc06fa08e",
+            "action_id": "synthetic-e2e-2",
+            "status": "ready",
+            "seq": 3
+          },
+          {
+            "tool": "finish_request",
+            "request_id": "request-656dada1c29e218e058664ca800a3f81125f66f72f9544fcf0285007ba8d12d7",
+            "action_id": "synthetic-e2e-3",
+            "status": "completed",
+            "seq": null
+          }
+        ],
+        "failures": [],
+        "status": {
+          "status": "ready",
+          "mode": "global",
+          "contract": "dots-direct-global/1",
+          "config_id": "global-fixture",
+          "instance_id": "a139ceb4842bb0b8bece3ed1968628b2",
+          "http_address": "http://127.0.0.1:33113/v1",
+          "max_routes": 2,
+          "active_routes": 1,
+          "pending_routes": [],
+          "routes": [
+            {
+              "route_id": "route-64abf1ad1394a337b4dac8a8a3274e24",
+              "model": "gpt-6-astra",
+              "reasoning_effort": "xhigh",
+              "state": "claimed",
+              "worker_id": "synthetic-real-client-controller",
+              "requests": 3,
+              "last_seq": 3,
+              "request_pending": false,
+              "last_local_stop_requested_at": null,
+              "metrics": {
+                "full_context_returns": 1,
+                "delta_context_returns": 2,
+                "response_commits": 3,
+                "http_emissions": 3,
+                "context_payload_bytes": [
+                  27366,
+                  1308,
+                  1238
+                ]
+              }
+            }
+          ],
+          "closed_route_count": 0,
+          "allowed_pairs": [
+            {
+              "model": "gpt-6-astra",
+              "reasoning_effort": "xhigh"
+            }
+          ],
+          "default_pair": {
+            "model": "gpt-6-astra",
+            "reasoning_effort": "xhigh"
+          },
+          "actual_native_platform_verified": false,
+          "mac_execution_verified": false,
+          "model_api_used": false,
+          "automatic_wake": false,
+          "tool_contract": "dots-direct-tools/2",
+          "native_hosted_execution_attested": false,
+          "native_children_stop_confirmed": false,
+          "trust_boundary": "trusted_single_owner_logical_route_claim",
+          "controller_action": "Create an actual native child for each pending route with its exact pair, then have that child claim using get_request. No automatic child wake is provided."
+        },
+        "expected_requests": 3,
+        "passed": true
+      }
+    },
+    "actual-bridge-search-image": {
+      "actual_client": "codex-cli 0.159.2",
+      "source_report_sha256": "dd657cd735742b775455b6466148c91e388f4dd0dae10e6ef76aa669a3bf0e4e",
+      "evidence": {
+        "case": "actual-bridge-search-image",
+        "client": "codex-cli 0.159.2",
+        "real_global_runtime": true,
+        "controller_synthetic": true,
+        "model_api_calls": 0,
+        "live_native_inference": false,
+        "client_returncode": 0,
+        "request_count": 3,
+        "events": [
+          {
+            "tool": "get_request",
+            "request_id": null,
+            "action_id": null,
+            "status": "ready",
+            "seq": 1
+          },
+          {
+            "tool": "discover_tools",
+            "request_id": "request-8b876a6c210130f597558d7a27d089690b675cef814a2b388ad691edebb26d09",
+            "action_id": null,
+            "status": null,
+            "seq": null
+          },
+          {
+            "tool": "lookup_schema",
+            "request_id": "request-8b876a6c210130f597558d7a27d089690b675cef814a2b388ad691edebb26d09",
+            "action_id": null,
+            "status": null,
+            "seq": null
+          },
+          {
+            "tool": "submit_action_and_wait_result",
+            "request_id": "request-8b876a6c210130f597558d7a27d089690b675cef814a2b388ad691edebb26d09",
+            "action_id": "synthetic-e2e-1",
+            "status": "pending",
+            "seq": null
+          },
+          {
+            "tool": "await_result",
+            "request_id": "request-8b876a6c210130f597558d7a27d089690b675cef814a2b388ad691edebb26d09",
+            "action_id": "synthetic-e2e-1",
+            "status": "ready",
+            "seq": 2
+          },
+          {
+            "tool": "discover_tools",
+            "request_id": "request-1368a036ed3dfb695790d60e6fc03597a179c930f89442753336012c6b213122",
+            "action_id": null,
+            "status": null,
+            "seq": null
+          },
+          {
+            "tool": "lookup_schema",
+            "request_id": "request-1368a036ed3dfb695790d60e6fc03597a179c930f89442753336012c6b213122",
+            "action_id": null,
+            "status": null,
+            "seq": null
+          },
+          {
+            "tool": "submit_action_and_wait_result",
+            "request_id": "request-1368a036ed3dfb695790d60e6fc03597a179c930f89442753336012c6b213122",
+            "action_id": "synthetic-e2e-2",
+            "status": "pending",
+            "seq": null
+          },
+          {
+            "tool": "await_result",
+            "request_id": "request-1368a036ed3dfb695790d60e6fc03597a179c930f89442753336012c6b213122",
+            "action_id": "synthetic-e2e-2",
+            "status": "ready",
+            "seq": 3
+          },
+          {
+            "tool": "finish_request",
+            "request_id": "request-ee9286f67f9838f62597eb3d66e52a531de7630382119e64db4f8e5918567e91",
+            "action_id": "synthetic-e2e-3",
+            "status": "completed",
+            "seq": null
+          }
+        ],
+        "failures": [],
+        "status": {
+          "status": "ready",
+          "mode": "global",
+          "contract": "dots-direct-global/1",
+          "config_id": "global-fixture",
+          "instance_id": "a3dd27c350fe1ef3afca86d10123bb0c",
+          "http_address": "http://127.0.0.1:34175/v1",
+          "max_routes": 2,
+          "active_routes": 1,
+          "pending_routes": [],
+          "routes": [
+            {
+              "route_id": "route-f854f39c46310a340d02f6a4786f9d49",
+              "model": "gpt-6-astra",
+              "reasoning_effort": "xhigh",
+              "state": "claimed",
+              "worker_id": "synthetic-real-client-controller",
+              "requests": 3,
+              "last_seq": 3,
+              "request_pending": false,
+              "last_local_stop_requested_at": null,
+              "metrics": {
+                "full_context_returns": 1,
+                "delta_context_returns": 2,
+                "response_commits": 3,
+                "http_emissions": 3,
+                "context_payload_bytes": [
+                  27384,
+                  1308,
+                  1384
+                ]
+              }
+            }
+          ],
+          "closed_route_count": 0,
+          "allowed_pairs": [
+            {
+              "model": "gpt-6-astra",
+              "reasoning_effort": "xhigh"
+            }
+          ],
+          "default_pair": {
+            "model": "gpt-6-astra",
+            "reasoning_effort": "xhigh"
+          },
+          "actual_native_platform_verified": false,
+          "mac_execution_verified": false,
+          "model_api_used": false,
+          "automatic_wake": false,
+          "tool_contract": "dots-direct-tools/2",
+          "native_hosted_execution_attested": false,
+          "native_children_stop_confirmed": false,
+          "trust_boundary": "trusted_single_owner_logical_route_claim",
+          "controller_action": "Create an actual native child for each pending route with its exact pair, then have that child claim using get_request. No automatic child wake is provided."
+        },
+        "expected_requests": 3,
+        "passed": true
+      }
+    },
+    "native_web_actions": {
+      "actual_native_actions": [
+        "open_page",
+        "find_in_page"
+      ],
+      "parallel_tool_calls": false,
+      "sequential_reservations": true,
+      "real_http_response_matches": true,
+      "source_link_in_text": true,
+      "mac_or_tunnel_used": false,
+      "external_model_api_used": false
+    }
+  }
+}

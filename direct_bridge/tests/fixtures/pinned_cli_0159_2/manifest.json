@@ -1,0 +1,32 @@
+{
+  "contract": "pinned-codex-client-fixture-manifest/1",
+  "fixture_count": 25,
+  "evidence_boundary": "Real official pinned CLI outbound requests and callbacks; synthetic response/controller/MCP content. No native-model or live-Mac claim.",
+  "files": {
+    "default-1.json": "d02ca391b78caf105ed9555cebce1c90e2c1f0aca19fad6bf018d78f59c30e72",
+    "web-disabled-1.json": "7f47e671f5f2f9957465697be42f980339eb5db9bf10162c6de53b4b468d941a",
+    "web-cached-1.json": "7e6ee17fb6dbb72e80535fbdec833d382a55d8f89628652c34b640e828292ca4",
+    "web-live-1.json": "596ebaf83c783c0b04287ef5186650407b2cbd1fbb610a9e5fd5ffdbf4153ddc",
+    "web-indexed-1.json": "b0ab5f985e6d42ca5811729be0ca052b697a933d4cc4a2e382ea81eae9f7bb1e",
+    "web-configured-1.json": "f8ef248aec78cf4e4675a4bbcc34fa3a53c42fd3f6988f153189c8e241272e32",
+    "web-text-image-1.json": "fd78cdba144ec82375fc01e59dfa194d445a6cdc0660a7d6da5246254cffd000",
+    "function-roundtrip-1.json": "23b1ab5d506bb557de52b4ca45ad05deb7bd377138cb2b3cbb27b0b278c8f8de",
+    "function-roundtrip-2.json": "0d3439602bae263770814572415a6673130c1730823988f0a4cf146f6117aca5",
+    "custom-roundtrip-1.json": "292ea396a02d83008da3a93cf83da88d1e8923e8d15fe4da6fa3c8a116c2a024",
+    "custom-roundtrip-2.json": "fae5cd770fa4cc90e04b029190015cb827e62285c2a713e47cc5923981e6c0f0",
+    "mcp-roundtrip-1.json": "5541bfad22c5395757b3bb9a51e5aeeadeb8e0f48291910383eabca249798709",
+    "mcp-roundtrip-2.json": "afb78d35d4db3e20c3fe40bbef143bfb586c85f9f597be8dc587a0d36b170464",
+    "web-roundtrip-1.json": "42a53d964805f767ff5c7dc0226ca456bd25fd1f72e30126f025b6cd4d5f06a2",
+    "web-roundtrip-2.json": "b38508c4c29d05ba53e4276fef2e7b89ac94d6c3c8a81cf26b811b2ab61a81b2",
+    "web-action-variants-1.json": "316c0e990e938d93415e2c9a22a40d4670b782b1e795dd3efc5172fa108921d6",
+    "web-action-variants-2.json": "fcc8b083151bb0f25df08bf5bf21ea4a0f8260316cee1d4dd81f3ddf049da3af",
+    "reasoning-roundtrip-1.json": "d061bf6a1f5d1c3037ec1f0492f30bda6f3f3a6781484f1e3967142847b96ca6",
+    "reasoning-roundtrip-2.json": "bc9b39e6d50a7ece4b6ee77304b2ab9c0bb7aafe5ee7246d919cc31be5b0605b",
+    "tool-search-full-1.json": "876bded68d137657d560a2cfe7aa8b7261368b8e64f39cd02b79b3dc06d48075",
+    "tool-search-full-2.json": "de788709737a9e57998d0e7684fcf33fe5c873be653bea2583d8c2557d61ff50",
+    "tool-search-full-3.json": "a861fcbe413207329e9f9a9f986f22393446b92b2429164db719c5b863265618",
+    "mcp-image-capable-1.json": "6cfe1fdde9ade6e6ae2a3a939feba4a5cead702001b403e7f951ef55854fc388",
+    "mcp-image-capable-2.json": "5a9ca41232adf9296ea1da615cefcfd05d0648af63430fff522b5e0164541791",
+    "code-mode-enabled-1.json": "fff6222cb5cc5dfd0296b377ac3297e4106a19e16fb9c8770f95614b2ea96ed3"
+  }
+}

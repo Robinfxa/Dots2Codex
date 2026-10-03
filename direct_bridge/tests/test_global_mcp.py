@@ -74,7 +74,7 @@ class GlobalMCPTests(unittest.TestCase):
     def test_production_multi_route_tool_callback_restart_final_turn(self):
         started=time.perf_counter()
         c=self.client;c.request(2,'tools/list');tools=c.recv(2)['result']['tools']
-        self.assertEqual(len(tools),8)
+        self.assertEqual(len(tools),10)
         get=next(t for t in tools if t['name']=='get_request')
         self.assertIn('route_id',get['inputSchema']['required'])
         results={};errors=[]

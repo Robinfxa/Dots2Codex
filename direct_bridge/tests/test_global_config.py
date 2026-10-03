@@ -295,7 +295,8 @@ class ConfigTests(unittest.TestCase):
         first = value['models'][0]
         self.assertEqual(first['default_reasoning_level'], 'xhigh')
         self.assertEqual([x['effort'] for x in first['supported_reasoning_levels']], ['xhigh', 'high'])
-        self.assertFalse(first['supports_search_tool'])
+        self.assertTrue(first['supports_search_tool'])
+        self.assertEqual(first['input_modalities'], ['text', 'image'])
         self.assertFalse(first['supports_reasoning_effort_updates'])
         before = self.catalog_path.read_bytes()
         with self.assertRaisesRegex(ProtocolError, 'direct_catalog_selection_mismatch'):
