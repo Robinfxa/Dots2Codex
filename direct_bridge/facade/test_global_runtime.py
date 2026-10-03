@@ -67,6 +67,7 @@ class GlobalRuntimeTests(unittest.TestCase):
 
     def tearDown(self):
         self.runtime.close()
+        self.assertTrue(self.runtime.diagnostics.wait_idle())
         self.temp.cleanup()
 
     def ingress(self, text='hello', identity=None, key=None):
@@ -85,6 +86,7 @@ class GlobalRuntimeTests(unittest.TestCase):
 
     def restart(self):
         self.runtime.close()
+        self.assertTrue(self.runtime.diagnostics.wait_idle())
         self.runtime = create_runtime(self.cfg)
         self.runtime.start_http()
         self.port = self.runtime.http.server_port

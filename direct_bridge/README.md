@@ -120,3 +120,7 @@ unchanged. No bundled Mac binary, credential, or external model client is includ
 ## Tool contract v2
 
 See [pinned-client tool compatibility](docs/TOOL_COMPATIBILITY.md) for client tool discovery, native-hosted web receipts, bounded native image blocks, precise unsupported options, and evidence boundaries. Global MCP now exposes ten tools; existing eight contracts are retained.
+
+## 本机脱敏诊断
+
+运行 `./DIRECT.command diagnostics --lines 80` 查看有限的时间线与脱敏关联 ID。只读，不重启、不读取密钥或请求内容；旧版本没有历史事件可还原。保留上限、字段含义与排障边界见 [脱敏诊断说明](docs/DIAGNOSTICS.md)。

@@ -22,6 +22,8 @@ import threading
 import time
 from urllib.parse import urlsplit, parse_qs
 
+from diagnostics import Diagnostics, duration_ms
+
 from context.incremental import (ContextStore, NativeContinuity, Delivery,
                                  strict_loads, tool_key, catalog_key, digest)
 from .wire import validate_request, validate_response, validate_history, has_tools, response_events, CLIENT_CALL_TYPES, request_tools
@@ -396,6 +398,7 @@ class GlobalRuntime:
         if path.exists():
             require(path.is_file() and path.stat().st_uid == os.getuid()
                     and not path.stat().st_mode & 0o077, 'private_state_file_required')
+        self.diagnostics = Diagnostics(path.parent)
         lock = str(path) + '.owner'
         self._owner_fd = os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         try:
@@ -429,6 +432,8 @@ class GlobalRuntime:
         except BaseException:
             self.close()
             raise
+
+        self.diagnostics.event('service', 'started', outcome='ok')
 
     def _active(self):
         require(not self.closed, 'bridge_closed')
@@ -554,6 +559,25 @@ class GlobalRuntime:
         return route
 
     def _next(self, route_id, seq, wait_ms, cancel_event):
+        started = time.monotonic()
+        ids = {'route': route_id}
+        self.diagnostics.event('runtime_wait', 'begin', ids=ids, wait_ms=wait_ms, after_seq=seq)
+        try:
+            result = self._next_impl(route_id, seq, wait_ms, cancel_event)
+            reason = None
+            if result.get('status') == 'pending':
+                reason = ('service_closed' if self.closed else 'cooperative_cancel'
+                          if cancel_event and cancel_event.is_set() else 'deadline')
+            self.diagnostics.event('runtime_wait', 'end', ids={**ids, 'request': result.get('request_id')},
+                wait_ms=wait_ms, after_seq=seq, outcome=result.get('status'), reason=reason,
+                duration_ms=duration_ms(started))
+            return result
+        except BaseException:
+            self.diagnostics.event('runtime_wait', 'end', ids=ids, outcome='error',
+                duration_ms=duration_ms(started))
+            raise
+
+    def _next_impl(self, route_id, seq, wait_ms, cancel_event):
         require(type(seq) is int and 0 <= seq <= self.max_requests, 'invalid_after_seq')
         require(type(wait_ms) is int and 0 <= wait_ms <= self.max_wait_ms, 'invalid_wait_ms')
         end = time.monotonic() + wait_ms / 1000
@@ -798,6 +822,9 @@ class GlobalRuntime:
                     route['context'] = _context_dump(context)
                     route['metrics']['response_commits'] += 1
                     self._save(route)
+                    self.diagnostics.event('response_commit', 'end', method=name,
+                        ids={'route': route['route_id'], 'request': record['id'], 'action': action_id},
+                        outcome='message' if final else 'tools')
                 if final:
                     return {'status': 'completed', 'route_id': route['route_id'], 'request_id': record['id'],
                             'action_id': action_id, 'http_delivery_confirmed': False}
@@ -834,6 +861,10 @@ class GlobalRuntime:
                 values = self.headers.get_all('Authorization') or []
                 require(len(values) == 1 and values[0].isascii() and hmac.compare_digest(values[0], 'Bearer ' + runtime.bearer), 'authorization_required')
                 require(not self.headers.get_all('Content-Encoding') or self.headers.get_all('Content-Encoding') == ['identity'], 'unsupported_encoding')
+            def _diag(self, stage, **fields):
+                if hasattr(self, 'diagnostic_ids'):
+                    runtime.diagnostics.event('http', stage, method='responses', ids=self.diagnostic_ids,
+                        duration_ms=duration_ms(self.diagnostic_started), **fields)
             def _json(self, status, value):
                 raw = canonical(value)
                 self.send_response(status)
@@ -843,10 +874,12 @@ class GlobalRuntime:
                 self.send_header('Connection', 'close')
                 self.end_headers()
                 self.wfile.write(raw)
+                self._diag('socket_written', http_status=status, outcome='ok')
                 self.close_connection = True
             def _error(self, error, request_id=None):
                 # Exception codes here are fixed validators, never payload text.
                 code = runtime.public_error(error)
+                self._diag('error', outcome='error', error_code=code)
                 details = getattr(error, 'details', {})
                 safe_details = {}
                 for key in ('tool_index', 'child_index'):
@@ -891,6 +924,9 @@ class GlobalRuntime:
             def do_POST(self):
                 request_id = None
                 acquired = False
+                self.diagnostic_started = time.monotonic()
+                self.diagnostic_ids = {'call': secrets.token_hex(12)}
+                self._diag('begin')
                 try:
                     self._headers()
                     require(self.path in ('/v1/responses', '/responses'), 'unsupported_endpoint')
@@ -906,6 +942,8 @@ class GlobalRuntime:
                     raw = self.rfile.read(int(lengths[0]))
                     require(len(raw) == int(lengths[0]), 'incomplete_body')
                     route_id, request_id = runtime.ingest(identity, strict_loads(raw), keys[0] if keys else None)
+                    self.diagnostic_ids.update(route=route_id, request=request_id)
+                    self._diag('ingested', wait_ms=runtime.http_wait_ms)
                     end = time.monotonic() + runtime.http_wait_ms / 1000
                     with runtime.cv:
                         while True:
@@ -923,11 +961,13 @@ class GlobalRuntime:
                                     route['metrics']['http_emissions'] += 1
                                 # Durable BEFORE socket emission. Broken sockets remain unknown.
                                 runtime._save(route)
+                                self._diag('delivery_fenced', outcome='tools' if has_tools(record['response']) else 'message')
                                 payload = response_events(record['response'])
                                 break
                             require(not runtime.closed, 'bridge_closed')
                             remaining = end - time.monotonic()
                             if remaining <= 0:
+                                self._diag('timeout', http_status=504, outcome='pending', error_code='outcome_pending', reason='deadline')
                                 return self._json(504, {'error': {'code': 'outcome_pending'}, 'request_id': request_id,
                                     'route_id': route_id, 'automatic_retry': False, 'resubmit_new_action': False})
                             runtime.cv.wait(min(.1, remaining))
@@ -940,15 +980,17 @@ class GlobalRuntime:
                     self.end_headers()
                     self.wfile.write(payload)
                     self.wfile.flush()
+                    self._diag('socket_flushed', http_status=200, outcome='ok')
                     self.close_connection = True
                 except (ValueError, KeyError, TypeError) as exc:
                     try:
                         self._error(exc, request_id)
                     except OSError:
-                        pass
+                        self._diag('disconnect', outcome='unknown', reason='socket_error')
                 except OSError:
-                    pass
+                    self._diag('disconnect', outcome='unknown', reason='socket_error')
                 finally:
+                    self._diag('end')
                     if acquired:
                         runtime.http.waiters.release()
                     self.close_connection = True
@@ -968,6 +1010,8 @@ class GlobalRuntime:
         with self.cv:
             already_closed = self.closed
             self.closed = True  # Admission closes even if supplementary stop recording fails.
+            if not already_closed:
+                self.diagnostics.event('service', 'stopping', reason='shutdown')
             if not already_closed and self.db is not None:
                 stopped_at = time.time()
                 try:
@@ -992,3 +1036,7 @@ class GlobalRuntime:
                 fcntl.flock(self._owner_fd, fcntl.LOCK_UN)
                 os.close(self._owner_fd)
                 self._owner_fd = None
+
+        if not already_closed:
+            self.diagnostics.event('service', 'stopped', reason='shutdown')
+            self.diagnostics.close()

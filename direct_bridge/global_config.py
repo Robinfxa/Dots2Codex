@@ -128,7 +128,8 @@ def new_values(info):
             "model_catalog_json": catalog_path, "model_providers": {PROVIDER: {
                 "name": "Dots2Codex Direct global", "base_url": info["base_url"],
                 "wire_api": "responses", "requires_openai_auth": False,
-                "supports_websockets": False, "request_max_retries": 0,
+                # Pinned client clones the prepared HTTP request for this one retry.
+                "supports_websockets": False, "request_max_retries": 1,
                 "stream_max_retries": 0,
                 "http_headers": {"Authorization": "Bearer " + info["local_bearer"]}}}}
 

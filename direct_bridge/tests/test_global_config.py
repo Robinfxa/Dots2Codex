@@ -74,6 +74,9 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(parsed['projects']['/sample']['trust_level'], 'trusted')
         provider = parsed['model_providers'][cfg.PROVIDER]
         self.assertFalse(provider['requires_openai_auth'])
+        self.assertEqual(provider['request_max_retries'], 1)
+        self.assertEqual(provider['stream_max_retries'], 0)
+        self.assertFalse(provider['supports_websockets'])
         self.assertNotIn('env_key', provider)
         self.assertEqual(provider['http_headers']['Authorization'], 'Bearer ' + self.info['local_bearer'])
         self.assertIn('# keep my comment', self.path.read_text())

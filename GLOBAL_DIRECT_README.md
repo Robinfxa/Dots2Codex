@@ -44,3 +44,7 @@ MCP 保留原有八个工具，并新增 `prepare_hosted_call`、`record_hosted_
 详细说明：[真实原生父/子控制器](direct_bridge/docs/GLOBAL_NATIVE_CONTROLLER.zh-CN.md)、[全局配置与恢复](direct_bridge/docs/GLOBAL_CONFIG.md)、[本机凭据](direct_bridge/docs/GLOBAL_CREDENTIALS.zh-CN.md)。
 
 项目 MIT 与 OpenAI Codex Apache-2.0 许可证/通知随包保留。依赖源码、密钥、私有 env、运行数据库和原始日志不在包内。官方隧道说明：<https://developers.openai.com/api/docs/guides/secure-mcp-tunnels>。
+
+## 本机脱敏诊断
+
+运行 `./DIRECT.command diagnostics --lines 80` 查看有限的时间线与脱敏关联 ID。只读，不重启、不读取密钥或请求内容；旧版本没有历史事件可还原。保留上限、字段含义与排障边界见 [脱敏诊断说明](direct_bridge/docs/DIAGNOSTICS.md)。

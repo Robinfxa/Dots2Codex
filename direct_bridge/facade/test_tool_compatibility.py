@@ -35,7 +35,7 @@ class ToolCompatibilityTests(unittest.TestCase):
         self.identity = {'session-id': 'fixture', 'thread-id': 'fixture'}
 
     def tearDown(self):
-        self.rt.close(); self.tmp.cleanup()
+        self.rt.close(); self.assertTrue(self.rt.diagnostics.wait_idle()); self.tmp.cleanup()
 
     def acquire(self, req):
         route, _ = self.rt.ingest(self.identity, req)
@@ -106,7 +106,7 @@ class ToolCompatibilityTests(unittest.TestCase):
         self.assertTrue(prepared['execute'])
         replay = self.prepare(first)
         self.assertFalse(replay['execute']); self.assertEqual(replay['effect'], 'unknown')
-        self.rt.close(); self.rt = create_runtime(self.cfg)
+        self.rt.close(); self.assertTrue(self.rt.diagnostics.wait_idle()); self.rt = create_runtime(self.cfg)
         self.assertFalse(self.prepare(first)['execute'])
         done = self.result(first, prepared)
         msg = response()['output'][0]

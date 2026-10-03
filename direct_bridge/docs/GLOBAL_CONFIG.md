@@ -31,7 +31,12 @@ The transaction owns only these top-level fields and its one provider table:
 
 Other providers, comments, profile/project configuration, safety settings and
 `web_search` are preserved. The provider uses Responses over loopback HTTP with
-WebSockets and automatic retries disabled. Hosted search, Responses Lite and
+WebSockets disabled, one exact HTTP-opening transport retry
+(`request_max_retries = 1`), and no stream retry (`stream_max_retries = 0`).
+This applies only to its owned Direct provider; it never reissues a native
+action. See [bounded HTTP replay](HTTP_REPLAY.md) for identity requirements,
+failure fences, the roughly ten-minute default maximum for two HTTP wait
+windows, and the limits of recovery. Hosted search, Responses Lite and
 in-place effort updates are not supported. Existing enabled search is not
 silently disabled; a request using an unsupported capability can fail closed.
 

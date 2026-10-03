@@ -321,6 +321,24 @@ class Launcher:
             result['stage'] = 'STOPPED' if result['stage'] != 'FAILED' else 'FAILED'
         return result
 
+    def diagnostics(self, lines=80):
+        """Read-only, payload-free snapshot; never uses credentials or contacts services."""
+        from diagnostics import recent
+        snapshot = {'stage': 'UNKNOWN', 'processes': {}, 'local_status': 'available'}
+        try:
+            runtime = self.current()
+            records = self.records(runtime)
+            value = read(runtime / 'status.json') if runtime and (runtime / 'status.json').exists() else {}
+            stage = value.get('stage', 'STOPPED')
+            if type(stage) is str and stage in {'STARTING', 'RUNNING', 'STOPPING', 'STOPPED', 'FAILED'}:
+                snapshot['stage'] = stage
+            snapshot['processes'] = {role: {'running': alive(record.get('pid')), 'owned': owned(record)}
+                                     for role, record in records.items()}
+        except Exception:
+            snapshot['local_status'] = 'unavailable'
+        snapshot.update(recent(self.state / 'bridge', lines))
+        return snapshot
+
     def active_session_clients(self, runtime):
         """Inspect only exact recorded PIDs; stale/reused PIDs never block Start."""
         if runtime is None or not (runtime / 'sessions').exists():
@@ -949,6 +967,28 @@ def print_status(value, ui):
         ui.say('已记录的活动单会话 CLI: ' + str(value['active_session_clients']) + '；Stop 会中断它们使用的共享服务。')
 
 
+def print_diagnostics(value, ui):
+    ui.say('Direct sanitized diagnostics v1')
+    ui.say('Recorded service stage: ' + value['stage'] + ' (snapshot only; readiness not probed)')
+    for role in ('owner', 'tunnel', 'bridge'):
+        process = value['processes'].get(role)
+        if process is not None:
+            ui.say(role + ': running=' + str(process['running']).lower() + ' owned=' + str(process['owned']).lower())
+    if value['local_status'] != 'available':
+        ui.say('Local process status unavailable; no service action was taken.')
+    ui.say('Retention: latest two 256 KiB event files (512 KiB total); oldest events rotate out, no age-based purge.')
+    ui.say('No payloads, tool arguments/results, tokens, raw IDs, or tunnel stdout/stderr. ID references use a shared local salt across restarts.')
+    if value['status'] == 'not_available':
+        ui.say('No diagnostic events available. Older running versions produce none; reading does not start or restart a service.')
+    elif value['status'] in {'unavailable', 'invalid_line_limit'}:
+        ui.say('Diagnostic events unavailable or unsafe to read; no files were changed.')
+    elif value['status'] == 'partial':
+        ui.say('Partial snapshot: unsafe, oversized, or malformed records were omitted.')
+    for event in value['events']:
+        ui.say(json.dumps(event, sort_keys=True, separators=(',', ':')))
+    ui.say('coroutine_cancelled does not prove a user clicked Cancel; socket_flushed does not prove client receipt or execution.')
+
+
 def help_text(ui):
     ui.say('DIRECT：单会话 / 全局\n'
            '  session  启动新 CLI，仅本次 provider 覆盖；不改全局配置\n'
@@ -957,6 +997,7 @@ def help_text(ui):
            '  stop     只停止本工具拥有的本机进程，并恢复全局配置\n'
            '  restore  单独恢复配置，不需要 Google、隧道或密钥\n'
            '  status   查看本地状态；不启动模型，不触发请求\n'
+           '  diagnostics  只读最近脱敏事件；--lines 1–200（默认 80），不重启服务\n'
            '  setup    首次引导：现有专用 tunnel、私有依赖和本机 env\n'
            '  desktop  打开你选择的已安装 Desktop app，不强制关闭现有窗口\n'
            '  codex    在选定项目启动现有正常 Codex CLI，不限单次会话\n'
@@ -1015,9 +1056,10 @@ def choose_mode(ui):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', nargs='?', choices=('start', 'global', 'session', 'stop', 'restore', 'status', 'setup', 'desktop', 'codex', 'help', '_serve'))
+    parser.add_argument('command', nargs='?', choices=('start', 'global', 'session', 'stop', 'restore', 'status', 'diagnostics', 'setup', 'desktop', 'codex', 'help', '_serve'))
     parser.add_argument('--state-dir', type=Path, default=DEFAULT_STATE)
     parser.add_argument('--runtime', type=Path, help=argparse.SUPPRESS)
+    parser.add_argument('--lines', type=int, default=80, choices=range(1, 201), metavar='1-200', help='Maximum recent sanitized diagnostic events (default 80)')
     cli_args = list(sys.argv[1:] if argv is None else argv)
     args = parser.parse_args(cli_args)
     ui = UI()
@@ -1026,6 +1068,9 @@ def main(argv=None):
         state = launcher.state
         if args.command == 'help':
             help_text(ui)
+            return 0
+        if args.command == 'diagnostics':
+            print_diagnostics(launcher.diagnostics(args.lines), ui)
             return 0
         if args.command == '_serve':
             require(args.runtime is not None, 'runtime_required')

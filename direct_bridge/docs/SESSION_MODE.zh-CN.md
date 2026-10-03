@@ -14,6 +14,7 @@
 - 新生成的唯一 provider ID 和完整 provider 表，指向身份已核验的本机服务
 - 当前允许模型目录以及默认 `gpt-6-astra / xhigh`；后续新路由仍须使用允许的精确 model/effort
 - `env_key=DOTS_BRIDGE_HTTP_BEARER`，本地 bearer 只进入 CLI 子进程环境，不进入命令行；隧道 key 和无关 API key 不传给 CLI
+- 仅此 Direct provider 使用 `request_max_retries=1`、`stream_max_retries=0`：HTTP 建连/等响应头阶段最多一次原请求传输重试，不重建失败的流、不重新执行原生动作。默认两个 HTTP 等待窗口合计约 10 分钟，另加连接和退避开销；详见 [有界 HTTP 重取与限制](HTTP_REPLAY.md)
 
 不写入、恢复、备份或修改 `CODEX_HOME/config.toml`，不修改 auth.json，也不强制改变现有 sandbox、审批和 web_search 设置。你在 CLI 内主动改变设置的效果由 Codex 本身决定。CLI 的退出码会作为 `session` 命令的退出码返回。
 

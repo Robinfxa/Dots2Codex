@@ -47,9 +47,9 @@
       "sha256": "bcbcfffdeebf909cf39144c8ffb7346ed0daba52dfb8037c3353978c5da30759"
     },
     "GLOBAL_DIRECT_README.md": {
-      "bytes": 7219,
+      "bytes": 7535,
       "mode": "0644",
-      "sha256": "5167161c42dffb9910e8b70b4239ee0949b2f02ddec740c887ab78104881a49a"
+      "sha256": "8bc11e80740c0c6822b9c407e719c5388e4e71546921fd9ce552fda6dfed0550"
     },
     "GLOBAL_GATEWAY_CONTRACT.json": {
       "bytes": 2653,
@@ -207,14 +207,14 @@
       "sha256": "9246d18641b9e8294e4ef4a06213d5d8dab43ac1685b58cafe1383c5f055def1"
     },
     "direct_bridge/MANIFEST.json": {
-      "bytes": 23147,
+      "bytes": 24127,
       "mode": "0644",
-      "sha256": "b3781113ce5558d31bc6884978d66e0162a02c82f67afecc6cce66f9019814cc"
+      "sha256": "38e79061e5d9c3ebb5f209e893d6c8b075b3ccdd5981f38867f618e782edc2c4"
     },
     "direct_bridge/README.md": {
-      "bytes": 7598,
+      "bytes": 7900,
       "mode": "0644",
-      "sha256": "29a99c42c5f5844f33df74000a2388d98bc8f352f6651774cfc919b8a9eade9c"
+      "sha256": "6531310b710849444b15e28e187bdc08779114713322996b082522c33fe2e359"
     },
     "direct_bridge/START_HERE.zh-CN.md": {
       "bytes": 3561,
@@ -246,15 +246,25 @@
       "mode": "0644",
       "sha256": "67b190ca14456f6db496c20e3efac9d4f0b02c9e44bb2dbb0b64cc5e6729a9fc"
     },
+    "direct_bridge/diagnostics.py": {
+      "bytes": 12667,
+      "mode": "0644",
+      "sha256": "8bbd1a6199eafb2a78a9053ffaf59192bfb045234f078574e9b68150728d7e4f"
+    },
     "direct_bridge/docs/CODEX_CLIENT.zh-CN.md": {
       "bytes": 7329,
       "mode": "0644",
       "sha256": "2e16e591dd4b1515251366f2ab45a936fcae57276841a225e88ed72ff65b9581"
     },
-    "direct_bridge/docs/GLOBAL_CONFIG.md": {
-      "bytes": 6466,
+    "direct_bridge/docs/DIAGNOSTICS.md": {
+      "bytes": 5452,
       "mode": "0644",
-      "sha256": "96e9dd3246a5bf6243994365b974c0aa63c221ba564278ad4b35fce92a08adb0"
+      "sha256": "6cb8294fc0e542c3221bdac56cd8fbaccce15e3c5b37fc4545c3b031f5d34547"
+    },
+    "direct_bridge/docs/GLOBAL_CONFIG.md": {
+      "bytes": 6822,
+      "mode": "0644",
+      "sha256": "afbc73f51981d75cbfacb4f64c613c43d72787d8db29fb4d3826947952d8ec8b"
     },
     "direct_bridge/docs/GLOBAL_CREDENTIALS.zh-CN.md": {
       "bytes": 6551,
@@ -262,9 +272,14 @@
       "sha256": "52ed3622d2c53a0eba5992d1169449ab90e90d6096de50043463f5d1537490f7"
     },
     "direct_bridge/docs/GLOBAL_NATIVE_CONTROLLER.zh-CN.md": {
-      "bytes": 11114,
+      "bytes": 11509,
       "mode": "0644",
-      "sha256": "2d056d22b0f4094861157d9e28b6754cd790eb83a19d34ddaedfa8afc44d87b0"
+      "sha256": "402b7ade8771f5674630a112702e16227c1378677106abd8fec0e006f00d2357"
+    },
+    "direct_bridge/docs/HTTP_REPLAY.md": {
+      "bytes": 4938,
+      "mode": "0644",
+      "sha256": "ae80054b9243b2d3996b4e13df0691de9b208e4aac72a4b8d0c597307e6f527f"
     },
     "direct_bridge/docs/MAC_QUICKSTART.zh-CN.md": {
       "bytes": 10802,
@@ -282,9 +297,9 @@
       "sha256": "cfb5677ded3c5f0282384f8576c4d1426ac754ccab3051cb3c8b4116af70603d"
     },
     "direct_bridge/docs/SESSION_MODE.zh-CN.md": {
-      "bytes": 4249,
+      "bytes": 4587,
       "mode": "0644",
-      "sha256": "8661efed6ab811f1126f01317da18e8aa14c452f08c17c6e82b89c023480a57a"
+      "sha256": "8890c3e3b60828712c5f5123571c5ca17c03fb42760726d54c5a77ab371815e9"
     },
     "direct_bridge/docs/TOOL_COMPATIBILITY.md": {
       "bytes": 11150,
@@ -307,9 +322,9 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     "direct_bridge/facade/global_runtime.py": {
-      "bytes": 56109,
+      "bytes": 59080,
       "mode": "0644",
-      "sha256": "af2b095321099e439424c142f335382898c216ac9589631b6ad7d50f070e8171"
+      "sha256": "3309b80e25e8a1b811dced0f57b95a25b2b4ebe7f02fcfed982e2071fef84c34"
     },
     "direct_bridge/facade/hosted.py": {
       "bytes": 12452,
@@ -327,14 +342,14 @@
       "sha256": "b201c838518accc5caebb136856491bd2ba6a9ff68d7841258ebfaefaf18a7d8"
     },
     "direct_bridge/facade/test_global_runtime.py": {
-      "bytes": 14567,
+      "bytes": 14691,
       "mode": "0644",
-      "sha256": "d4df7f79ba01ac231a7e1d456386af5473e6c7a44f16e748d4666cd794151c1e"
+      "sha256": "398abf6a8f7907bc2bea294c16a597958e2309087de77df16e284fee38fc718a"
     },
     "direct_bridge/facade/test_history_echo.py": {
-      "bytes": 11773,
+      "bytes": 12003,
       "mode": "0644",
-      "sha256": "45545d825aaeaf71d0888647689b05f6aee0516354efcad5a0dac3478614a2a6"
+      "sha256": "c39ef799a2c136a7272a1e4874ec7b4ddaf6b35b18618320d9954e37bd5991b0"
     },
     "direct_bridge/facade/test_runtime.py": {
       "bytes": 15059,
@@ -342,9 +357,9 @@
       "sha256": "34d8a49af16ee35870f8f2cc1f217a49290c8add96c79f3feb053ead0087f8e4"
     },
     "direct_bridge/facade/test_tool_compatibility.py": {
-      "bytes": 16584,
+      "bytes": 16684,
       "mode": "0644",
-      "sha256": "2763897491f17d66377a0115eac91b380f5eb1f87e7c28681e17fa453b8e37c7"
+      "sha256": "d3f8f25368ab562a8ef10e79b5a3ebf55ff44ffcbccc6afd0238d1af29d41ca4"
     },
     "direct_bridge/facade/wire.py": {
       "bytes": 31884,
@@ -357,9 +372,9 @@
       "sha256": "526cd94a52f05b2aa044a46e24c8ebcce3afa053f5fb9ec0db630bdc6f12a152"
     },
     "direct_bridge/global_config.py": {
-      "bytes": 20781,
+      "bytes": 20866,
       "mode": "0644",
-      "sha256": "a61554bbe481a9ba709be10b9a9e870e5f467f2ca73bbb77a9a84d635be6a9f0"
+      "sha256": "935571b725458cfd334ba2c924a7653782d5aadb3be02af028b48c6fbb2f05a7"
     },
     "direct_bridge/global_credentials.py": {
       "bytes": 20130,
@@ -367,9 +382,9 @@
       "sha256": "4beddec9240d2524996287b84d949ef657b3efb9e717a8009f933180da5b775e"
     },
     "direct_bridge/global_launcher.py": {
-      "bytes": 62206,
+      "bytes": 65135,
       "mode": "0644",
-      "sha256": "3509c0866e0435d9012d8706ba8fc5796c8fd4a1ada70f9eaad692108aa64563"
+      "sha256": "233c94d0b173338f940628cd33d20f3d5b5260ec4eb37a6795f67174e3e7ef44"
     },
     "direct_bridge/mcp_adapter/__init__.py": {
       "bytes": 77,
@@ -392,9 +407,9 @@
       "sha256": "204d2d986cff54fa685714dc2d3e41a26cf0e0d1cf8418fc8a58eea716a8c653"
     },
     "direct_bridge/mcp_adapter/server.py": {
-      "bytes": 9492,
+      "bytes": 11711,
       "mode": "0644",
-      "sha256": "27b092104e22f13f92bdae47da10b4229df4081719a11a71d3e3d80f656af69f"
+      "sha256": "de89148428203d80352ff1a1f771809260bf8c7a53afecf8739b7ba7afcabbb1"
     },
     "direct_bridge/mcp_adapter/tools.py": {
       "bytes": 5763,
@@ -487,9 +502,9 @@
       "sha256": "83bd12ed1e32d16e1354aecf174f51e2f33dab148b2f50cbc19a0cec0920ebb2"
     },
     "direct_bridge/session_client.py": {
-      "bytes": 3337,
+      "bytes": 3423,
       "mode": "0644",
-      "sha256": "499af65093773fb0964e88b150fc81ea42f7f58887e62ac1868f1badfba1b87b"
+      "sha256": "92c2f78efde4144b5054207e0442027417d80834840441289dba4d85cd3c33aa"
     },
     "direct_bridge/tests/fixtures/pinned_cli_0159_2/README.md": {
       "bytes": 1199,
@@ -641,15 +656,20 @@
       "mode": "0644",
       "sha256": "85989ccf5dfbce7daac4aec35daa135c48717e847dcd58d646ca41de8228836c"
     },
+    "direct_bridge/tests/test_diagnostics.py": {
+      "bytes": 20717,
+      "mode": "0644",
+      "sha256": "2f4ec422fa162f54ab87fb02c8f76455914eb87b1fde342143dff8c8baf1997f"
+    },
     "direct_bridge/tests/test_direct_setup.py": {
       "bytes": 19523,
       "mode": "0644",
       "sha256": "e638baa35c0f53df7fdc4fb32f91e2549dff5c5ba424bdd7c88516b26ede6359"
     },
     "direct_bridge/tests/test_global_config.py": {
-      "bytes": 16561,
+      "bytes": 16740,
       "mode": "0644",
-      "sha256": "12421b2565d93dee681350e8985b664e4c8f0d20c1afd92cc0babb955ae4bcf4"
+      "sha256": "d93d441fb3f01c35b998ed2c920ba0b8d03cb537fe650957f151f7025311b93a"
     },
     "direct_bridge/tests/test_global_credentials.py": {
       "bytes": 19957,
@@ -665,6 +685,11 @@
       "bytes": 9225,
       "mode": "0644",
       "sha256": "bc1a9b8060010d9d05aac149cfe5cf0377d4b138bd1afcd483c4eeffd8076c25"
+    },
+    "direct_bridge/tests/test_http_replay_recovery.py": {
+      "bytes": 6435,
+      "mode": "0644",
+      "sha256": "3b0c4d1478c2134b0a45a26b7cf1468e76ea23632d422973dcdaebb634b8fda7"
     },
     "direct_bridge/tests/test_mcp_config.py": {
       "bytes": 4162,
@@ -682,9 +707,9 @@
       "sha256": "d3b6e60b49273da91e3c4d69887eb23fcd77d4e683c9fae5665de5de6e93c5a9"
     },
     "direct_bridge/tests/test_session_mode.py": {
-      "bytes": 29297,
+      "bytes": 29488,
       "mode": "0644",
-      "sha256": "2d62966688558517dd5759b977b1ff50a62074f9c05b6e5b7d812e0c9729a48c"
+      "sha256": "379ff339e601625adb644ee3f91af26d75d06d0fdbd92eae727035eda4e2746b"
     },
     "direct_bridge/tests/test_tool_upgrade.py": {
       "bytes": 5421,
@@ -2237,7 +2262,7 @@
       "sha256": "4a8b2f264ff4bfe9cad372ba069aa9fca5dfee19dc13f35a17f3d6d7c9ad6c5f"
     }
   },
-  "hashed_file_count": 445,
+  "hashed_file_count": 450,
   "historical_manifests": {
     "LIGHTWEIGHT_PACKAGE_MANIFEST.json": "Historical unchanged lightweight subtree only; not Global Direct identity",
     "ROUTER_PACKAGE_MANIFEST.json": "Historical af7bac6 main snapshot only; not current Global Direct identity"
@@ -2246,9 +2271,9 @@
   "main_base_tree": "088e36406cd4c2a7093e1160aa26f02afa5bbc55",
   "manifest_self_excluded": true,
   "preserved_main_files": 337,
-  "publication_parent_commit": "3510c7270032a2bb67a773f5db53a361bffcb07e",
-  "publication_parent_tree": "f31ef6e71c0b6cdc2dd0531dd5d7a673f259a8cf",
+  "publication_parent_commit": "10c73b34b9bc236a975b6d49a3604683c7abfe02",
+  "publication_parent_tree": "f50ee945cab0668e17c46173e71e0fa35d786403",
   "source_exclusions_policy": "Generated __pycache__/.pyc only; exact excluded path inventory is in external BUILD_STATUS.json",
   "source_tree_hash_algorithm": "SHA-256 of UTF-8 canonical JSON files map (sort_keys=true,separators=comma/colon,ensure_ascii=false)",
-  "source_tree_sha256": "4f98058fcdd02689866aa28bd1fa0c101b015aac286211d001a5c72f01b66a7f"
+  "source_tree_sha256": "37195f30c4d2bbfe5700c26bbaf6831aa5116f2a89e8e10d31af01e5b4817cc4"
 }

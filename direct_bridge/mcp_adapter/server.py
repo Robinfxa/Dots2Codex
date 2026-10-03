@@ -12,6 +12,10 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import logging
 import math
+import secrets
+import time
+
+from diagnostics import duration_ms
 import sys
 import threading
 
@@ -138,6 +142,38 @@ class MCPServer:
             return await self._call_tool(name, arguments)
 
     async def _call_tool(self, name, arguments):
+        diag = getattr(self.runtime, 'diagnostics', None)
+        started = time.monotonic()
+        ids = {'call': secrets.token_hex(12)}
+        if type(arguments) is dict:
+            ids.update({key: arguments.get(key + '_id') for key in ('route', 'request', 'action')})
+        fields = {'method': name if name in self._definitions else 'unknown'}
+        if type(arguments) is dict and name in {'get_request', 'submit_action_and_wait_result', 'await_result'}:
+            fields['wait_ms'] = arguments.get('wait_ms', 1000)
+        def event(stage, **extra):
+            if diag is not None:
+                diag.event('mcp', stage, ids=ids, **fields, **extra)
+        event('begin')
+        try:
+            result = await self._call_tool_impl(name, arguments, event)
+            content = result.structuredContent
+            outcome = 'error' if result.isError else 'ok'
+            if not result.isError and type(content) is dict and type(content.get('status')) is str:
+                from diagnostics import OUTCOMES
+                outcome = content['status'] if content['status'] in OUTCOMES else 'ok'
+            code = content.get('error') if result.isError and type(content) is dict else None
+            if code == 'request_timeout':
+                outcome = 'timeout'
+            event('end', outcome=outcome, error_code=code, duration_ms=duration_ms(started))
+            return result
+        except anyio.get_cancelled_exc_class():
+            event('end', outcome='cancelled', reason='coroutine_cancelled', duration_ms=duration_ms(started))
+            raise
+        except BaseException:
+            event('end', outcome='error', error_code='runtime_error', duration_ms=duration_ms(started))
+            raise
+
+    async def _call_tool_impl(self, name, arguments, event):
         definition = self._definitions.get(name)
         if definition is None:
             return error_result("unknown_tool")
@@ -153,14 +189,21 @@ class MCPServer:
         self._cancel_events.add(cancel_event)
 
         def invoke():
+            started = time.monotonic()
+            event('invoke_begin')
+            outcome = 'error'
             try:
-                return self.runtime.call_tool(name, arguments, cancel_event=cancel_event)
+                result = self.runtime.call_tool(name, arguments, cancel_event=cancel_event)
+                outcome = 'ok'
+                return result
             finally:
+                event('invoke_end', outcome=outcome, duration_ms=duration_ms(started))
                 self._slots.release()
 
         # shield prevents cancellation of an accepted work item before its finally
         # releases the slot. Runtime sees the separate cooperative cancel event.
         try:
+            event('queued')
             future = asyncio.get_running_loop().run_in_executor(self._pool, invoke)
         except BaseException:
             self._slots.release()
@@ -181,6 +224,7 @@ class MCPServer:
             return types.CallToolResult(content=[types.TextContent(type="text", text=encoded), *images],
                                         structuredContent=result, isError=False)
         except TimeoutError:
+            event('timeout', outcome='timeout', error_code='request_timeout')
             redacted_log("request_timeout")
             return error_result("request_timeout")
         except anyio.get_cancelled_exc_class():

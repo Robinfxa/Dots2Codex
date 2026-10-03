@@ -126,10 +126,14 @@ class GlobalHistoryEchoTests(unittest.TestCase):
 
     def tearDown(self):
         self.runtime.close()
+        if hasattr(self.runtime, "diagnostics"):
+            self.assertTrue(self.runtime.diagnostics.wait_idle())
         self.temp.cleanup()
 
     def restart(self):
         self.runtime.close()
+        if hasattr(self.runtime, "diagnostics"):
+            self.assertTrue(self.runtime.diagnostics.wait_idle())
         self.runtime = create_runtime(self.cfg)
         self.runtime.start_http()
 

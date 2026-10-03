@@ -57,7 +57,8 @@ def codex_argv(binary, project, info, session_id):
     table = {'name': 'Dots2Codex Direct session', 'base_url': info['base_url'],
              'env_key': BEARER_NAME, 'wire_api': 'responses',
              'requires_openai_auth': False, 'supports_websockets': False,
-             'request_max_retries': 0, 'stream_max_retries': 0}
+             # One exact prepared HTTP-opening replay; never rebuild a failed stream.
+             'request_max_retries': 1, 'stream_max_retries': 0}
     encode = lambda value: json.dumps(value, ensure_ascii=False)
     overrides = [('model_provider', encode(provider)),
                  ('model', encode(selected['model'])),
