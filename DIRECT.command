@@ -1,5 +1,5 @@
 #!/bin/sh
-# Finder/Terminal entry point. Guided global service launcher. First use requires local review.
+# Finder/Terminal entry point. Session/global mode chooser; shared service and local review.
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 export PYTHONDONTWRITEBYTECODE=1

@@ -1,0 +1,61 @@
+{
+  "contract": "dots-direct-cloud-native-unattended-evidence/1",
+  "completed_at_utc": "2026-10-03T05:43:36Z",
+  "source_base_commit": "018b5ed5755a945d6860a0879db88fec37fc5b77",
+  "status": "passed",
+  "scope": "Bounded active native controller, private cloud-file mailbox test shim, real SDK MCP stdio and GlobalRuntime, synthetic Codex HTTP client",
+  "native": {
+    "platform_spawn_observed": true,
+    "platform_followup_observed": true,
+    "explicit_spawn_parameters": {
+      "model": "gpt-6-astra",
+      "reasoning_effort": "xhigh",
+      "fork_turns": "none"
+    },
+    "runtime_model_attestation": false,
+    "task_identity_sha256": "50f918973c37c94b0a9a50ecd10557317d246369456625b725731fd47c2cf756",
+    "unique_task_count": 1,
+    "native_turns": 2,
+    "responses_authored_by_native_task": 3,
+    "same_context_epoch_retained": true,
+    "history_rehydrated_on_resume": false,
+    "idle_before_resume": "get_request after_seq=2 wait_ms=3000 returned pending",
+    "resumed_after_bridge_restart": true,
+    "parent_operation_required_new_user_message": false
+  },
+  "bridge": {
+    "restart_count": 1,
+    "http_answer_deliveries": 3,
+    "response_commits": 3,
+    "full_context_returns": 1,
+    "delta_context_returns": 2,
+    "finish_calls_including_identical_retries": 6,
+    "identical_finish_results_completed": true,
+    "safe_text_http_replays": 3,
+    "answers": [
+      "HARBOUR-47",
+      "HARBOUR-94",
+      "HARBOUR-141"
+    ],
+    "automatic_wake": false,
+    "actual_native_platform_verified": false,
+    "model_api_used": false
+  },
+  "cleanup": {
+    "fixture_stop_requested": true,
+    "fixture_process_exit_code": 0
+  },
+  "unverified": [
+    "deployed Direct MCP transport to native worker",
+    "Mac Desktop or CLI",
+    "secure tunnel",
+    "real Mac tool execution",
+    "idle MCP-to-model automatic wake",
+    "permanent host scheduler",
+    "platform context compaction/replacement recovery",
+    "long-duration reliability"
+  ],
+  "synthetic_regression_tests": "Separate test_unattended_fixture.py and existing runtime/MCP tests; these are not native-execution evidence",
+  "publication_redaction": "No bearer, claim token, ready file, user data, or raw native task path is included.",
+  "source_note": "Native scenario ran before later fixture-only safety hardening (refuse nonempty state directory, exclusive no-follow temporary file creation), an eight-second fixture MCP receive timeout override, and docstring/report-label edits. Native waits were at most three seconds and unaffected by the timeout correction. Final synthetic regression suite, including a full five-second idle wait and actual mailbox CLI test, is rerun against the hardened fixture; no production bridge code changed."
+}

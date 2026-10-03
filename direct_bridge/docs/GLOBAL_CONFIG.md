@@ -1,5 +1,11 @@
 # Global Codex configuration contract
 
+This transaction contract applies only to `DIRECT.command global` / legacy
+`start`, or the menu's explicit global choice. `DIRECT.command session` uses
+per-process CLI overrides and never invokes preview/apply/reconcile/restore;
+see [session mode](SESSION_MODE.zh-CN.md). Existing global transactions remain
+unchanged when a session CLI reuses the shared service.
+
 `direct_bridge/global_config.py` is the Direct adapter to the main release's
 `dots_lite/config_transaction.py` and `dots_lite/client_catalog.py`. It imports
 main's format-preserving TOML parser, snapshots, symlink and ownership checks,

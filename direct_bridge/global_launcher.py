@@ -1,4 +1,4 @@
-"""Owned service lifecycle for the global Direct bridge (no model worker).
+"""Shared Direct service with session CLI and global client configuration modes.
 
 Filesystem, exact-PID identity and reversible configuration patterns are adapted
 from the repository's MIT-licensed main launcher. Tunnel output is deliberately
@@ -65,7 +65,8 @@ def safe_error(error):
 
 
 def base_environment():
-    allowed = {'PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', 'SYSTEMROOT', 'CODEX_HOME'}
+    allowed = {'PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'LC_CTYPE', 'SYSTEMROOT', 'CODEX_HOME',
+               'CODEX_BIN', 'TERM', 'COLORTERM', 'TERM_PROGRAM'}
     result = {k: v for k, v in os.environ.items() if k in allowed}
     result.update(PYTHONDONTWRITEBYTECODE='1', PYTHONNOUSERSITE='1')
     return result
@@ -305,6 +306,7 @@ class Launcher:
         if 'error' in value:
             result['error'] = value['error']
         result['configuration'] = self.tx.status(self.state)
+        result['active_session_clients'] = len(self.active_session_clients(runtime))
         if runtime and all(processes.get(role, {}).get('owned') for role in ('owner', 'tunnel', 'bridge')):
             try:
                 from direct_bridge.global_credentials import load_credentials
@@ -317,6 +319,29 @@ class Launcher:
         if not any(record['running'] for record in processes.values()):
             result['stage'] = 'STOPPED' if result['stage'] != 'FAILED' else 'FAILED'
         return result
+
+    def active_session_clients(self, runtime):
+        """Inspect only exact recorded PIDs; stale/reused PIDs never block Start."""
+        if runtime is None or not (runtime / 'sessions').exists():
+            return []
+        result = []
+        for path in sorted((runtime / 'sessions').glob('*.json')):
+            value = read(path)
+            require(value.get('contract') == CONTRACT and value.get('run_id') == runtime.name
+                    and value.get('session_id') == path.stem, 'session_owner_binding_mismatch')
+            if value.get('stage') != 'EXITED' and any(owned(value.get(key)) for key in ('launcher', 'client')):
+                result.append(value)
+        return result
+
+    def _reserve_session(self, runtime, session_id):
+        if session_id is None:
+            return
+        require(re.fullmatch(r'[0-9a-f]{32}', session_id), 'invalid_session_identity')
+        directory = private_dir(runtime / 'sessions', create=True)
+        path = directory / (session_id + '.json')
+        require(not path.exists(), 'session_identity_already_used')
+        save(path, {'contract': CONTRACT, 'run_id': runtime.name, 'session_id': session_id,
+                    'stage': 'LAUNCHING', 'launcher': owner_record('session-launcher', runtime.name)})
 
     def _ready(self, runtime, settings, bearer):
         require(not (runtime / 'stop.json').exists(), 'start_cancelled_by_stop')
@@ -430,7 +455,10 @@ class Launcher:
                              confirm=True, check_ready=lambda: self._ready(runtime, settings, credential.http_bearer),
                              approve_private_config=True)
 
-    def start(self, credential=None, *, timeout=45, package_sha256=None):
+    def start(self, credential=None, *, timeout=45, package_sha256=None, mode='global', session_id=None):
+        require(mode in ('global', 'session'), 'invalid_start_mode')
+        require(mode == 'session' or session_id is None, 'invalid_session_start_mode')
+        apply_global = mode == 'global'
         private_dir(self.state)
         settings = load_settings(self.state)
         require(settings['bundle_root'] == str(BUNDLE_ROOT), 'bundle_moved_review_profile_before_start')
@@ -454,12 +482,21 @@ class Launcher:
                         healthy = False
                     changed_package = package_sha256 is not None and settings['package_sha256'] != package_sha256
                     if healthy and not changed_package:
-                        applied = self._apply_config(runtime, settings, credential)
-                        return {'stage': 'RUNNING', 'already_running': True, 'configuration': applied}
+                        if not apply_global:
+                            check_profile(settings)
+                        applied = self._apply_config(runtime, settings, credential) if apply_global else {'stage': 'unchanged'}
+                        self._reserve_session(runtime, session_id)
+                        return {'stage': 'RUNNING', 'already_running': True, 'configuration': applied,
+                                'configuration_scope': mode, 'run_id': runtime.name}
+                    # Session mode may borrow a healthy service, never repair or
+                    # replace a live global/other-session service as a side effect.
+                    require(apply_global, 'session_service_conflict_use_status_or_explicit_stop')
+                    require(not self.active_session_clients(runtime), 'session_clients_active_exit_before_restart')
                     # A transport-only restart preserves the exact database and
                     # native request/action IDs. It never starts a native worker.
                     self._stop_services(runtime)
                     self._restore_config(confirm=False)
+                require(not self.active_session_clients(runtime), 'session_clients_active_exit_before_restart')
             if package_sha256 is not None and settings['package_sha256'] != package_sha256:
                 settings = dict(settings, package_sha256=package_sha256)
                 save(settings_path(self.state), settings)
@@ -491,10 +528,11 @@ class Launcher:
                     except (OSError, ValueError, ProtocolError, http.client.HTTPException):
                         require(time.monotonic() < until, 'service_readiness_timeout')
                         self.ports.wait(.1)
-                applied = self._apply_config(runtime, settings, credential)
-                save(runtime / 'active.json', {'run_id': run_id, 'configured_at': time.time()})
+                applied = self._apply_config(runtime, settings, credential) if apply_global else {'stage': 'unchanged'}
+                self._reserve_session(runtime, session_id)
+                save(runtime / 'active.json', {'run_id': run_id, 'started_at': time.time(), 'configuration_scope': mode})
                 return {'stage': 'RUNNING', 'already_running': False, 'configuration': applied,
-                        'native_platform_verified': False}
+                        'configuration_scope': mode, 'run_id': run_id, 'native_platform_verified': False}
             except BaseException as error:
                 cleanup_error = None
                 try:
@@ -502,15 +540,112 @@ class Launcher:
                         self._stop_services(runtime)
                 except Exception as failure:
                     cleanup_error = safe_error(failure)
-                try:
-                    self._restore_config(confirm=False)
-                except Exception as failure:
-                    cleanup_error = safe_error(failure)
+                if apply_global:
+                    try:
+                        self._restore_config(confirm=False)
+                    except Exception as failure:
+                        cleanup_error = safe_error(failure)
+                if session_id is not None:
+                    session_path = runtime / 'sessions' / (session_id + '.json')
+                    if session_path.exists():
+                        record = read(session_path)
+                        record.pop('launcher', None)
+                        record['stage'] = 'EXITED'
+                        save(session_path, record)
                 save(runtime / 'status.json', {'stage': 'FAILED', 'error': safe_error(error),
                      'cleanup_error': cleanup_error, 'durable_state_preserved': True})
                 if cleanup_error:
                     raise ProtocolError(cleanup_error) from None
                 raise
+
+    def session(self, credential, client, *, package_sha256=None, timeout=45):
+        """Launch one fresh CLI. Shared backend persists until explicit Stop."""
+        from direct_bridge.session_client import codex_argv
+        settings = load_settings(self.state)
+        info = self._config_info(settings, credential)
+        session_id = secrets.token_hex(16)
+        argv = codex_argv(*client, info, session_id)
+        configuration = self.tx.status(self.state, settings['codex_home'])
+        self.ui.say('单会话模式：只给本次新 CLI 临时覆盖 provider，不写入或恢复 config.toml。\n'
+                    '原有用户/项目安全设置保留；共享服务会留在后台，直到明确 Stop。')
+        if configuration.get('active_transaction'):
+            self.ui.say('注意：所选 CODEX_HOME 已有本工具的全局配置/恢复记录。单会话不会撤销它；其他客户端仍可能使用 Direct。')
+        else:
+            self.ui.say('其他已有全局或项目 provider 设置保持原样；这不会隔离或切换已打开的 Desktop/CLI。')
+        outcome = self.start(credential, timeout=timeout, package_sha256=package_sha256,
+                             mode='session', session_id=session_id)
+        runtime = self.state / 'runs' / outcome['run_id']
+        path = runtime / 'sessions' / (session_id + '.json')
+        process = None
+        client_identity = None
+        launch_error = None
+        try:
+            try:
+                # LAUNCHING is already durable under Start's lifecycle lock.
+                with private_lock(self.state / 'lifecycle.lock'):
+                    require(self.current() == runtime, 'service_changed_before_session_launch')
+                    self._ready(runtime, settings, credential.http_bearer)
+                    env = credential.codex_env(os.environ)
+                    env['CODEX_HOME'] = settings['codex_home']
+                    print_status(outcome, self.ui)
+                    process = subprocess.Popen(argv, env=env, cwd=str(client[1]))
+                    client_identity = process_identity(process.pid)
+                    require(client_identity is not None or process.poll() is not None,
+                            'session_client_identity_unavailable')
+                    record = read(path)
+                    if client_identity is not None:
+                        record['client'] = {'pid': process.pid, 'process_identity': client_identity}
+                    record['stage'] = 'RUNNING'
+                    save(path, record)
+            except BaseException as error:
+                if process is None:
+                    raise
+                # An interrupted/failed post-spawn write is recoverable without
+                # returning to the menu while this CLI still owns the terminal.
+                if process.poll() is None:
+                    client_identity = client_identity or process_identity(process.pid)
+                    if client_identity is not None:
+                        record = {'contract': CONTRACT, 'run_id': runtime.name,
+                                  'session_id': session_id, 'stage': 'RUNNING',
+                                  'launcher': owner_record('session-launcher', runtime.name),
+                                  'client': {'pid': process.pid, 'process_identity': client_identity}}
+                        try:
+                            save(path, record)
+                        except BaseException:
+                            # Only this just-spawned child may be rolled back.
+                            # Existing clients/backend are never signalled here.
+                            launch_error = error
+                            self.ui.say('无法保存新 CLI 的拥有者记录，正在关闭本次刚启动的 CLI；共享服务和其他客户端保持原样。')
+                            try:
+                                require(stop_owned(record['client']), 'session_client_cleanup_incomplete')
+                            except Exception:
+                                self.ui.say('尚未确认新 CLI 退出；请在该 CLI 中正常退出。仍等待它，未返回菜单。')
+                    else:
+                        # ps can transiently fail on macOS. The original durable
+                        # launcher reservation remains live; never mark a live
+                        # child EXITED merely because identity lookup failed.
+                        self.ui.say('暂时无法核验新 CLI 的进程身份；保留启动记录并等待该 CLI 正常退出。共享服务不重启。')
+                elif not isinstance(error, KeyboardInterrupt):
+                    launch_error = error
+            while True:
+                try:
+                    code = process.wait()
+                    break
+                except KeyboardInterrupt:
+                    # Terminal SIGINT is also delivered to the foreground CLI.
+                    self.ui.say('已将终端中断交给 CLI；等待它退出。共享服务保持运行。')
+            if launch_error is not None:
+                raise launch_error
+            return {'stage': 'SESSION_EXITED', 'exit_code': code if code >= 0 else 128 - code,
+                    'configuration_scope': 'session', 'service_left_running': True}
+        finally:
+            if process is None or process.poll() is not None:
+                # poll/wait of our own Popen is proof of exit even if ps failed.
+                save(path, {'contract': CONTRACT, 'run_id': runtime.name,
+                            'session_id': session_id, 'stage': 'EXITED'})
+            # A wait failure with a live child keeps the durable reservation.
+            # No process scan, false EXITED status, or shared-service cleanup.
+
 
 
 def supervise(state, runtime):
@@ -692,7 +827,7 @@ def setup(state, ui=None):
     credential_dir = no_symlinks(ui.text('仅用于现有本机 env / http-bearer 的私有目录', str(DEFAULT_CREDENTIALS)))
     http_port, admin_port = 18765, 18766
     require(port_available(http_port) and port_available(admin_port), 'service_port_occupied_nothing_started')
-    if not ui.confirm(f'使用现有专用隧道 {tunnel_id}，在\n{state}\n保存独立的全局 Direct 设置和新私有 profile。\n'
+    if not ui.confirm(f'使用现有专用隧道 {tunnel_id}，在\n{state}\n保存共享 Direct 服务设置和新私有 profile。\n'
                       f'仅读取和复用 {credential_dir} 中的现有凭据；保存缺失值另行确认。\n'
                       '旧 profile 和 Lean 不会修改；旧 Direct tunnel/bridge 须已正常停止。\n'
                       '启动只运行 MCP、官方隧道和本地 Responses 服务，不会启动模型或原生控制器。\n'
@@ -746,7 +881,7 @@ def setup(state, ui=None):
                     'bundle_root': str(BUNDLE_ROOT), 'package_sha256': package_sha256,
                     'credential_dir': str(credential_dir)}
         save(settings_path(state), settings)
-    ui.say('首次设置已保存。以后双击 DIRECT.command 选择 Start 即可；请求和动作记录会跨重启保留。')
+    ui.say('首次设置已保存；尚未更改 Codex 全局配置。以后双击 DIRECT.command 选择 Start，再选单会话或全局；请求和动作记录会跨重启保留。')
     return credential
 
 
@@ -757,20 +892,30 @@ def print_status(value, ui):
     if value.get('stage') == 'RUNNING' and value.get('ready') is False:
         ui.say('已有本工具的服务进程，但本次未验证完整就绪状态；未发出模型请求。')
     elif value.get('stage') == 'RUNNING':
-        ui.say('MCP + 官方隧道 + 本地 Responses 已启动。全局配置已启用；已有 Codex 窗口请正常退出后重开。')
+        ui.say('MCP + 官方隧道 + 本地 Responses 已启动。')
+        if value.get('configuration_scope') == 'session':
+            ui.say('本次为单会话 CLI；全局配置保持原样。退出 CLI 不会停止共享服务。')
+        elif value.get('configuration_scope') == 'global':
+            ui.say('全局配置已启用；已有 Codex 窗口请正常退出后重开。')
         ui.say('这不证明实际原生控制器已接入；需要在 dot 中明确启动/继续相应任务。')
+    if value.get('stage') == 'SESSION_EXITED':
+        ui.say('本次 CLI 已退出（退出码 ' + str(value['exit_code']) + '）。共享服务和原有全局配置保持原样。')
     if value.get('stage') == 'STOPPED':
         ui.say('本机服务已停止；请求、未知动作和恢复记录均保留。原生任务须在 dot 中单独停止。')
     if value.get('stage') == 'FAILED':
         ui.say('启动失败: ' + value.get('error', 'unknown'))
     configuration = value.get('configuration', {})
     if configuration.get('active_transaction'):
-        ui.say('全局 provider 仍已启用；Stop 或 Restore 可恢复。')
+        ui.say('存在本工具的全局配置/恢复记录；Stop 或 Restore 可恢复，冲突时不会强行覆盖。')
+    if value.get('active_session_clients'):
+        ui.say('已记录的活动单会话 CLI: ' + str(value['active_session_clients']) + '；Stop 会中断它们使用的共享服务。')
 
 
 def help_text(ui):
-    ui.say('DIRECT Global\n'
-           '  start    一键启动 MCP、官方隧道和本地路由，再启用全局 Codex 配置\n'
+    ui.say('DIRECT：单会话 / 全局\n'
+           '  session  启动新 CLI，仅本次 provider 覆盖；不改全局配置\n'
+           '  global   启动共享服务并启用全局 Codex CLI/Desktop 配置\n'
+           '  start    global 的兼容命令；明确选择全局模式\n'
            '  stop     只停止本工具拥有的本机进程，并恢复全局配置\n'
            '  restore  单独恢复配置，不需要 Google、隧道或密钥\n'
            '  status   查看本地状态；不启动模型，不触发请求\n'
@@ -778,7 +923,9 @@ def help_text(ui):
            '  desktop  打开你选择的已安装 Desktop app，不强制关闭现有窗口\n'
            '  codex    在选定项目启动现有正常 Codex CLI，不限单次会话\n'
            '  help     本说明\n\n'
-           '双击 DIRECT.command 打开菜单。Python >=3.11。--state-dir 可指定私有状态目录。\n'
+           '双击 DIRECT.command，选择 Start 后再选单会话或全局。Python >=3.11。--state-dir 可指定私有状态目录。\n'
+           '单会话需要 codex-cli 0.159.2，使用 --no-daemon；不改变现有安全设置。\n'
+           '单会话仅限定本次 CLI 的配置覆盖；共享后端保持运行直到明确 Stop，不隔离其他已启用的全局客户端。\n'
            '首次关键变更逐项确认；之后同一设置一键启动。不会自动开机启动或重放未知动作。\n'
            'CLI/Desktop 共用选定 CODEX_HOME；现有窗口需正常退出并重开，新建会话。\n'
            '不要为重试删除数据库。不要绕过 macOS 安全提示。官方 tunnel 安装: ' + GUIDE)
@@ -803,22 +950,34 @@ def open_desktop(ui):
     ui.say('已请求打开 app。请使用新会话；打开成功不代表该版本已读取全局 provider。')
 
 
-def launch_codex(ui):
-    candidates = [os.environ.get('CODEX_BIN'), shutil.which('codex'),
-                  '/Applications/ChatGPT.app/Contents/Resources/codex',
-                  '/Applications/Codex.app/Contents/Resources/codex']
-    binary = next((str(Path(path).absolute()) for path in candidates
-                   if path and Path(path).is_file() and os.access(path, os.X_OK)), None)
-    require(binary is not None, 'existing_codex_cli_missing')
+def launch_codex(ui, settings=None):
+    from direct_bridge.session_client import existing_codex
+    binary = existing_codex()
     project = Path(ui.text('Codex 项目目录', str(Path.home()))).expanduser()
     require(project.is_absolute() and project.is_dir(), 'existing_project_directory_required')
     # Normal client behavior, global settings and existing user safety settings.
     # No session marker, forced trial flags, hidden wake or model API call.
-    return subprocess.call([binary, '-C', str(project)], env=base_environment(), cwd=str(project))
+    env = base_environment()
+    if settings is not None:
+        env['CODEX_HOME'] = settings['codex_home']
+    return subprocess.call([binary, '-C', str(project)], env=env, cwd=str(project))
+
+
+def choose_mode(ui):
+    while True:
+        ui.say('启动方式：1 单会话 CLI（不改全局配置）   2 全局 CLI/Desktop（需 APPLY 授权）   0 取消')
+        choice = ui.text('选择模式', '1')
+        if choice in ('0', 'cancel', 'exit'):
+            raise Cancelled()
+        if choice in ('1', 'session'):
+            return 'session'
+        if choice in ('2', 'global'):
+            return 'global'
+        ui.say('请选择 0、1 或 2')
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', nargs='?', choices=('start', 'stop', 'restore', 'status', 'setup', 'desktop', 'codex', 'help', '_serve'))
+    parser.add_argument('command', nargs='?', choices=('start', 'global', 'session', 'stop', 'restore', 'status', 'setup', 'desktop', 'codex', 'help', '_serve'))
     parser.add_argument('--state-dir', type=Path, default=DEFAULT_STATE)
     parser.add_argument('--runtime', type=Path, help=argparse.SUPPRESS)
     cli_args = list(sys.argv[1:] if argv is None else argv)
@@ -851,10 +1010,14 @@ def main(argv=None):
                 open_desktop(ui)
                 return {}
             if command == 'codex':
-                launch_codex(ui)
-                return {}
-            if command in ('start', 'setup'):
+                settings = load_settings(state) if settings_path(state).exists() else None
+                return {'exit_code': launch_codex(ui, settings)}
+            if command in ('start', 'global', 'session', 'setup'):
                 require(sys.stdin.isatty(), 'interactive_start_required')
+                client = None
+                if command == 'session':
+                    from direct_bridge.session_client import preflight
+                    client = preflight(ui)
                 package_sha256 = verify_package()
                 credential = setup(state, ui)
                 if command == 'setup':
@@ -865,14 +1028,22 @@ def main(argv=None):
                 require(prerequisites(settings['python']), 'private_dependencies_unavailable')
                 if Path(sys.executable).absolute() != Path(settings['python']).absolute():
                     env = credential.tunnel_env(base_environment())
+                    if 'CODEX_BIN' in os.environ:
+                        env['CODEX_BIN'] = os.environ['CODEX_BIN']
                     os.execve(settings['python'], [settings['python'], '-B', str(ROOT / 'global_launcher.py'),
-                                                  'start', '--state-dir', str(state)], env)
+                                                  command, '--state-dir', str(state)], env)
+                if command == 'session':
+                    return launcher.session(credential, client, package_sha256=package_sha256)
                 outcome = launcher.start(credential, package_sha256=package_sha256)
                 print_status(outcome, ui)
                 if sys.platform == 'darwin' and ui.confirm('现在打开已安装的 Desktop app？若它已运行，请先正常退出再打开，避免保留旧 provider。', 'OPEN'):
                     open_desktop(ui)
                 return {}
             if command == 'stop':
+                if launcher.active_session_clients(launcher.current()) and not ui.confirm(
+                        'Stop 会中断所有共用本服务的单会话 CLI 和全局客户端的后续请求，并恢复全局配置。\n'
+                        '不会关闭 CLI/Desktop 窗口或停止原生任务。确认停止共享服务？', 'STOP'):
+                    raise Cancelled()
                 return launcher.stop()
             if command == 'restore':
                 require(sys.stdin.isatty(), 'interactive_restore_required')
@@ -882,19 +1053,22 @@ def main(argv=None):
             help_text(ui)
             return {}
         if args.command:
-            print_status(action(args.command), ui)
-            return 0
+            result = action(args.command)
+            print_status(result, ui)
+            return result.get('exit_code', 0)
         require(sys.stdin.isatty(), 'interactive_menu_required')
         while True:
-            ui.say('\nDIRECT Global   1 Start   2 Stop + Restore   3 Status   4 Restore only   5 Help   6 Open Desktop   7 Codex CLI   0 Exit')
+            ui.say('\nDIRECT   1 Start（选择模式）   2 Stop + Restore   3 Status   4 Restore only   5 Help   6 Open Desktop   7 普通 Codex CLI   0 Exit')
             choice = ui.text('选择', '1')
             if choice in ('0', 'exit', 'quit'):
                 return 0
             command = {'1': 'start', '2': 'stop', '3': 'status', '4': 'restore', '5': 'help', '6': 'desktop', '7': 'codex'}.get(choice, choice)
-            if command not in ('start', 'stop', 'status', 'restore', 'help', 'setup', 'desktop', 'codex'):
+            if command not in ('start', 'global', 'session', 'stop', 'status', 'restore', 'help', 'setup', 'desktop', 'codex'):
                 ui.say('请选择 0–7')
                 continue
             try:
+                if choice == '1':
+                    command = choose_mode(ui)
                 print_status(action(command), ui)
             except Cancelled:
                 ui.say('已取消；已有配置和请求记录保留。')

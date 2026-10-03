@@ -361,7 +361,9 @@ class SetupTests(unittest.TestCase):
         result = subprocess.run([str(bundle / "DIRECT.command"), "help", "--state-dir", str(self.state)],
             capture_output=True, text=True, timeout=10, env={**os.environ, "PYTHON_BIN": sys.executable})
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("DIRECT Global", result.stdout)
+        self.assertIn("DIRECT：单会话 / 全局", result.stdout)
+        self.assertIn("session", result.stdout)
+        self.assertIn("global", result.stdout)
         self.assertFalse(self.state.exists())
 
 

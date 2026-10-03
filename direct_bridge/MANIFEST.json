@@ -43,14 +43,14 @@
       "sha256": "941a65e2b5a1eccf26be9816b10a76c3a26138495b461108c34021b92a54c409"
     },
     "docs/CODEX_CLIENT.zh-CN.md": {
-      "bytes": 7171,
+      "bytes": 7329,
       "mode": "0644",
-      "sha256": "590eca452a0495eae04b1f80abd1d026cbf94c0d4d15c89cba11d08e5185275e"
+      "sha256": "2e16e591dd4b1515251366f2ab45a936fcae57276841a225e88ed72ff65b9581"
     },
     "docs/GLOBAL_CONFIG.md": {
-      "bytes": 6101,
+      "bytes": 6466,
       "mode": "0644",
-      "sha256": "175ffad7ceb0d8bfa3c0ee8c4193cfd2ec07e8afc277b65d25b12c2a11eb9f0e"
+      "sha256": "96e9dd3246a5bf6243994365b974c0aa63c221ba564278ad4b35fce92a08adb0"
     },
     "docs/GLOBAL_CREDENTIALS.zh-CN.md": {
       "bytes": 6551,
@@ -58,9 +58,9 @@
       "sha256": "52ed3622d2c53a0eba5992d1169449ab90e90d6096de50043463f5d1537490f7"
     },
     "docs/GLOBAL_NATIVE_CONTROLLER.zh-CN.md": {
-      "bytes": 7884,
+      "bytes": 8572,
       "mode": "0644",
-      "sha256": "1aef8cbdbbd8f453f3be23eec4b57426d289bed04da108d70571789b219271a8"
+      "sha256": "1a5be57a6edac302434af5f68b3e549d8e6589e8b51418f00e0a18e514af0604"
     },
     "docs/MAC_QUICKSTART.zh-CN.md": {
       "bytes": 10802,
@@ -76,6 +76,16 @@
       "bytes": 4003,
       "mode": "0644",
       "sha256": "cfb5677ded3c5f0282384f8576c4d1426ac754ccab3051cb3c8b4116af70603d"
+    },
+    "docs/SESSION_MODE.zh-CN.md": {
+      "bytes": 4249,
+      "mode": "0644",
+      "sha256": "8661efed6ab811f1126f01317da18e8aa14c452f08c17c6e82b89c023480a57a"
+    },
+    "docs/UNATTENDED_CLOUD_VALIDATION.zh-CN.md": {
+      "bytes": 9052,
+      "mode": "0644",
+      "sha256": "85c58cc5742e177201f1aa6cbe92bd6e9d5c3f43bb401963e35cea00dee3aeef"
     },
     "facade/README.md": {
       "bytes": 5416,
@@ -133,9 +143,9 @@
       "sha256": "4beddec9240d2524996287b84d949ef657b3efb9e717a8009f933180da5b775e"
     },
     "global_launcher.py": {
-      "bytes": 48286,
+      "bytes": 59641,
       "mode": "0644",
-      "sha256": "971829800d222677314a2118807e87df6765a14f92bcbbe1de710572f3977c4f"
+      "sha256": "bfe44750eb5029698d7336a433876e0ea5c1205b3a4035e403a2856157113bd7"
     },
     "mcp_adapter/__init__.py": {
       "bytes": 77,
@@ -182,10 +192,25 @@
       "mode": "0644",
       "sha256": "fa391bfcfa2b256c0f1a877c2fe2db99f2e41600785bbf653768b96bbc86d9c1"
     },
+    "orchestration/test_unattended_fixture.py": {
+      "bytes": 8322,
+      "mode": "0644",
+      "sha256": "72c6705a25d5015668b5b524950375e654e47f7ea2f1139c908f80e9ab0e7154"
+    },
     "orchestration/test_vertical_slice.py": {
       "bytes": 545,
       "mode": "0644",
       "sha256": "787c958af638a95d38749c18be37ef86c619cbd78e34c3e41d9858360af562d4"
+    },
+    "orchestration/unattended_fixture.py": {
+      "bytes": 16431,
+      "mode": "0644",
+      "sha256": "9f725794dae830da68ab66c5d96e2372d986a21e712c1f36d1dbcb73f8a21f9f"
+    },
+    "orchestration/unattended_native_result.json": {
+      "bytes": 2738,
+      "mode": "0644",
+      "sha256": "1399137eba6b93203dc809f05bd5180f45ee73cd3aed8e4fb3c3252fe18a3e88"
     },
     "orchestration/vertical_slice.py": {
       "bytes": 8286,
@@ -232,6 +257,11 @@
       "mode": "0644",
       "sha256": "83bd12ed1e32d16e1354aecf174f51e2f33dab148b2f50cbc19a0cec0920ebb2"
     },
+    "session_client.py": {
+      "bytes": 3337,
+      "mode": "0644",
+      "sha256": "499af65093773fb0964e88b150fc81ea42f7f58887e62ac1868f1badfba1b87b"
+    },
     "tests/global_service_fixture.py": {
       "bytes": 2492,
       "mode": "0644",
@@ -243,9 +273,9 @@
       "sha256": "85989ccf5dfbce7daac4aec35daa135c48717e847dcd58d646ca41de8228836c"
     },
     "tests/test_direct_setup.py": {
-      "bytes": 19414,
+      "bytes": 19523,
       "mode": "0644",
-      "sha256": "7246fd285582e6a8f3ea2a6e4df4b0f14fcf9e4d0de369fc320e68e0796867a4"
+      "sha256": "e638baa35c0f53df7fdc4fb32f91e2549dff5c5ba424bdd7c88516b26ede6359"
     },
     "tests/test_global_config.py": {
       "bytes": 16491,
@@ -276,6 +306,11 @@
       "bytes": 8408,
       "mode": "0644",
       "sha256": "559a2980edd411fec739590c58ec849d2c524480d967005aed4b30444536cb49"
+    },
+    "tests/test_session_mode.py": {
+      "bytes": 29297,
+      "mode": "0644",
+      "sha256": "2d62966688558517dd5759b977b1ff50a62074f9c05b6e5b7d812e0c9729a48c"
     },
     "tests/test_unused_reopen.py": {
       "bytes": 17029,
@@ -335,6 +370,8 @@
     "docs/MAC_QUICKSTART.zh-CN.md",
     "docs/MCP_AND_TUNNEL.md",
     "docs/NATIVE_CONTROLLER.zh-CN.md",
+    "docs/SESSION_MODE.zh-CN.md",
+    "docs/UNATTENDED_CLOUD_VALIDATION.zh-CN.md",
     "facade/README.md",
     "facade/__init__.py",
     "facade/global_runtime.py",
@@ -356,7 +393,10 @@
     "orchestration/README.md",
     "orchestration/global_vertical_slice.py",
     "orchestration/global_vertical_slice_result.json",
+    "orchestration/test_unattended_fixture.py",
     "orchestration/test_vertical_slice.py",
+    "orchestration/unattended_fixture.py",
+    "orchestration/unattended_native_result.json",
     "orchestration/vertical_slice.py",
     "orchestration/vertical_slice_result.json",
     "requirements-global.txt",
@@ -366,6 +406,7 @@
     "scripts/start_mcp.sh",
     "scripts/tunnel_help.sh",
     "scripts/verify_release.py",
+    "session_client.py",
     "tests/global_service_fixture.py",
     "tests/mcp_fixture.py",
     "tests/test_direct_setup.py",
@@ -375,6 +416,7 @@
     "tests/test_global_mcp.py",
     "tests/test_mcp_config.py",
     "tests/test_mcp_stdio.py",
+    "tests/test_session_mode.py",
     "tests/test_unused_reopen.py",
     "transport/README.md",
     "transport/__init__.py",
@@ -384,6 +426,6 @@
     "transport/surface.py",
     "transport/test_queue.py"
   ],
-  "source_tree_sha256": "2811a39ea265879051471dce25a3c1fd85623d40648117864027abd9ff7c487e",
-  "tree_sha256": "2811a39ea265879051471dce25a3c1fd85623d40648117864027abd9ff7c487e"
+  "source_tree_sha256": "66e5b37990afcb9a66bdcea3d4a487a0116bad269779edd9404d6be27f888869",
+  "tree_sha256": "66e5b37990afcb9a66bdcea3d4a487a0116bad269779edd9404d6be27f888869"
 }
