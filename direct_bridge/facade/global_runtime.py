@@ -254,18 +254,19 @@ def _context_request(request):
 
 def _adapt_pending_echo(context, request):
     # Codex can omit benign response-item id/status/type annotations for assistant
-    # messages. Keep the original source snapshot exact; accept only wire-verified
-    # echoes of newly emitted items, never edits to earlier client history.
+    # messages and output_text annotations/logprobs. Use the same binding as wire
+    # history validation. Keep the original source snapshot exact; accept only
+    # wire-verified echoes of newly emitted items, never edits to earlier history.
     if context._request is None or not context._pending_output:
         return
-    from .wire import call_binding
+    from .wire import call_binding, message_binding
     start = len(context._request['input'])
     echoed = request['input'][start:start + len(context._pending_output)]
     if len(echoed) != len(context._pending_output):
         return
     for expected, actual in zip(context._pending_output, echoed):
         if expected.get('type') == 'message':
-            if actual.get('role') != expected.get('role') or actual.get('content') != expected.get('content'):
+            if message_binding(actual) != message_binding(expected):
                 return
             if set(actual) - {'id', 'status', 'type', 'role', 'content'}:
                 return

@@ -408,6 +408,24 @@ def validate_response(response, request, *, max_bytes=MAX_BYTES):
     return copy.deepcopy(response)
 
 
+def message_binding(item):
+    """Exact message content, excluding known Codex-dropped text metadata.
+
+    The pinned Codex ContentItem::OutputText stores only text. Its typed
+    round-trip drops Responses annotations/logprobs before echoing history.
+    Normalize only those fields for comparison; never rewrite source history or
+    emitted responses, concatenate parts, coerce input_text, or discard unknown
+    fields. Role, text bytes, content types, boundaries and order stay exact.
+    """
+    content = item.get('content')
+    if isinstance(content, list):
+        content = [{key: value for key, value in part.items()
+                    if key not in {'annotations', 'logprobs'}}
+                   if isinstance(part, dict) and part.get('type') == 'output_text'
+                   else part for part in content]
+    return {'role': item.get('role'), 'content': content}
+
+
 def validate_history(request, previous_request, prior_outputs, prior_call_hashes=None):
     """Full input prefix plus exact earlier calls, compactly hash-bound."""
     prior = []
@@ -422,14 +440,14 @@ def validate_history(request, previous_request, prior_outputs, prior_call_hashes
                 if item.get('type') in {'function_call', 'custom_tool_call'}}
     require(supplied == emitted, 'tool_history_does_not_match_delivered_calls')
     # The previous assistant answer is part of full history, too. Ignore only
-    # optional item status/id annotations which the Codex serializer may omit.
+    # optional item annotations and known typed-client text metadata omissions.
     suffix = request['input'][len(prior):]
-    messages = [{'role': x.get('role'), 'content': x.get('content')} for x in suffix
+    messages = [message_binding(x) for x in suffix
                 if x.get('type', 'message' if 'role' in x else None) == 'message']
     for output in prior_outputs:
         for item in output['output']:
             if item.get('type') == 'message':
-                require({'role': item['role'], 'content': item['content']} in messages,
+                require(message_binding(item) in messages,
                         'previous_assistant_message_missing')
 
 

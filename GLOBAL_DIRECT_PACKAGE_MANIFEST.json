@@ -207,9 +207,9 @@
       "sha256": "9246d18641b9e8294e4ef4a06213d5d8dab43ac1685b58cafe1383c5f055def1"
     },
     "direct_bridge/MANIFEST.json": {
-      "bytes": 12705,
+      "bytes": 12911,
       "mode": "0644",
-      "sha256": "0bf5d63660ec88518764af56d6f6ac731a36da81b92466017b4cde556af1b74d"
+      "sha256": "143ecbc62eec6b4e7a75f835cde0193374cd9720b95e636ba85f6d7ea6385a22"
     },
     "direct_bridge/README.md": {
       "bytes": 7277,
@@ -292,9 +292,9 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     "direct_bridge/facade/global_runtime.py": {
-      "bytes": 47659,
+      "bytes": 47719,
       "mode": "0644",
-      "sha256": "e43c42e410b6c9dd25cf3723ce912ea04693aa741b77c6c86d0b8d3f565af0ed"
+      "sha256": "ae035a400ff1774afd6a097a7149419aa3bc5027daeb4e9bccd16ff18cc2d9b6"
     },
     "direct_bridge/facade/runtime.py": {
       "bytes": 21059,
@@ -306,15 +306,20 @@
       "mode": "0644",
       "sha256": "d4df7f79ba01ac231a7e1d456386af5473e6c7a44f16e748d4666cd794151c1e"
     },
+    "direct_bridge/facade/test_history_echo.py": {
+      "bytes": 11773,
+      "mode": "0644",
+      "sha256": "45545d825aaeaf71d0888647689b05f6aee0516354efcad5a0dac3478614a2a6"
+    },
     "direct_bridge/facade/test_runtime.py": {
       "bytes": 15059,
       "mode": "0644",
       "sha256": "34d8a49af16ee35870f8f2cc1f217a49290c8add96c79f3feb053ead0087f8e4"
     },
     "direct_bridge/facade/wire.py": {
-      "bytes": 23157,
+      "bytes": 23979,
       "mode": "0644",
-      "sha256": "4e0c5079147f64a4c869d27918c200060db21f7a745282a8b9cbf0ecf6135539"
+      "sha256": "21679c4637846f20658c076452ce9f7dbf950be415fa04abb66efa89e3896296"
     },
     "direct_bridge/facade/wire_support.py": {
       "bytes": 584,
@@ -2022,7 +2027,7 @@
       "sha256": "4a8b2f264ff4bfe9cad372ba069aa9fca5dfee19dc13f35a17f3d6d7c9ad6c5f"
     }
   },
-  "hashed_file_count": 402,
+  "hashed_file_count": 403,
   "historical_manifests": {
     "LIGHTWEIGHT_PACKAGE_MANIFEST.json": "Historical unchanged lightweight subtree only; not Global Direct identity",
     "ROUTER_PACKAGE_MANIFEST.json": "Historical af7bac6 main snapshot only; not current Global Direct identity"
@@ -2031,9 +2036,9 @@
   "main_base_tree": "088e36406cd4c2a7093e1160aa26f02afa5bbc55",
   "manifest_self_excluded": true,
   "preserved_main_files": 337,
-  "publication_parent_commit": "610c1aac83bc32478a12b0c40dbb8f881df55ea3",
-  "publication_parent_tree": "a282a94f2ec056fb81f65407d4ee61485b50c0a0",
+  "publication_parent_commit": "cee8e6e8032e7bea8ae95e29589c8d1f2d200676",
+  "publication_parent_tree": "c83fdc8aedb472196d149a2d2dca4f12db067bd0",
   "source_exclusions_policy": "Generated __pycache__/.pyc only; exact excluded path inventory is in external BUILD_STATUS.json",
   "source_tree_hash_algorithm": "SHA-256 of UTF-8 canonical JSON files map (sort_keys=true,separators=comma/colon,ensure_ascii=false)",
-  "source_tree_sha256": "5562e3cff2b398674a49b094f5da55df8fd697c08080cf41856293b9987db535"
+  "source_tree_sha256": "bf5f2fff04f88fc53e4f7072725ea40e577ae731492257f5db6b6f0020ddeaa9"
 }

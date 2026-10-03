@@ -88,9 +88,9 @@
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     "facade/global_runtime.py": {
-      "bytes": 47659,
+      "bytes": 47719,
       "mode": "0644",
-      "sha256": "e43c42e410b6c9dd25cf3723ce912ea04693aa741b77c6c86d0b8d3f565af0ed"
+      "sha256": "ae035a400ff1774afd6a097a7149419aa3bc5027daeb4e9bccd16ff18cc2d9b6"
     },
     "facade/runtime.py": {
       "bytes": 21059,
@@ -102,15 +102,20 @@
       "mode": "0644",
       "sha256": "d4df7f79ba01ac231a7e1d456386af5473e6c7a44f16e748d4666cd794151c1e"
     },
+    "facade/test_history_echo.py": {
+      "bytes": 11773,
+      "mode": "0644",
+      "sha256": "45545d825aaeaf71d0888647689b05f6aee0516354efcad5a0dac3478614a2a6"
+    },
     "facade/test_runtime.py": {
       "bytes": 15059,
       "mode": "0644",
       "sha256": "34d8a49af16ee35870f8f2cc1f217a49290c8add96c79f3feb053ead0087f8e4"
     },
     "facade/wire.py": {
-      "bytes": 23157,
+      "bytes": 23979,
       "mode": "0644",
-      "sha256": "4e0c5079147f64a4c869d27918c200060db21f7a745282a8b9cbf0ecf6135539"
+      "sha256": "21679c4637846f20658c076452ce9f7dbf950be415fa04abb66efa89e3896296"
     },
     "facade/wire_support.py": {
       "bytes": 584,
@@ -335,6 +340,7 @@
     "facade/global_runtime.py",
     "facade/runtime.py",
     "facade/test_global_runtime.py",
+    "facade/test_history_echo.py",
     "facade/test_runtime.py",
     "facade/wire.py",
     "facade/wire_support.py",
@@ -378,6 +384,6 @@
     "transport/surface.py",
     "transport/test_queue.py"
   ],
-  "source_tree_sha256": "b4af547bd17c9401e89555b75d5294281e4a1bc4c1abdbba633d245d86043daa",
-  "tree_sha256": "b4af547bd17c9401e89555b75d5294281e4a1bc4c1abdbba633d245d86043daa"
+  "source_tree_sha256": "2811a39ea265879051471dce25a3c1fd85623d40648117864027abd9ff7c487e",
+  "tree_sha256": "2811a39ea265879051471dce25a3c1fd85623d40648117864027abd9ff7c487e"
 }
